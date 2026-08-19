@@ -32,15 +32,15 @@ pipeline, so the features on the roadmap drop in without rework.
 
 ## Tech stack
 
-| Concern | Choice |
-| --- | --- |
-| Platform | Windows 11 desktop, WPF, .NET 8, C# |
-| Node canvas | [Nodify](https://www.nuget.org/packages/Nodify) |
-| MVVM | [CommunityToolkit.Mvvm](https://www.nuget.org/packages/CommunityToolkit.Mvvm) |
-| Scripting | Roslyn (`Microsoft.CodeAnalysis.CSharp.Scripting`) |
-| Local inference | bundled llama.cpp `llama-server`, spawned as a silent child process |
-| Hosted inference | OpenRouter |
-| Serialization | `System.Text.Json` |
+| Concern          | Choice                                                                        |
+| ---------------- | ----------------------------------------------------------------------------- |
+| Platform         | Windows 11 desktop, WPF, .NET 8, C#                                           |
+| Node canvas      | [Nodify](https://www.nuget.org/packages/Nodify)                               |
+| MVVM             | [CommunityToolkit.Mvvm](https://www.nuget.org/packages/CommunityToolkit.Mvvm) |
+| Scripting        | Roslyn (`Microsoft.CodeAnalysis.CSharp.Scripting`)                            |
+| Local inference  | bundled llama.cpp `llama-server`, spawned as a silent child process           |
+| Hosted inference | OpenRouter                                                                    |
+| Serialization    | `System.Text.Json`                                                            |
 
 Strict MVVM throughout: views are XAML, code behind is `InitializeComponent` and nothing
 else, and all logic lives in view models and services.
@@ -57,6 +57,15 @@ else, and all logic lives in view models and services.
 
 Local and hosted are independent. You can run the whole application with just an
 OpenRouter key and no llama.cpp build at all, or entirely offline with no key.
+
+## Git
+
+- Commit after each logical unit of work, not one giant commit at the end of a task. A logical unit is something that builds and leaves the app in a working state.
+- Never commit broken code to main. If a change spans multiple commits, each one should build.
+- Write real commit messages: what changed and why, not "update files." Subject line under ~70 characters, body when the change needs explanation.
+- Do not commit build artifacts, binaries, models, or secrets. `dist/`, `bin/`, `obj/`, `vendor/llama/`, `*.gguf`, and any API keys stay out of the repo.
+- Push to main when the task is complete and the exe in `dist/` runs.
+- Report the commit hash and a one-line summary of what landed when a task finishes.
 
 ## Setup and run
 
