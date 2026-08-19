@@ -9,7 +9,8 @@ while their output streams into a live activity feed.
 
 This repository holds the **vertical slice** plus the first cut of **distributed
 inference**: one model split across several machines over llama.cpp RPC, with a source
-registry, live health monitoring, coverage tracking and a peer panel. It is a real graph
+registry, live health monitoring, coverage tracking and a Network tab that browses what
+the network can serve. It is a real graph
 execution engine rather than a fixed pipeline, so the features on the roadmap drop in
 without rework.
 
@@ -32,8 +33,12 @@ without rework.
   asking for confirmation in the feed first.
 - **Save and load.** Graphs round trip through JSON, positions and settings included.
 - **Distributed inference.** A model that does not fit on one machine is split across
-  sources over llama.cpp RPC, the run is gated on complete coverage, and the peer panel
-  shows which source holds which section while it happens.
+  sources over llama.cpp RPC, the run is gated on complete coverage, and the Network tab
+  shows which source holds which section of the assembled pipeline.
+- **Model browsing.** The Network tab lists every model the network could serve, with
+  size, requirements, per section redundancy and a clear Complete or Blocked verdict; a
+  Model node on the Network provider picks from that list and refuses incomplete models
+  with the reason.
 - **Contribution.** Any install can serve its GPU to another orchestrator with one
   toggle; roles are interchangeable, there is no dedicated worker machine.
 
@@ -155,27 +160,33 @@ you press Run on is the orchestrator; every other machine contributes sections o
 model. Any install can play either role.
 
 **Set up the contributing machine.** Install LocalNEXUS there (or copy a published
-`dist\` folder), make sure `vendor\llama\` has the llama.cpp build, open the **Peers**
-panel on the right, and press **Start contributing**. That starts the bundled
+`dist\` folder), make sure `vendor\llama\` has the llama.cpp build, switch to the
+**Network** tab, and press **Contribute** on the contribution card. That starts the bundled
 `ggml-rpc-server` silently on the configured port (50052 by default) and remembers the
 choice across restarts. The first time, allow it through the Windows firewall or open
-the port yourself; the panel on the orchestrator will show the source as unreachable
-until inbound connections are allowed. The worker does not need the model file: weights
-stream from the orchestrator over the connection.
+the port yourself; the Network tab on the orchestrator will show the source as
+unreachable until inbound connections are allowed. The worker does not need the model
+file: weights stream from the orchestrator over the connection.
 
-**Register it on the orchestrator.** In the Peers panel, add a source: a name, the
-other machine's address, the port, and ideally its GPU memory in MiB, which is what the
-automatic split proportions are computed from. The source is probed immediately and
-then every ten seconds, and its state, last seen time and reachability history live in
-the panel.
+**Register it on the orchestrator.** In the Network tab, press **+** next to Sources
+and add it: a name, the other machine's address, the port, and ideally its GPU memory
+in MiB, which is what the automatic split proportions are computed from. The source is
+probed immediately and then every ten seconds, and its state, last seen time and
+reachability history live on its card.
+
+**Browse what the network can serve.** The Available models list in the Network tab
+shows every known model with its size, memory requirement and a Complete or Blocked
+verdict. Selecting one draws its coverage chain: the pipeline of sections in order,
+which source holds which layer range, and how many candidates back each section. An
+uncovered section is shown in red and named as the reason the model is blocked.
 
 **Run split.** Select a Model node with a local GGUF. If the model fits on this machine
 it runs here; splitting is a capability unlock, not a speedup, so it only happens when
 the model does not fit. To exercise the split path with a small model, tick **Force a
-split across sources** in the node's Distribution settings. The Coverage section of the
-panel shows the section chain the run would use: which source holds which layer range,
-and how many sources could cover each section. A run is gated on complete coverage; a
-gap in any section refuses the run and names the uncovered section.
+split across sources** in the node's Distribution settings. Alternatively set the node's
+provider to **Network** and pick a model from the network list; incomplete models refuse
+to run and say why. A run is gated on complete coverage; a gap in any section refuses
+the run and names the uncovered section.
 
 **Proportions.** Blank split proportions divide the model by declared memory. To tune
 by hand, enter comma separated values with dot decimals, one per source, remote sources
@@ -257,8 +268,8 @@ src/LocalNEXUS.App/
     Persistence/   AppPaths, AppConfig, ModelCatalog, GraphSerializer
     Files/         UnityProjectService, FileWriter
     Dialogs/       IDialogService and its Windows implementation
-  ViewModels/      MainViewModel, ActivityFeedViewModel, PeersViewModel, and friends
-  Views/           XAML only: window, canvas templates, peer panel, settings panels
+  ViewModels/      MainViewModel, ActivityFeedViewModel, NetworkViewModel, and friends
+  Views/           XAML only: window, canvas templates, network tab, settings panels
   Infrastructure/  ActivityFeed, converters, behaviours
 vendor/llama/      llama.cpp binaries, fetched not committed
 publish.ps1        self contained single file publish into dist/

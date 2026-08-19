@@ -87,6 +87,8 @@ public sealed class LlamaServerManager : IDisposable
                 }
             }
 
+            EvictRpcConflicts(options, key);
+
             var instance = StartServer(fullPath, options);
             lock (_sync)
             {
@@ -113,6 +115,35 @@ public sealed class LlamaServerManager : IDisposable
         finally
         {
             gate.Release();
+        }
+    }
+
+    /// <summary>
+    /// Stops running servers that hold a connection to an rpc worker the new launch needs.
+    /// llama.cpp's rpc-server serves one coordinator at a time, so a second coordinator pointed
+    /// at a worker that is already claimed would sit blocked in startup until the first one
+    /// exits. The newest plan wins; the old coordinator is disposed and relaunched on demand.
+    /// </summary>
+    private void EvictRpcConflicts(LlamaLaunchOptions options, string newKey)
+    {
+        if (options.RpcEndpoints.Count == 0)
+        {
+            return;
+        }
+
+        lock (_sync)
+        {
+            var conflicts = _servers
+                .Where(pair =>
+                    pair.Key != newKey &&
+                    pair.Value.RpcEndpoints.Intersect(options.RpcEndpoints, StringComparer.OrdinalIgnoreCase).Any())
+                .ToList();
+
+            foreach (var pair in conflicts)
+            {
+                pair.Value.Dispose();
+                _servers.Remove(pair.Key);
+            }
         }
     }
 
@@ -226,7 +257,7 @@ public sealed class LlamaServerManager : IDisposable
         }
 
         var logPath = AppPaths.CreateLogFilePath($"llama-{Path.GetFileNameWithoutExtension(ggufPath)}");
-        var instance = new LlamaServerInstance(process, ggufPath, port, logPath);
+        var instance = new LlamaServerInstance(process, ggufPath, port, logPath, options.RpcEndpoints);
         instance.BeginCapturingOutput();
         return instance;
     }

@@ -112,7 +112,7 @@ public sealed partial class NetworkServedModel : ObservableObject
     public string PeerCountText => PeerCount == 1 ? "1 source" : $"{PeerCount} sources";
 
     /// <summary>Name plus quantization for dropdowns and the row title.</summary>
-    public string DisplayLabel => $"{Name}  ({Quantization})";
+    public string DisplayLabel => $"{Name} ({Quantization})";
 
     public static string BuildKey(string name, string quantization) => $"{name}|{quantization}";
 
