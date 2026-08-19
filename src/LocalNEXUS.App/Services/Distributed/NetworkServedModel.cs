@@ -37,11 +37,16 @@ public sealed partial class NetworkServedModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Strength))]
     [NotifyPropertyChangedFor(nameof(StatusText))]
+    [NotifyPropertyChangedFor(nameof(ChainStatusText))]
+    [NotifyPropertyChangedFor(nameof(HasDepth1))]
+    [NotifyPropertyChangedFor(nameof(HasDepth2))]
+    [NotifyPropertyChangedFor(nameof(HasDepth3))]
     private bool _isComplete;
 
     /// <summary>Why the model cannot run, naming the uncovered section. Null when complete.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(StatusText))]
+    [NotifyPropertyChangedFor(nameof(ChainStatusText))]
     private string? _incompleteReason;
 
     /// <summary>How many distinct sources serve pieces of this model in the current plan.</summary>
@@ -52,6 +57,10 @@ public sealed partial class NetworkServedModel : ObservableObject
     /// <summary>The redundancy of the weakest section: the chain is only as strong as this.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Strength))]
+    [NotifyPropertyChangedFor(nameof(ChainStatusText))]
+    [NotifyPropertyChangedFor(nameof(HasDepth1))]
+    [NotifyPropertyChangedFor(nameof(HasDepth2))]
+    [NotifyPropertyChangedFor(nameof(HasDepth3))]
     private int _weakestRedundancy;
 
     public NetworkServedModel(string name, string quantization)
@@ -76,6 +85,20 @@ public sealed partial class NetworkServedModel : ObservableObject
 
     /// <summary>One word for the row badge, with the reason carried separately.</summary>
     public string StatusText => IsComplete ? "Complete" : "Blocked";
+
+    /// <summary>The sentence above the coverage chain.</summary>
+    public string ChainStatusText => IsComplete
+        ? $"Complete and armed. Every section is covered; the weakest has {WeakestRedundancy} candidate source(s)."
+        : IncompleteReason ?? "Blocked: coverage is incomplete.";
+
+    /// <summary>First strength bar of the row: the model can run at all.</summary>
+    public bool HasDepth1 => IsComplete && WeakestRedundancy >= 1;
+
+    /// <summary>Second strength bar: every section survives losing one source.</summary>
+    public bool HasDepth2 => IsComplete && WeakestRedundancy >= 2;
+
+    /// <summary>Third strength bar: comfortably covered everywhere.</summary>
+    public bool HasDepth3 => IsComplete && WeakestRedundancy >= 3;
 
     public string SizeText => FileBytes switch
     {

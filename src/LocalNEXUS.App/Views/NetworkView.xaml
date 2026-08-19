@@ -1,0 +1,523 @@
+<UserControl x:Class="LocalNEXUS.App.Views.NetworkView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:LocalNEXUS.App.ViewModels"
+             xmlns:distributed="clr-namespace:LocalNEXUS.App.Services.Distributed"
+             d:DataContext="{d:DesignInstance Type=vm:NetworkViewModel}"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             Background="{StaticResource Surface.Window.Brush}">
+
+    <Grid Margin="24,20,24,20">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" MinWidth="480" />
+            <ColumnDefinition Width="28" />
+            <ColumnDefinition Width="400" />
+        </Grid.ColumnDefinitions>
+
+        <!-- ============================ Models and the chain ============================ -->
+        <Grid Grid.Column="0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <DockPanel Grid.Row="0" Margin="0,0,0,14">
+                <Button DockPanel.Dock="Right"
+                        Style="{StaticResource SmallButton}"
+                        VerticalAlignment="Center"
+                        Content="Refresh"
+                        Command="{Binding RefreshModelsCommand}" />
+                <StackPanel>
+                    <TextBlock Text="Available models"
+                               FontSize="{StaticResource Font.Size.Title}"
+                               FontWeight="SemiBold" />
+                    <TextBlock Margin="0,3,0,0"
+                               FontSize="{StaticResource Font.Size.Small}"
+                               Foreground="{StaticResource Text.Secondary.Brush}"
+                               Text="What the network can serve right now. Pick one to see how it is assembled." />
+                </StackPanel>
+            </DockPanel>
+
+            <ListBox Grid.Row="1"
+                     ItemsSource="{Binding Index.Models}"
+                     SelectedItem="{Binding SelectedModel}"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto">
+                <ListBox.ItemTemplate>
+                    <DataTemplate DataType="{x:Type distributed:NetworkServedModel}">
+                        <DockPanel>
+
+                            <!-- Signal strength, decided by the weakest section -->
+                            <StackPanel DockPanel.Dock="Left"
+                                        Orientation="Horizontal"
+                                        VerticalAlignment="Center"
+                                        Margin="0,0,16,0">
+                                <Rectangle Width="5" Height="8" RadiusX="1" RadiusY="1" VerticalAlignment="Bottom">
+                                    <Rectangle.Style>
+                                        <Style TargetType="Rectangle">
+                                            <Setter Property="Fill" Value="{StaticResource Surface.Border.Brush}" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding HasDepth1}" Value="True">
+                                                    <Setter Property="Fill" Value="{Binding Strength, Converter={StaticResource ResourceLookup}, ConverterParameter=SectionCoverage}" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Rectangle.Style>
+                                </Rectangle>
+                                <Rectangle Width="5" Height="13" RadiusX="1" RadiusY="1" Margin="3,0,0,0" VerticalAlignment="Bottom">
+                                    <Rectangle.Style>
+                                        <Style TargetType="Rectangle">
+                                            <Setter Property="Fill" Value="{StaticResource Surface.Border.Brush}" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding HasDepth2}" Value="True">
+                                                    <Setter Property="Fill" Value="{Binding Strength, Converter={StaticResource ResourceLookup}, ConverterParameter=SectionCoverage}" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Rectangle.Style>
+                                </Rectangle>
+                                <Rectangle Width="5" Height="18" RadiusX="1" RadiusY="1" Margin="3,0,0,0" VerticalAlignment="Bottom">
+                                    <Rectangle.Style>
+                                        <Style TargetType="Rectangle">
+                                            <Setter Property="Fill" Value="{StaticResource Surface.Border.Brush}" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding HasDepth3}" Value="True">
+                                                    <Setter Property="Fill" Value="{Binding Strength, Converter={StaticResource ResourceLookup}, ConverterParameter=SectionCoverage}" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Rectangle.Style>
+                                </Rectangle>
+                            </StackPanel>
+
+                            <!-- Complete or blocked, the signal that matters most -->
+                            <Border DockPanel.Dock="Right"
+                                    VerticalAlignment="Center"
+                                    CornerRadius="10"
+                                    BorderThickness="1"
+                                    Padding="10,3"
+                                    Margin="16,0,0,0"
+                                    BorderBrush="{Binding Strength, Converter={StaticResource ResourceLookup}, ConverterParameter=SectionCoverage}">
+                                <TextBlock Text="{Binding StatusText}"
+                                           FontSize="{StaticResource Font.Size.Small}"
+                                           FontWeight="SemiBold"
+                                           Foreground="{Binding Strength, Converter={StaticResource ResourceLookup}, ConverterParameter=SectionCoverage}" />
+                            </Border>
+
+                            <StackPanel VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding Name}"
+                                               FontSize="{StaticResource Font.Size.Large}"
+                                               FontWeight="SemiBold"
+                                               VerticalAlignment="Center" />
+                                    <Border Background="{StaticResource Surface.Window.Brush}"
+                                            BorderBrush="{StaticResource Surface.Border.Brush}"
+                                            BorderThickness="1"
+                                            CornerRadius="3"
+                                            Padding="6,1"
+                                            Margin="10,0,0,0"
+                                            VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Quantization}"
+                                                   FontFamily="{StaticResource Font.Mono}"
+                                                   FontSize="{StaticResource Font.Size.Small}"
+                                                   Foreground="{StaticResource Text.Secondary.Brush}" />
+                                    </Border>
+                                </StackPanel>
+
+                                <TextBlock Margin="0,4,0,0"
+                                           FontSize="{StaticResource Font.Size.Small}"
+                                           Foreground="{StaticResource Text.Secondary.Brush}">
+                                    <Run Text="{Binding RequirementText, Mode=OneWay}" /><Run Text="    " /><Run Text="{Binding PeerCountText, Mode=OneWay}" />
+                                </TextBlock>
+
+                                <TextBlock Margin="0,3,0,0"
+                                           FontSize="{StaticResource Font.Size.Small}"
+                                           TextWrapping="Wrap"
+                                           Foreground="{StaticResource SectionCoverage.Uncovered.Brush}"
+                                           Text="{Binding IncompleteReason}"
+                                           Visibility="{Binding IncompleteReason, Converter={StaticResource StringToVisibility}}" />
+                            </StackPanel>
+                        </DockPanel>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+
+            <!-- The chain: sections in pipeline order, left to right -->
+            <StackPanel Grid.Row="2" Margin="0,18,0,0">
+                <TextBlock Text="Coverage chain"
+                           FontSize="{StaticResource Font.Size.Title}"
+                           FontWeight="SemiBold" />
+
+                <TextBlock Margin="0,4,0,0"
+                           FontSize="{StaticResource Font.Size.Small}"
+                           TextWrapping="Wrap"
+                           Text="{Binding SelectedModel.ChainStatusText, FallbackValue='Select a model to see how it is assembled.'}"
+                           Foreground="{Binding SelectedModel.Strength, Converter={StaticResource ResourceLookup}, ConverterParameter=SectionCoverage, FallbackValue={StaticResource Text.Secondary.Brush}}" />
+
+                <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                              VerticalScrollBarVisibility="Disabled"
+                              Margin="0,12,0,0"
+                              Visibility="{Binding HasSelection, Converter={StaticResource BooleanToVisibility}}">
+                    <ItemsControl ItemsSource="{Binding SelectedModel.Plan.Assignments}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type distributed:SourceAssignment}">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+
+                                    <!-- The wire into this section from the previous one -->
+                                    <Rectangle Width="26"
+                                               Height="2"
+                                               Fill="{StaticResource Surface.Border.Brush}"
+                                               VerticalAlignment="Center">
+                                        <Rectangle.Style>
+                                            <Style TargetType="Rectangle">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Section.Index}" Value="0">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Rectangle.Style>
+                                    </Rectangle>
+
+                                    <Border Width="172"
+                                            CornerRadius="8"
+                                            Background="{StaticResource Surface.Card.Brush}"
+                                            BorderThickness="1.5"
+                                            Padding="14,11"
+                                            BorderBrush="{Binding Coverage, Converter={StaticResource ResourceLookup}, ConverterParameter=SectionCoverage}">
+                                        <StackPanel>
+                                            <DockPanel>
+                                                <TextBlock DockPanel.Dock="Right"
+                                                           Text="{Binding Section.LayerRangeText}"
+                                                           FontSize="{StaticResource Font.Size.Small}"
+                                                           Foreground="{StaticResource Text.Secondary.Brush}" />
+                                                <TextBlock Text="{Binding Section.Ordinal}"
+                                                           FontSize="{StaticResource Font.Size.Small}"
+                                                           FontWeight="SemiBold"
+                                                           Foreground="{StaticResource Text.Secondary.Brush}" />
+                                            </DockPanel>
+
+                                            <TextBlock Margin="0,7,0,0"
+                                                       FontWeight="SemiBold"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Text="{Binding SourceText}">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsCovered}" Value="False">
+                                                                <Setter Property="Foreground" Value="{StaticResource SectionCoverage.Uncovered.Brush}" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+
+                                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                                <Rectangle Width="5" Height="7" RadiusX="1" RadiusY="1" VerticalAlignment="Bottom">
+                                                    <Rectangle.Style>
+                                                        <Style TargetType="Rectangle">
+                                                            <Setter Property="Fill" Value="{StaticResource Surface.Border.Brush}" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding Depth1}" Value="True">
+                                                                    <Setter Property="Fill" Value="{Binding Coverage, Converter={StaticResource ResourceLookup}, ConverterParameter=SectionCoverage}" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Rectangle.Style>
+                                                </Rectangle>
+                                                <Rectangle Width="5" Height="11" RadiusX="1" RadiusY="1" Margin="3,0,0,0" VerticalAlignment="Bottom">
+                                                    <Rectangle.Style>
+                                                        <Style TargetType="Rectangle">
+                                                            <Setter Property="Fill" Value="{StaticResource Surface.Border.Brush}" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding Depth2}" Value="True">
+                                                                    <Setter Property="Fill" Value="{Binding Coverage, Converter={StaticResource ResourceLookup}, ConverterParameter=SectionCoverage}" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Rectangle.Style>
+                                                </Rectangle>
+                                                <Rectangle Width="5" Height="15" RadiusX="1" RadiusY="1" Margin="3,0,0,0" VerticalAlignment="Bottom">
+                                                    <Rectangle.Style>
+                                                        <Style TargetType="Rectangle">
+                                                            <Setter Property="Fill" Value="{StaticResource Surface.Border.Brush}" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding Depth3}" Value="True">
+                                                                    <Setter Property="Fill" Value="{Binding Coverage, Converter={StaticResource ResourceLookup}, ConverterParameter=SectionCoverage}" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Rectangle.Style>
+                                                </Rectangle>
+
+                                                <TextBlock Margin="9,0,0,0"
+                                                           VerticalAlignment="Bottom"
+                                                           FontSize="{StaticResource Font.Size.Small}"
+                                                           Text="{Binding CoverageText}"
+                                                           Foreground="{Binding Coverage, Converter={StaticResource ResourceLookup}, ConverterParameter=SectionCoverage}" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </StackPanel>
+        </Grid>
+
+        <!-- ============================ Sources and contribution ============================ -->
+        <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+
+                <!-- Contribution card -->
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <DockPanel>
+                            <Border DockPanel.Dock="Right"
+                                    Width="18"
+                                    Height="18"
+                                    CornerRadius="9"
+                                    BorderThickness="1"
+                                    BorderBrush="{StaticResource Text.Secondary.Brush}"
+                                    VerticalAlignment="Center"
+                                    Background="Transparent"
+                                    ToolTip="The memory offer is declared, not enforced: orchestrators honour it through their split proportions, because the bundled rpc-server has no cap flag.">
+                                <TextBlock Text="?"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           FontSize="{StaticResource Font.Size.Small}"
+                                           Foreground="{StaticResource Text.Secondary.Brush}" />
+                            </Border>
+                            <TextBlock Text="Contribution"
+                                       FontSize="{StaticResource Font.Size.Large}"
+                                       FontWeight="SemiBold" />
+                        </DockPanel>
+
+                        <TextBlock Margin="0,6,0,0"
+                                   FontSize="{StaticResource Font.Size.Small}"
+                                   TextWrapping="Wrap"
+                                   Foreground="{StaticResource Text.Secondary.Brush}"
+                                   Text="{Binding Worker.StatusText}" />
+
+                        <Grid Margin="0,10,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="12" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="12" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,4" Text="Port" />
+                                <TextBox Text="{Binding Worker.Port, UpdateSourceTrigger=LostFocus}">
+                                    <TextBox.Style>
+                                        <Style TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Worker.IsRunning}" Value="True">
+                                                    <Setter Property="IsEnabled" Value="False" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBox.Style>
+                                </TextBox>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,4" Text="Memory offer (MiB)" />
+                                <TextBox Text="{Binding Registry.ThisMachine.Capabilities.MemoryMb, UpdateSourceTrigger=LostFocus}" />
+                            </StackPanel>
+
+                            <Button Grid.Column="4"
+                                    VerticalAlignment="Bottom"
+                                    Command="{Binding ToggleContributionCommand}">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                        <Setter Property="Content" Value="Contribute" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Worker.IsRunning}" Value="True">
+                                                <Setter Property="Content" Value="Stop" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- Sources -->
+                <DockPanel Margin="0,22,0,10">
+                    <Button DockPanel.Dock="Right"
+                            Style="{StaticResource SmallButton}"
+                            Content="+"
+                            Padding="10,2"
+                            FontSize="{StaticResource Font.Size.Large}"
+                            ToolTip="Add a source by address"
+                            Command="{Binding ToggleAddSourceCommand}" />
+                    <TextBlock Text="Sources"
+                               FontSize="{StaticResource Font.Size.Large}"
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center" />
+                </DockPanel>
+
+                <Border Style="{StaticResource Card}"
+                        Margin="0,0,0,12"
+                        Visibility="{Binding IsAddSourceOpen, Converter={StaticResource BooleanToVisibility}}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,4" Text="Display name" />
+                        <TextBox Text="{Binding NewSourceName, UpdateSourceTrigger=PropertyChanged}" />
+
+                        <Grid Margin="0,8,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="2*" />
+                                <ColumnDefinition Width="10" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,4" Text="Host" />
+                                <TextBox Text="{Binding NewSourceHost, UpdateSourceTrigger=PropertyChanged}"
+                                         FontFamily="{StaticResource Font.Mono}" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,4" Text="Port" />
+                                <TextBox Text="{Binding NewSourcePort, UpdateSourceTrigger=PropertyChanged}"
+                                         FontFamily="{StaticResource Font.Mono}" />
+                            </StackPanel>
+                        </Grid>
+
+                        <TextBlock Style="{StaticResource FieldLabel}" Text="Declared memory (MiB, blank for unknown)" />
+                        <TextBox Text="{Binding NewSourceMemoryMb, UpdateSourceTrigger=PropertyChanged}" />
+
+                        <CheckBox Content="Reached over the internet"
+                                  Margin="0,10,0,0"
+                                  IsChecked="{Binding NewSourceIsInternet}" />
+
+                        <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                            <Button Style="{StaticResource SmallButton}"
+                                    Content="Add source"
+                                    Margin="0,0,8,0"
+                                    Command="{Binding AddSourceCommand}" />
+                            <Button Style="{StaticResource SmallButton}"
+                                    Content="Cancel"
+                                    Command="{Binding ToggleAddSourceCommand}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <ItemsControl ItemsSource="{Binding Registry.Sources}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type distributed:InferenceSource}">
+                            <Border Background="{StaticResource Surface.Card.Brush}"
+                                    BorderBrush="{StaticResource Surface.Border.Brush}"
+                                    BorderThickness="1"
+                                    CornerRadius="8"
+                                    Padding="14,11"
+                                    Margin="0,0,0,10">
+                                <StackPanel>
+                                    <DockPanel>
+                                        <TextBlock DockPanel.Dock="Right"
+                                                   Text="{Binding State}"
+                                                   VerticalAlignment="Center"
+                                                   FontSize="{StaticResource Font.Size.Small}"
+                                                   Foreground="{Binding State, Converter={StaticResource ResourceLookup}, ConverterParameter=SourceState}" />
+                                        <Ellipse Width="9"
+                                                 Height="9"
+                                                 Margin="0,0,8,0"
+                                                 VerticalAlignment="Center"
+                                                 Fill="{Binding State, Converter={StaticResource ResourceLookup}, ConverterParameter=SourceState}" />
+                                        <TextBlock Text="{Binding DisplayName}"
+                                                   FontWeight="SemiBold"
+                                                   VerticalAlignment="Center" />
+                                    </DockPanel>
+
+                                    <TextBlock Margin="0,5,0,0"
+                                               FontSize="{StaticResource Font.Size.Small}"
+                                               Foreground="{StaticResource Text.Secondary.Brush}">
+                                        <Run Text="{Binding EndpointText, Mode=OneWay}" FontFamily="Cascadia Mono, Consolas, Courier New" /><Run Text="    " /><Run Text="{Binding Locality, Mode=OneWay}" />
+                                    </TextBlock>
+
+                                    <TextBlock Margin="0,3,0,0"
+                                               FontSize="{StaticResource Font.Size.Small}"
+                                               Foreground="{StaticResource Text.Secondary.Brush}">
+                                        <Run Text="Last seen" /><Run Text=" " /><Run Text="{Binding LastSeenText, Mode=OneWay}" /><Run Text="    " /><Run Text="{Binding ReachabilitySummary, Mode=OneWay}" /><Run Text="    " /><Run Text="{Binding Capabilities.Summary, Mode=OneWay}" />
+                                    </TextBlock>
+
+                                    <Expander Header="Edit"
+                                              Margin="0,7,0,0"
+                                              Foreground="{StaticResource Text.Secondary.Brush}"
+                                              FontSize="{StaticResource Font.Size.Small}">
+                                        <StackPanel Margin="0,8,0,0">
+                                            <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,4" Text="Display name" />
+                                            <TextBox Text="{Binding DisplayName, UpdateSourceTrigger=LostFocus}" />
+
+                                            <Grid Margin="0,8,0,0">
+                                                <Grid.Style>
+                                                    <Style TargetType="Grid">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsThisMachine}" Value="True">
+                                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Grid.Style>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="2*" />
+                                                    <ColumnDefinition Width="10" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0">
+                                                    <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,4" Text="Host" />
+                                                    <TextBox Text="{Binding Host, UpdateSourceTrigger=LostFocus}"
+                                                             FontFamily="{StaticResource Font.Mono}" />
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="2">
+                                                    <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,4" Text="Port" />
+                                                    <TextBox Text="{Binding Port, UpdateSourceTrigger=LostFocus}"
+                                                             FontFamily="{StaticResource Font.Mono}" />
+                                                </StackPanel>
+                                            </Grid>
+
+                                            <TextBlock Style="{StaticResource FieldLabel}" Text="Declared memory (MiB)" />
+                                            <TextBox Text="{Binding Capabilities.MemoryMb, UpdateSourceTrigger=LostFocus}" />
+
+                                            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                                <StackPanel.Style>
+                                                    <Style TargetType="StackPanel">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsThisMachine}" Value="True">
+                                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </StackPanel.Style>
+                                                <Button Style="{StaticResource SmallButton}"
+                                                        Content="Probe now"
+                                                        Margin="0,0,8,0"
+                                                        CommandParameter="{Binding}"
+                                                        Command="{Binding DataContext.ProbeNowCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                                                <Button Style="{StaticResource SmallButton}"
+                                                        Content="Remove"
+                                                        CommandParameter="{Binding}"
+                                                        Command="{Binding DataContext.RemoveSourceCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Expander>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

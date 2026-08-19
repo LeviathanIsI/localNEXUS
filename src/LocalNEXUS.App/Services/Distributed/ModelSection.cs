@@ -22,4 +22,10 @@ public sealed record ModelSection(
 
     /// <summary>Short label for the panel and for refusal messages.</summary>
     public string Label => $"section {Index + 1} (layers {FirstLayer}-{LastLayer})";
+
+    /// <summary>Header of a chain segment.</summary>
+    public string Ordinal => $"SECTION {Index + 1}";
+
+    /// <summary>Second line of a chain segment.</summary>
+    public string LayerRangeText => $"layers {FirstLayer}-{LastLayer}";
 }

@@ -91,7 +91,7 @@ public partial class App : Application
 
         var feedViewModel = new ActivityFeedViewModel(executor, graph, feed, Dispatcher);
         var catalogViewModel = new ModelCatalogViewModel(catalog, dialogs);
-        var peersViewModel = new PeersViewModel(sources, rpcWorker, coverage, healthMonitor, feed);
+        var networkViewModel = new NetworkViewModel(networkModels, sources, rpcWorker, healthMonitor, feed);
 
         var mainViewModel = new MainViewModel(
             graph,
@@ -101,7 +101,7 @@ public partial class App : Application
             feed,
             feedViewModel,
             catalogViewModel,
-            peersViewModel,
+            networkViewModel,
             unityProject,
             config);
 

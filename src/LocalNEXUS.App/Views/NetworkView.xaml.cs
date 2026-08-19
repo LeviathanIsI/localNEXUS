@@ -1,8 +1,8 @@
 namespace LocalNEXUS.App.Views;
 
-public partial class PeersView
+public partial class NetworkView
 {
-    public PeersView()
+    public NetworkView()
     {
         InitializeComponent();
     }
