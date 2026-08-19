@@ -18,6 +18,7 @@ x86/
 build/
 artifacts/
 publish/
+dist/
 *.dll
 *.exe
 *.pdb

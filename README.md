@@ -7,9 +7,11 @@ You wire model nodes together on a Blueprints style canvas, type what you want i
 chat box, and watch the models plan, write code, and put files into your Unity project
 while their output streams into a live activity feed.
 
-This repository currently holds the **vertical slice**: the smallest end to end version
-that proves the architecture. It is a real graph execution engine rather than a fixed
-pipeline, so the features on the roadmap drop in without rework.
+This repository holds the **vertical slice** plus the first cut of **distributed
+inference**: one model split across several machines over llama.cpp RPC, with a source
+registry, live health monitoring, coverage tracking and a peer panel. It is a real graph
+execution engine rather than a fixed pipeline, so the features on the roadmap drop in
+without rework.
 
 ## What the slice does
 
@@ -29,6 +31,11 @@ pipeline, so the features on the roadmap drop in without rework.
 - **File writing.** The Output node writes into the Unity project you opened, optionally
   asking for confirmation in the feed first.
 - **Save and load.** Graphs round trip through JSON, positions and settings included.
+- **Distributed inference.** A model that does not fit on one machine is split across
+  sources over llama.cpp RPC, the run is gated on complete coverage, and the peer panel
+  shows which source holds which section while it happens.
+- **Contribution.** Any install can serve its GPU to another orchestrator with one
+  toggle; roles are interchangeable, there is no dedicated worker machine.
 
 ## Tech stack
 
@@ -39,6 +46,7 @@ pipeline, so the features on the roadmap drop in without rework.
 | MVVM             | [CommunityToolkit.Mvvm](https://www.nuget.org/packages/CommunityToolkit.Mvvm) |
 | Scripting        | Roslyn (`Microsoft.CodeAnalysis.CSharp.Scripting`)                            |
 | Local inference  | bundled llama.cpp `llama-server`, spawned as a silent child process           |
+| Distributed      | llama.cpp RPC: `llama-server --rpc` as coordinator, `ggml-rpc-server` as worker |
 | Hosted inference | OpenRouter                                                                    |
 | Serialization    | `System.Text.Json`                                                            |
 
@@ -80,6 +88,21 @@ dotnet restore
 dotnet build
 dotnet run --project src/LocalNEXUS.App
 ```
+
+## Publishing a build to hand to someone
+
+```powershell
+.\publish.ps1
+```
+
+publishes a self contained single file build to `dist\`, overwriting what is there. The
+person you give it to needs no .NET install: `dist\LocalNEXUS.exe` runs on its own.
+Whatever llama.cpp build sits in `vendor\llama\` is copied to `dist\vendor\llama\`
+automatically so local and distributed inference work from the published folder too. If
+`dist\vendor\llama\` is missing on the target machine, drop a llama.cpp build there;
+the app looks next to its own exe first.
+
+`dist\` is a build artifact and stays out of git.
 
 On first run LocalNEXUS creates its data folder:
 
@@ -124,6 +147,48 @@ Select a Model node, switch **Provider** to `OpenRouter`, and fill in:
 
 > Keys are stored in plain text inside the saved graph file. Strip them before sharing
 > a graph.
+
+## Distributed inference: splitting a model across machines
+
+One model can run across several machines on your LAN over llama.cpp RPC. The machine
+you press Run on is the orchestrator; every other machine contributes sections of the
+model. Any install can play either role.
+
+**Set up the contributing machine.** Install LocalNEXUS there (or copy a published
+`dist\` folder), make sure `vendor\llama\` has the llama.cpp build, open the **Peers**
+panel on the right, and press **Start contributing**. That starts the bundled
+`ggml-rpc-server` silently on the configured port (50052 by default) and remembers the
+choice across restarts. The first time, allow it through the Windows firewall or open
+the port yourself; the panel on the orchestrator will show the source as unreachable
+until inbound connections are allowed. The worker does not need the model file: weights
+stream from the orchestrator over the connection.
+
+**Register it on the orchestrator.** In the Peers panel, add a source: a name, the
+other machine's address, the port, and ideally its GPU memory in MiB, which is what the
+automatic split proportions are computed from. The source is probed immediately and
+then every ten seconds, and its state, last seen time and reachability history live in
+the panel.
+
+**Run split.** Select a Model node with a local GGUF. If the model fits on this machine
+it runs here; splitting is a capability unlock, not a speedup, so it only happens when
+the model does not fit. To exercise the split path with a small model, tick **Force a
+split across sources** in the node's Distribution settings. The Coverage section of the
+panel shows the section chain the run would use: which source holds which layer range,
+and how many sources could cover each section. A run is gated on complete coverage; a
+gap in any section refuses the run and names the uncovered section.
+
+**Proportions.** Blank split proportions divide the model by declared memory. To tune
+by hand, enter comma separated values with dot decimals, one per source, remote sources
+first and this machine last, for example `1,1` for an even two way split.
+
+Two things worth knowing about the llama.cpp RPC layer underneath:
+
+- The rpc worker enforces no memory cap of its own. The memory a machine offers is a
+  declared capability that orchestrators honour through their split proportions.
+- If a worker drops mid request, the whole coordinating server goes down with it.
+  LocalNEXUS probes the sources that were engaged, plans coverage again with whatever
+  still covers each section, relaunches, and re-sends the request once; if coverage is
+  no longer complete, the run fails with the reason.
 
 ## Opening a Unity project
 
@@ -185,14 +250,18 @@ src/LocalNEXUS.App/
   Nodes/           InputNode, ModelNode, TransformNode, OutputNode, NodeFactory
   Services/
     Execution/     GraphExecutor, RunContext, RunState, topological sort
-    Inference/     IModelClient, OpenAiCompatibleClient, LlamaServerManager
+    Inference/     IModelClient, OpenAiCompatibleClient, LlamaServerManager,
+                   RpcWorkerManager, LlamaLaunchOptions
+    Distributed/   sections, sources, coverage: InferenceSource, ModelSection,
+                   CoveragePlanner, SourceRegistry, SourceHealthMonitor
     Persistence/   AppPaths, AppConfig, ModelCatalog, GraphSerializer
     Files/         UnityProjectService, FileWriter
     Dialogs/       IDialogService and its Windows implementation
-  ViewModels/      MainViewModel, ActivityFeedViewModel, and friends
-  Views/           XAML only: window, canvas templates, per node settings panels
+  ViewModels/      MainViewModel, ActivityFeedViewModel, PeersViewModel, and friends
+  Views/           XAML only: window, canvas templates, peer panel, settings panels
   Infrastructure/  ActivityFeed, converters, behaviours
-vendor/llama/      llama-server binaries, fetched not committed
+vendor/llama/      llama.cpp binaries, fetched not committed
+publish.ps1        self contained single file publish into dist/
 ```
 
 ## Roadmap

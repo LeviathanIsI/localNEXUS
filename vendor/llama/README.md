@@ -4,9 +4,12 @@ Put a llama.cpp server build here. The contents of this folder are not committed
 they are large, they are specific to your GPU and driver stack, and they ship under
 llama.cpp's own license.
 
-LocalNEXUS looks for `llama-server.exe` in this folder (and in the same folder next
-to the built application). Everything the executable needs, which on Windows means
-its `.dll` files, has to sit beside it.
+LocalNEXUS looks for `llama-server.exe` and `ggml-rpc-server.exe` in this folder (and
+in the same folder next to the built application). `llama-server` serves models and
+coordinates distributed runs; `ggml-rpc-server` is what runs when this machine
+contributes to someone else's pipeline. Both ship in the same release archive.
+Everything the executables need, which on Windows means their `.dll` files, has to
+sit beside them.
 
 ## Getting a build
 
