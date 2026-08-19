@@ -21,22 +21,13 @@ public sealed class LlamaServerInstance : IDisposable
     private StreamWriter? _log;
     private bool _disposed;
 
-    public LlamaServerInstance(
-        Process process,
-        string ggufPath,
-        int port,
-        string logPath,
-        IReadOnlyList<string> rpcEndpoints)
+    public LlamaServerInstance(Process process, string ggufPath, int port, string logPath)
     {
         Process = process;
         GgufPath = ggufPath;
         Port = port;
         LogPath = logPath;
-        RpcEndpoints = rpcEndpoints;
     }
-
-    /// <summary>The rpc workers this server is connected to. Empty for a purely local server.</summary>
-    public IReadOnlyList<string> RpcEndpoints { get; }
 
     /// <summary>The running child process.</summary>
     public Process Process { get; }

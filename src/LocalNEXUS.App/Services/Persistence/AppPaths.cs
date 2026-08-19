@@ -15,10 +15,9 @@ public static class AppPaths
     public const string LlamaServerExecutableName = "llama-server.exe";
 
     /// <summary>
-    /// Name of the llama.cpp rpc worker executable, spawned when this machine contributes to
-    /// another orchestrator. This is the name the official release archives ship it under.
+    /// Name of the Mesh LLM node executable, which is the process the distributed path runs on.
     /// </summary>
-    public const string RpcServerExecutableName = "ggml-rpc-server.exe";
+    public const string MeshExecutableName = "mesh-llm.exe";
 
     /// <summary>Root of the per user data folder.</summary>
     public static string Root { get; } = Path.Combine(
@@ -65,10 +64,36 @@ public static class AppPaths
     public static string? FindLlamaServerExecutable() => FindLlamaExecutable(LlamaServerExecutableName);
 
     /// <summary>
-    /// Locates the bundled rpc-server executable, searched for in the same places as
-    /// llama-server because both ship in the same llama.cpp archive.
+    /// Locates the bundled Mesh LLM executable. Its release bundle carries a native runtime
+    /// tree beside the executable, so the whole bundle is placed under <c>vendor\mesh</c>
+    /// rather than the executable alone.
     /// </summary>
-    public static string? FindRpcServerExecutable() => FindLlamaExecutable(RpcServerExecutableName);
+    public static string? FindMeshExecutable()
+    {
+        foreach (var candidate in EnumerateMeshSearchDirectories())
+        {
+            var executable = Path.Combine(candidate, MeshExecutableName);
+            if (File.Exists(executable))
+            {
+                return executable;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>Every directory searched for the Mesh LLM executable, in priority order.</summary>
+    public static IEnumerable<string> EnumerateMeshSearchDirectories()
+    {
+        foreach (var directory in EnumerateVendorDirectories("mesh"))
+        {
+            yield return directory;
+
+            // The published release bundle keeps the executable one level down beside its
+            // native runtimes, so both shapes resolve without the user rearranging anything.
+            yield return Path.Combine(directory, "mesh-bundle");
+        }
+    }
 
     private static string? FindLlamaExecutable(string executableName)
     {
@@ -85,31 +110,36 @@ public static class AppPaths
     }
 
     /// <summary>Every directory searched for the llama.cpp executables, in priority order.</summary>
-    public static IEnumerable<string> EnumerateLlamaSearchDirectories()
+    public static IEnumerable<string> EnumerateLlamaSearchDirectories() => EnumerateVendorDirectories("llama");
+
+    /// <summary>
+    /// Every place a bundled vendor folder may live, in priority order. Resolution has to give
+    /// the same answer from a development run and from the published single file executable,
+    /// which is why the process path is yielded alongside the base directory rather than one
+    /// being assumed to equal the other.
+    /// </summary>
+    private static IEnumerable<string> EnumerateVendorDirectories(string vendorName)
     {
         var baseDirectory = AppContext.BaseDirectory;
 
-        yield return Path.Combine(baseDirectory, "vendor", "llama");
+        yield return Path.Combine(baseDirectory, "vendor", vendorName);
 
-        // For a self contained single file publish, AppContext.BaseDirectory is documented to
-        // be the directory of the executable, but the process path is yielded as well so the
-        // lookup cannot depend on that detail.
         if (Environment.ProcessPath is { } processPath
             && Path.GetDirectoryName(processPath) is { } processDirectory
             && !string.Equals(processDirectory, baseDirectory.TrimEnd(Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase))
         {
-            yield return Path.Combine(processDirectory, "vendor", "llama");
+            yield return Path.Combine(processDirectory, "vendor", vendorName);
         }
 
         // Walk up from the build output towards the repository root so that a development run
-        // finds vendor\llama without a build step that copies the binaries around.
+        // finds the vendor folder without a build step that copies the binaries around.
         var directory = new DirectoryInfo(baseDirectory);
         while (directory is not null)
         {
-            yield return Path.Combine(directory.FullName, "vendor", "llama");
+            yield return Path.Combine(directory.FullName, "vendor", vendorName);
             directory = directory.Parent;
         }
 
-        yield return Path.Combine(Root, "vendor", "llama");
+        yield return Path.Combine(Root, "vendor", vendorName);
     }
 }

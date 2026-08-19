@@ -15,18 +15,14 @@ public sealed class ExecutionServices
     public ExecutionServices(
         IModelClient modelClient,
         LlamaServerManager llamaServers,
-        SourceRegistry sources,
-        CoveragePlanner coverage,
-        SourceHealthMonitor healthMonitor,
+        MeshManager mesh,
         UnityProjectService unityProject,
         FileWriter fileWriter,
         IActivityFeed feed)
     {
         ModelClient = modelClient;
         LlamaServers = llamaServers;
-        Sources = sources;
-        Coverage = coverage;
-        HealthMonitor = healthMonitor;
+        Mesh = mesh;
         UnityProject = unityProject;
         FileWriter = fileWriter;
         Feed = feed;
@@ -35,17 +31,11 @@ public sealed class ExecutionServices
     /// <summary>Sends chat requests to local and cloud endpoints alike.</summary>
     public IModelClient ModelClient { get; }
 
-    /// <summary>Starts and reuses llama-server processes, local and distributed alike.</summary>
+    /// <summary>Starts and reuses llama-server processes for models served on this machine alone.</summary>
     public LlamaServerManager LlamaServers { get; }
 
-    /// <summary>Every source this install knows about, this machine included.</summary>
-    public SourceRegistry Sources { get; }
-
-    /// <summary>Computes which sources fill which sections and gates distributed launches.</summary>
-    public CoveragePlanner Coverage { get; }
-
-    /// <summary>Probes sources on demand, used before a launch and after a failure.</summary>
-    public SourceHealthMonitor HealthMonitor { get; }
+    /// <summary>This install's mesh node: what the network can serve, and where to send it.</summary>
+    public MeshManager Mesh { get; }
 
     /// <summary>The Unity project that output nodes write into.</summary>
     public UnityProjectService UnityProject { get; }

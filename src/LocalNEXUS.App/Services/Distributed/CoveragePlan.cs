@@ -1,10 +1,15 @@
 namespace LocalNEXUS.App.Services.Distributed;
 
 /// <summary>
-/// The computed answer to "can this model run right now": the section chain, who fills each
-/// section, how much slack each section has, and a single gate the launcher checks before
-/// anything is spawned. A gap in any section means there is no valid pipeline.
+/// The computed answer to "can this model run right now": the section chain, who holds each
+/// section, how much slack each section has, and a single gate the model node checks before
+/// it sends anything. A gap in any section means there is no valid pipeline.
 /// </summary>
+/// <remarks>
+/// The plan is now a reading of the mesh's own topology rather than something this install
+/// computes. The gate stays, because a node still has to refuse a model the network cannot
+/// currently assemble, and it should say which section is missing when it does.
+/// </remarks>
 public sealed class CoveragePlan
 {
     public CoveragePlan(IReadOnlyList<SourceAssignment> assignments)
@@ -15,44 +20,45 @@ public sealed class CoveragePlan
         }
 
         Assignments = assignments;
-        WeakestAssignment = assignments.MinBy(a => a.Redundancy)!;
+        WeakestAssignment = assignments.MinBy(a => a.Depth3 ? 3 : a.Depth2 ? 2 : a.Depth1 ? 1 : 0)!;
 
         var uncovered = assignments.FirstOrDefault(a => !a.IsCovered);
         IsComplete = uncovered is null;
-        IncompleteReason = uncovered is null
-            ? null
-            : $"No source covers {uncovered.Section.Label}. Add a source with enough memory or free this machine's.";
+        IncompleteReason = uncovered switch
+        {
+            null => null,
+            { Source: null } => $"No source holds {uncovered.Section.Label}.",
+            _ => $"{uncovered.Section.Label} is on {uncovered.SourceText} but not serving ({uncovered.StateText})."
+        };
     }
 
     /// <summary>One entry per section, in pipeline order.</summary>
     public IReadOnlyList<SourceAssignment> Assignments { get; }
 
-    /// <summary>The assignment with the least redundancy: the weakest link in the chain.</summary>
+    /// <summary>The assignment with the least slack: the weakest link in the chain.</summary>
     public SourceAssignment WeakestAssignment { get; }
 
     /// <summary>The single gate. False means the run must be refused, with <see cref="IncompleteReason"/> as the message.</summary>
     public bool IsComplete { get; }
 
-    /// <summary>Why the plan is incomplete, naming the uncovered section. Null when complete.</summary>
+    /// <summary>Why the plan is incomplete, naming the section at fault. Null when complete.</summary>
     public string? IncompleteReason { get; }
 
-    /// <summary>True when the plan spans more than one source, which means an rpc launch.</summary>
+    /// <summary>True when the pipeline spans more than one section, which means the mesh split it.</summary>
     public bool IsSplit => Assignments.Count > 1;
 
-    /// <summary>
-    /// The remote endpoints in the order llama-server should be given them. RPC devices are
-    /// registered ahead of local devices by llama.cpp, and the planner builds sections in the
-    /// same order, so this list lines up with the tensor split below.
-    /// </summary>
-    public IReadOnlyList<string> RpcEndpoints => Assignments
-        .Where(a => a.Source is { IsThisMachine: false })
-        .Select(a => a.Source!.EndpointText)
-        .ToList();
+    /// <summary>How many distinct sources hold pieces of this model.</summary>
+    public int SourceCount => Assignments
+        .Select(a => a.Source)
+        .OfType<InferenceSource>()
+        .Select(s => s.SourceId)
+        .Distinct()
+        .Count();
 
-    /// <summary>Tensor split proportions in section order, matching llama.cpp device order.</summary>
-    public IReadOnlyList<double> TensorSplit => Assignments.Select(a => a.Proportion).ToList();
+    /// <summary>Slack behind the weakest section, which is what the model's strength bars show.</summary>
+    public int WeakestSpare => Assignments.Min(a => a.SpareSources);
 
-    /// <summary>One line for status messages: who serves what.</summary>
+    /// <summary>One line for status messages: who holds what.</summary>
     public string Summary => string.Join(", ", Assignments.Select(a =>
         $"{a.Section.Label}: {a.SourceText}"));
 }

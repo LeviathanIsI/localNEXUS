@@ -72,24 +72,15 @@
             <TextBlock Style="{StaticResource HintText}"
                        Text="Applied when LocalNEXUS starts the server for this model. 999 layers means offload everything." />
 
-            <TextBlock Style="{StaticResource SectionHeader}" Margin="0,16,0,0" Text="Distribution" />
-            <CheckBox Content="Force a split across sources"
-                      Margin="0,6,0,0"
-                      IsChecked="{Binding ForceSplit}" />
             <TextBlock Style="{StaticResource HintText}"
-                       Text="Splitting happens automatically when a model does not fit on this machine. Forcing exists to test the split path with a small model." />
-
-            <TextBlock Style="{StaticResource FieldLabel}" Text="Split proportions" />
-            <TextBox Text="{Binding SplitProportions, UpdateSourceTrigger=PropertyChanged}"
-                     FontFamily="{StaticResource Font.Mono}" />
-            <TextBlock Style="{StaticResource HintText}"
-                       Text="Blank divides by declared memory. Otherwise comma separated with dot decimals, one value per source: remote sources first, this machine last. For example 1,1 for an even two way split." />
+                       Margin="0,10,0,0"
+                       Text="A local model runs on this machine alone. To run one across machines, switch this node to the network provider and pick a model the mesh serves." />
         </StackPanel>
 
         <!-- Network served model -->
         <StackPanel Visibility="{Binding IsNetwork, Converter={StaticResource BooleanToVisibility}}">
             <TextBlock Style="{StaticResource FieldLabel}" Text="Network model" />
-            <ComboBox ItemsSource="{Binding NetworkModels.Models}"
+            <ComboBox ItemsSource="{Binding Mesh.Models}"
                       SelectedItem="{Binding SelectedNetworkModel}">
                 <ComboBox.ItemContainerStyle>
                     <Style TargetType="ComboBoxItem" BasedOn="{StaticResource {x:Type ComboBoxItem}}">
@@ -115,7 +106,7 @@
                 </ComboBox.ItemTemplate>
             </ComboBox>
             <TextBlock Style="{StaticResource HintText}"
-                       Text="Models the network can serve right now, from the Network tab. Blocked models cannot be picked; the tab shows which section has no coverage. How the model is assembled across sources is decided at run time." />
+                       Text="Models the mesh can serve right now, from the Network tab. Blocked models cannot be picked; the tab shows which section is at fault. Whether the model runs on one machine or as layer stages across several is the mesh's decision, made at run time." />
         </StackPanel>
 
         <!-- Self hosted server -->

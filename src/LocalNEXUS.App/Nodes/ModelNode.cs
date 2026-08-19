@@ -1,6 +1,4 @@
 using System.IO;
-using System.Net.Http;
-using System.Net.Sockets;
 using System.Text.Json.Nodes;
 using CommunityToolkit.Mvvm.ComponentModel;
 using LocalNEXUS.App.Infrastructure;
@@ -92,22 +90,6 @@ public sealed partial class ModelNode : NodeBase
     private int _gpuLayers = LlamaLaunchOptions.DefaultGpuLayers;
 
     /// <summary>
-    /// Splits the model across sources even when it fits on this machine. Distribution is a
-    /// capability unlock rather than a speedup, so this exists for testing the split path with
-    /// a small model, not as a performance setting.
-    /// </summary>
-    [ObservableProperty]
-    private bool _forceSplit;
-
-    /// <summary>
-    /// Manual split proportions, comma separated with dot decimals, one value per source in
-    /// the plan's order: remote sources first, this machine last. Blank means automatic by
-    /// declared memory.
-    /// </summary>
-    [ObservableProperty]
-    private string _splitProportions = string.Empty;
-
-    /// <summary>
     /// The endpoint root. Filled in automatically when the provider changes. Leaving it blank
     /// for a local model means "use servers this application starts"; setting it points the
     /// node at a server that is already running somewhere else and nothing is spawned.
@@ -119,11 +101,11 @@ public sealed partial class ModelNode : NodeBase
     [ObservableProperty]
     private string _apiKey = string.Empty;
 
-    public ModelNode(ModelCatalog catalog, NetworkModelIndex networkModels)
+    public ModelNode(ModelCatalog catalog, MeshManager mesh)
         : base("Model")
     {
         Catalog = catalog;
-        NetworkModels = networkModels;
+        Mesh = mesh;
 
         Prompt = AddInput("Text", PinType.Text);
         Completion = AddOutput("Code", PinType.Code);
@@ -135,8 +117,8 @@ public sealed partial class ModelNode : NodeBase
     /// <summary>The GGUF files available for the local provider.</summary>
     public ModelCatalog Catalog { get; }
 
-    /// <summary>The models the network serves, for the network provider's dropdown.</summary>
-    public NetworkModelIndex NetworkModels { get; }
+    /// <summary>This install's mesh node: what the network serves, and where to send it.</summary>
+    public MeshManager Mesh { get; }
 
     /// <summary>Receives the text to send to the model.</summary>
     public Pin Prompt { get; }
@@ -183,29 +165,11 @@ public sealed partial class ModelNode : NodeBase
 
         try
         {
-            var resolution = await ResolveEndpointAsync(ctx, entry, ct).ConfigureAwait(false);
-
-            try
-            {
-                return await StreamOnceAsync(ctx, entry, resolution.Endpoint, userContent, ct).ConfigureAwait(false);
-            }
-            catch (Exception ex) when (resolution.Plan is { IsSplit: true } && IsTransportFailure(ex))
-            {
-                // A split pipeline died mid request, which with llama.cpp rpc takes the whole
-                // coordinator down. Probe the sources that were engaged, plan again against
-                // whatever still covers each section, and re-send the request once.
-                entry.Flush();
-                entry.Detail = "a source dropped, planning again";
-                StatusMessage = "A source dropped, planning again";
-                ctx.Feed.Info(
-                    "Distributed run interrupted",
-                    $"{Title} lost its pipeline: {ex.Message} Planning again with the sources still covering each section.");
-
-                var replanned = await ReplanAfterFailureAsync(ctx, entry, resolution.Plan, ct).ConfigureAwait(false);
-
-                entry.Append($"{Environment.NewLine}{Environment.NewLine}");
-                return await StreamOnceAsync(ctx, entry, replanned.Endpoint, userContent, ct).ConfigureAwait(false);
-            }
+            // Recovery from a source dropping mid request belongs to the engine now: the mesh
+            // routes around peers it has retired, so a node that second guessed it here would
+            // be racing the thing that actually knows the topology.
+            var endpoint = await ResolveEndpointAsync(ctx, entry, ct).ConfigureAwait(false);
+            return await StreamOnceAsync(ctx, entry, endpoint, userContent, ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -234,8 +198,6 @@ public sealed partial class ModelNode : NodeBase
         ["maxTokens"] = MaxTokens,
         ["contextSize"] = ContextSize,
         ["gpuLayers"] = GpuLayers,
-        ["forceSplit"] = ForceSplit,
-        ["splitProportions"] = SplitProportions,
         ["baseUrl"] = BaseUrl,
         ["apiKey"] = ApiKey
     };
@@ -254,7 +216,7 @@ public sealed partial class ModelNode : NodeBase
                              ?? (localPath is not null && File.Exists(localPath) ? new LocalModelInfo(localPath) : null);
 
         var networkKey = settings["networkModel"]?.GetValue<string>();
-        SelectedNetworkModel = NetworkModels.FindByKey(networkKey);
+        SelectedNetworkModel = Mesh.FindByKey(networkKey);
         _unresolvedNetworkModelKey = SelectedNetworkModel is null ? networkKey : null;
 
         OpenRouterModel = settings["openRouterModel"]?.GetValue<string>() ?? string.Empty;
@@ -264,8 +226,6 @@ public sealed partial class ModelNode : NodeBase
         MaxTokens = settings["maxTokens"]?.GetValue<int>() ?? 4096;
         ContextSize = settings["contextSize"]?.GetValue<int>() ?? LlamaLaunchOptions.DefaultContextSize;
         GpuLayers = settings["gpuLayers"]?.GetValue<int>() ?? LlamaLaunchOptions.DefaultGpuLayers;
-        ForceSplit = settings["forceSplit"]?.GetValue<bool>() ?? false;
-        SplitProportions = settings["splitProportions"]?.GetValue<string>() ?? string.Empty;
         BaseUrl = settings["baseUrl"]?.GetValue<string>() ?? DefaultBaseUrlFor(Provider);
         ApiKey = settings["apiKey"]?.GetValue<string>() ?? string.Empty;
     }
@@ -302,7 +262,12 @@ public sealed partial class ModelNode : NodeBase
         return NodeResult.FromPin(Completion, result.Text);
     }
 
-    private async Task<EndpointResolution> ResolveEndpointAsync(
+    /// <summary>
+    /// Works out where this node's request goes. Local models are served by a process this
+    /// application starts; network models are served by the mesh, which decides for itself
+    /// whether that means one peer or layer stages across several.
+    /// </summary>
+    private async Task<ModelEndpoint> ResolveEndpointAsync(
         NodeExecutionContext ctx,
         ActivityEvent entry,
         CancellationToken ct)
@@ -320,31 +285,12 @@ public sealed partial class ModelNode : NodeBase
             }
 
             var openRouterUrl = string.IsNullOrWhiteSpace(BaseUrl) ? OpenRouterBaseUrl : BaseUrl;
-            return new EndpointResolution(new ModelEndpoint(openRouterUrl, OpenRouterModel, ApiKey), null);
+            return new ModelEndpoint(openRouterUrl, OpenRouterModel, ApiKey);
         }
 
         if (Provider == ModelProvider.Network)
         {
-            var networkModel = SelectedNetworkModel
-                ?? throw new InvalidOperationException(
-                    $"{Title} has no network model selected. Pick one in the Network tab or the node settings.");
-
-            if (!networkModel.IsComplete)
-            {
-                throw new InvalidOperationException(
-                    $"{Title} cannot use {networkModel.DisplayLabel}: {networkModel.IncompleteReason ?? "coverage is incomplete."}");
-            }
-
-            if (string.IsNullOrWhiteSpace(networkModel.LocalPath))
-            {
-                throw new InvalidOperationException(
-                    $"{Title} cannot serve {networkModel.DisplayLabel}: this install holds no copy of the weights, and fetching them from the network does not exist yet.");
-            }
-
-            // Assembled however the planner decides, exactly like a local model that does not
-            // fit: sources are fungible and the graph does not care where inference happens.
-            return await ResolveManagedAsync(ctx, entry, networkModel.LocalPath, forceSplit: false, manualProportions: null, ct)
-                .ConfigureAwait(false);
+            return ResolveNetwork(ctx);
         }
 
         if (Provider == ModelProvider.SelfHosted)
@@ -360,7 +306,7 @@ public sealed partial class ModelNode : NodeBase
             }
 
             var key = string.IsNullOrWhiteSpace(ApiKey) ? null : ApiKey;
-            return new EndpointResolution(new ModelEndpoint(BaseUrl, SelfHostedModelId, key), null);
+            return new ModelEndpoint(BaseUrl, SelfHostedModelId, key);
         }
 
         var modelPath = SelectedLocalModel?.Path;
@@ -374,63 +320,8 @@ public sealed partial class ModelNode : NodeBase
         // user is pointing at their own server, so nothing is spawned.
         if (!string.IsNullOrWhiteSpace(BaseUrl))
         {
-            return new EndpointResolution(new ModelEndpoint(BaseUrl, Path.GetFileNameWithoutExtension(modelPath)), null);
+            return new ModelEndpoint(BaseUrl, Path.GetFileNameWithoutExtension(modelPath));
         }
-
-        return await ResolveManagedAsync(
-                ctx, entry, modelPath, ForceSplit, ParseSplitProportions(SplitProportions), ct)
-            .ConfigureAwait(false);
-    }
-
-    /// <summary>
-    /// The managed path shared by the local and network providers: decide whether the model
-    /// runs on this machine alone or split across sources, gate on coverage, and start or
-    /// reuse the server the plan calls for.
-    /// </summary>
-    private async Task<EndpointResolution> ResolveManagedAsync(
-        NodeExecutionContext ctx,
-        ActivityEvent entry,
-        string modelPath,
-        bool forceSplit,
-        IReadOnlyList<double>? manualProportions,
-        CancellationToken ct)
-    {
-        CoveragePlan? plan = null;
-
-        var metadata = TryReadMetadata(modelPath, out var metadataError);
-        if (metadata is null)
-        {
-            // Without layer count and size there is nothing to plan with. A plain local
-            // launch still works exactly as it always has; only splitting needs the header.
-            if (forceSplit)
-            {
-                throw new InvalidOperationException($"{Title} cannot plan a split: {metadataError}");
-            }
-        }
-        else
-        {
-            await ProbeUnknownSourcesAsync(ctx, ct).ConfigureAwait(false);
-
-            plan = ctx.Services.Coverage.Plan(metadata, forceSplit, manualProportions);
-            if (!plan.IsComplete)
-            {
-                throw new InvalidOperationException($"{Title} cannot run: {plan.IncompleteReason}");
-            }
-
-            if (plan.IsSplit)
-            {
-                // Automatic but visible: the system chose the assembly, so it shows its work.
-                ctx.Feed.Info("Coverage plan", $"{Title}: {plan.Summary}");
-            }
-        }
-
-        var launchOptions = new LlamaLaunchOptions
-        {
-            ContextSize = ContextSize,
-            GpuLayers = GpuLayers,
-            RpcEndpoints = plan is { IsSplit: true } ? plan.RpcEndpoints : Array.Empty<string>(),
-            TensorSplit = plan is { IsSplit: true } ? plan.TensorSplit : Array.Empty<double>()
-        };
 
         var status = new DelegateProgress<string>(message =>
         {
@@ -438,113 +329,48 @@ public sealed partial class ModelNode : NodeBase
             StatusMessage = message;
         });
 
+        var launchOptions = new LlamaLaunchOptions { ContextSize = ContextSize, GpuLayers = GpuLayers };
+
         var managedBaseUrl = await ctx.Services.LlamaServers
             .EnsureServerAsync(modelPath, launchOptions, status, ct)
             .ConfigureAwait(false);
 
-        return new EndpointResolution(
-            new ModelEndpoint(managedBaseUrl, Path.GetFileNameWithoutExtension(modelPath)),
-            plan);
+        return new ModelEndpoint(managedBaseUrl, Path.GetFileNameWithoutExtension(modelPath));
     }
 
     /// <summary>
-    /// After a split pipeline failed: probe the sources that were engaged so the registry
-    /// reflects reality, then resolve from scratch. The planner assigns whatever still covers
-    /// each section; no source is special.
+    /// Points the request at the mesh. The gate is the mesh's own answer to whether it can
+    /// assemble this model right now, and a refusal repeats the reason it gave rather than
+    /// inventing one.
     /// </summary>
-    private async Task<EndpointResolution> ReplanAfterFailureAsync(
-        NodeExecutionContext ctx,
-        ActivityEvent entry,
-        CoveragePlan failedPlan,
-        CancellationToken ct)
+    private ModelEndpoint ResolveNetwork(NodeExecutionContext ctx)
     {
-        var engaged = failedPlan.Assignments
-            .Select(a => a.Source)
-            .OfType<InferenceSource>()
-            .Where(s => !s.IsThisMachine)
-            .Distinct()
-            .ToList();
+        var mesh = ctx.Services.Mesh;
 
-        if (engaged.Count > 0)
+        var networkModel = SelectedNetworkModel
+            ?? throw new InvalidOperationException(
+                $"{Title} has no network model selected. Pick one in the Network tab or the node settings.");
+
+        if (!mesh.IsRunning)
         {
-            await Task.WhenAll(engaged.Select(s => ctx.Services.HealthMonitor.ProbeNowAsync(s, ct))).ConfigureAwait(false);
+            throw new InvalidOperationException(
+                $"{Title} cannot use {networkModel.DisplayLabel}: this install's mesh node is not running. Start it from the Network tab.");
         }
 
-        var modelPath = Provider == ModelProvider.Network
-            ? SelectedNetworkModel?.LocalPath
-            : SelectedLocalModel?.Path;
-
-        if (string.IsNullOrWhiteSpace(modelPath))
+        if (!networkModel.IsComplete)
         {
-            throw new InvalidOperationException($"{Title} no longer has a model selected.");
+            throw new InvalidOperationException(
+                $"{Title} cannot use {networkModel.DisplayLabel}: {networkModel.IncompleteReason ?? "the mesh cannot assemble it right now."}");
         }
 
-        var forceSplit = Provider != ModelProvider.Network && ForceSplit;
-        var proportions = Provider == ModelProvider.Network ? null : ParseSplitProportions(SplitProportions);
+        // Automatic but visible: the mesh chose the assembly, so the run shows its work.
+        if (networkModel.Plan is { IsSplit: true } plan)
+        {
+            ctx.Feed.Info("Coverage plan", $"{Title}: {plan.Summary}");
+        }
 
-        return await ResolveManagedAsync(ctx, entry, modelPath, forceSplit, proportions, ct).ConfigureAwait(false);
+        return new ModelEndpoint(mesh.ApiBaseUrl, networkModel.ModelId);
     }
-
-    private static async Task ProbeUnknownSourcesAsync(NodeExecutionContext ctx, CancellationToken ct)
-    {
-        var unknown = ctx.Services.Sources.RemoteSources
-            .Where(s => s.State == SourceState.Unknown)
-            .ToList();
-
-        if (unknown.Count > 0)
-        {
-            await Task.WhenAll(unknown.Select(s => ctx.Services.HealthMonitor.ProbeNowAsync(s, ct))).ConfigureAwait(false);
-        }
-    }
-
-    private static GgufModelInfo? TryReadMetadata(string modelPath, out string error)
-    {
-        try
-        {
-            error = string.Empty;
-            return GgufMetadata.Read(modelPath);
-        }
-        catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException)
-        {
-            error = ex.Message;
-            return null;
-        }
-    }
-
-    /// <summary>
-    /// Parses manual split proportions. Public because the peer panel previews coverage with
-    /// exactly the proportions a run would use. Null when blank or unparsable, which means
-    /// automatic by memory.
-    /// </summary>
-    public static IReadOnlyList<double>? ParseSplitProportions(string text)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return null;
-        }
-
-        var parts = text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var values = new List<double>(parts.Length);
-
-        foreach (var part in parts)
-        {
-            if (!double.TryParse(part, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var value)
-                || value <= 0)
-            {
-                return null;
-            }
-
-            values.Add(value);
-        }
-
-        return values;
-    }
-
-    private static bool IsTransportFailure(Exception ex)
-        => ex is ModelClientException or HttpRequestException or IOException or SocketException;
 
     partial void OnProviderChanged(ModelProvider value) => BaseUrl = DefaultBaseUrlFor(value);
-
-    /// <summary>What resolution produced: the endpoint to call, and the coverage plan behind it when the launch was distributed.</summary>
-    private sealed record EndpointResolution(ModelEndpoint Endpoint, CoveragePlan? Plan);
 }

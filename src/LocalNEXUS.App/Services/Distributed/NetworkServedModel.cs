@@ -3,37 +3,42 @@ using CommunityToolkit.Mvvm.ComponentModel;
 namespace LocalNEXUS.App.Services.Distributed;
 
 /// <summary>
-/// One model the network can serve: an identity (name plus quantization, never a machine),
-/// what it takes to run, and how well the network covers it right now. Instances are updated
-/// in place by the index, so anything holding a reference, a list row or a model node, sees
-/// coverage change live.
+/// One model the network can serve: an identity the mesh assigns, what it takes to run, and
+/// how well the network covers it right now. Instances are updated in place by the manager, so
+/// anything holding a reference, a list row or a model node, sees coverage change live.
 /// </summary>
+/// <remarks>
+/// The identity is the mesh's model id, never a file path or a machine. Where the weights
+/// physically live, which peer holds which layers, and whether any of it is on this machine
+/// are all details of the current assembly rather than part of what the model is.
+/// </remarks>
 public sealed partial class NetworkServedModel : ObservableObject
 {
-    /// <summary>Where this install can load the weights from. Empty once entries can exist that only the network holds.</summary>
+    /// <summary>Quantization label reported in the model's metadata.</summary>
     [ObservableProperty]
-    private string _localPath = string.Empty;
-
-    /// <summary>Size of the weights on disk.</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(SizeText))]
-    [NotifyPropertyChangedFor(nameof(RequirementText))]
-    private long _fileBytes;
-
-    /// <summary>Estimated memory to serve the whole model, in MiB.</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(RequirementText))]
-    private long _estimatedMemoryMb;
+    [NotifyPropertyChangedFor(nameof(DisplayLabel))]
+    private string _quantization = "unknown";
 
     /// <summary>Number of transformer layers, which is what gets divided into sections.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(RequirementText))]
     private int _layerCount;
 
-    /// <summary>The current assembly: who would fill which section if this model ran now.</summary>
+    /// <summary>Parameter count as the engine words it, for example <c>630M</c>.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(RequirementText))]
+    private string _parameterSize = string.Empty;
+
+    /// <summary>Context window the model was loaded with.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(RequirementText))]
+    private int _contextLength;
+
+    /// <summary>The current assembly: who holds which section if this model ran now.</summary>
     [ObservableProperty]
     private CoveragePlan? _plan;
 
-    /// <summary>The single most important signal: whether every section has coverage.</summary>
+    /// <summary>The single most important signal: whether the mesh can serve this model right now.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Strength))]
     [NotifyPropertyChangedFor(nameof(StatusText))]
@@ -43,78 +48,109 @@ public sealed partial class NetworkServedModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(HasDepth3))]
     private bool _isComplete;
 
-    /// <summary>Why the model cannot run, naming the uncovered section. Null when complete.</summary>
+    /// <summary>Why the model cannot run, naming the section at fault. Null when complete.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(StatusText))]
     [NotifyPropertyChangedFor(nameof(ChainStatusText))]
     private string? _incompleteReason;
 
-    /// <summary>How many distinct sources serve pieces of this model in the current plan.</summary>
+    /// <summary>How many distinct sources hold pieces of this model in the current assembly.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(PeerCountText))]
     private int _peerCount;
 
-    /// <summary>The redundancy of the weakest section: the chain is only as strong as this.</summary>
+    /// <summary>Usable peers standing spare behind the weakest section.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Strength))]
     [NotifyPropertyChangedFor(nameof(ChainStatusText))]
-    [NotifyPropertyChangedFor(nameof(HasDepth1))]
     [NotifyPropertyChangedFor(nameof(HasDepth2))]
     [NotifyPropertyChangedFor(nameof(HasDepth3))]
-    private int _weakestRedundancy;
+    private int _weakestSpare;
 
-    public NetworkServedModel(string name, string quantization)
+    public NetworkServedModel(string modelId)
     {
-        Name = name;
-        Quantization = quantization;
+        ModelId = modelId;
+        Name = ShortenId(modelId);
     }
 
-    /// <summary>The model's own name from its metadata.</summary>
+    /// <summary>The mesh's own id for this model. Sent as the model field on every request.</summary>
+    public string ModelId { get; }
+
+    /// <summary>The readable tail of the id, which is what the row leads with.</summary>
     public string Name { get; }
 
-    /// <summary>Quantization label, part of the identity.</summary>
-    public string Quantization { get; }
-
-    /// <summary>Stable identity the index reconciles on and graphs persist.</summary>
-    public string ModelKey => BuildKey(Name, Quantization);
+    /// <summary>Stable identity the manager reconciles on and graphs persist.</summary>
+    public string ModelKey => ModelId;
 
     /// <summary>Overall strength: the weakest section decides.</summary>
     public SectionCoverage Strength => !IsComplete
         ? SectionCoverage.Uncovered
-        : WeakestRedundancy >= 2 ? SectionCoverage.Healthy : SectionCoverage.Thin;
+        : WeakestSpare >= 1 ? SectionCoverage.Healthy : SectionCoverage.Thin;
 
     /// <summary>One word for the row badge, with the reason carried separately.</summary>
     public string StatusText => IsComplete ? "Complete" : "Blocked";
 
     /// <summary>The sentence above the coverage chain.</summary>
     public string ChainStatusText => IsComplete
-        ? $"Complete and armed. Every section is covered; the weakest has {WeakestRedundancy} candidate source(s)."
-        : IncompleteReason ?? "Blocked: coverage is incomplete.";
+        ? WeakestSpare > 0
+            ? $"Complete and armed. Every section is serving, with {WeakestSpare} spare source(s) behind the weakest."
+            : "Complete and armed. Every section is serving, with no spare source behind the weakest."
+        : IncompleteReason ?? "Blocked: the mesh cannot assemble this model right now.";
 
     /// <summary>First strength bar of the row: the model can run at all.</summary>
-    public bool HasDepth1 => IsComplete && WeakestRedundancy >= 1;
+    public bool HasDepth1 => IsComplete;
 
-    /// <summary>Second strength bar: every section survives losing one source.</summary>
-    public bool HasDepth2 => IsComplete && WeakestRedundancy >= 2;
+    /// <summary>Second strength bar: a spare source stands behind every section.</summary>
+    public bool HasDepth2 => IsComplete && WeakestSpare >= 1;
 
-    /// <summary>Third strength bar: comfortably covered everywhere.</summary>
-    public bool HasDepth3 => IsComplete && WeakestRedundancy >= 3;
+    /// <summary>Third strength bar: more than one spare source everywhere.</summary>
+    public bool HasDepth3 => IsComplete && WeakestSpare >= 2;
 
-    public string SizeText => FileBytes switch
+    /// <summary>What this model takes to run, from the metadata the mesh reports.</summary>
+    public string RequirementText
     {
-        >= 1024L * 1024 * 1024 => $"{FileBytes / (1024d * 1024 * 1024):0.0} GB",
-        >= 1024L * 1024 => $"{FileBytes / (1024d * 1024):0} MB",
-        _ => $"{FileBytes} bytes"
-    };
+        get
+        {
+            var parts = new List<string>(3);
 
-    public string RequirementText => $"{SizeText} on disk, about {EstimatedMemoryMb} MiB to serve";
+            if (!string.IsNullOrWhiteSpace(ParameterSize))
+            {
+                parts.Add($"{ParameterSize} parameters");
+            }
+
+            if (LayerCount > 0)
+            {
+                parts.Add($"{LayerCount} layers");
+            }
+
+            if (ContextLength > 0)
+            {
+                parts.Add($"{ContextLength:N0} token context");
+            }
+
+            return parts.Count == 0 ? "no metadata reported" : string.Join(", ", parts);
+        }
+    }
 
     public string PeerCountText => PeerCount == 1 ? "1 source" : $"{PeerCount} sources";
 
     /// <summary>Name plus quantization for dropdowns and the row title.</summary>
     public string DisplayLabel => $"{Name} ({Quantization})";
 
-    public static string BuildKey(string name, string quantization) => $"{name}|{quantization}";
+    /// <summary>
+    /// Trims a mesh model id down to what is worth leading a row with. Ids are either a
+    /// package reference with a namespace or a synthetic local id, and in both cases the
+    /// last segment is the part a person recognises.
+    /// </summary>
+    private static string ShortenId(string modelId)
+    {
+        var lastSlash = modelId.LastIndexOf('/');
+        var tail = lastSlash >= 0 && lastSlash < modelId.Length - 1
+            ? modelId[(lastSlash + 1)..]
+            : modelId;
+
+        return string.IsNullOrWhiteSpace(tail) ? modelId : tail;
+    }
 
     public override string ToString() => DisplayLabel;
 }

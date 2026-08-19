@@ -25,11 +25,6 @@
             </Grid.RowDefinitions>
 
             <DockPanel Grid.Row="0" Margin="0,0,0,14">
-                <Button DockPanel.Dock="Right"
-                        Style="{StaticResource SmallButton}"
-                        VerticalAlignment="Center"
-                        Content="Refresh"
-                        Command="{Binding RefreshModelsCommand}" />
                 <StackPanel>
                     <TextBlock Text="Available models"
                                FontSize="{StaticResource Font.Size.Title}"
@@ -37,12 +32,12 @@
                     <TextBlock Margin="0,3,0,0"
                                FontSize="{StaticResource Font.Size.Small}"
                                Foreground="{StaticResource Text.Secondary.Brush}"
-                               Text="What the network can serve right now. Pick one to see how it is assembled." />
+                               Text="{Binding Mesh.StatusText}" />
                 </StackPanel>
             </DockPanel>
 
             <ListBox Grid.Row="1"
-                     ItemsSource="{Binding Index.Models}"
+                     ItemsSource="{Binding Mesh.Models}"
                      SelectedItem="{Binding SelectedModel}"
                      ScrollViewer.VerticalScrollBarVisibility="Auto">
                 <ListBox.ItemTemplate>
@@ -273,11 +268,11 @@
             </StackPanel>
         </Grid>
 
-        <!-- ============================ Sources and contribution ============================ -->
+        <!-- ============================ This machine, membership and sources ============================ -->
         <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
             <StackPanel>
 
-                <!-- Contribution card -->
+                <!-- Mesh node card: the process the distributed path runs on -->
                 <Border Style="{StaticResource Card}">
                     <StackPanel>
                         <DockPanel>
@@ -289,7 +284,61 @@
                                     BorderBrush="{StaticResource Text.Secondary.Brush}"
                                     VerticalAlignment="Center"
                                     Background="Transparent"
-                                    ToolTip="The memory offer is declared, not enforced: orchestrators honour it through their split proportions, because the bundled rpc-server has no cap flag.">
+                                    ToolTip="The mesh node is a child process. It joins a private mesh on the local network unless you publish it, and stopping it leaves local inference untouched.">
+                                <TextBlock Text="?"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           FontSize="{StaticResource Font.Size.Small}"
+                                           Foreground="{StaticResource Text.Secondary.Brush}" />
+                            </Border>
+                            <TextBlock Text="This machine"
+                                       FontSize="{StaticResource Font.Size.Large}"
+                                       FontWeight="SemiBold" />
+                        </DockPanel>
+
+                        <TextBlock Margin="0,8,0,0"
+                                   TextWrapping="Wrap"
+                                   FontSize="{StaticResource Font.Size.Small}"
+                                   Foreground="{StaticResource Text.Secondary.Brush}"
+                                   Text="{Binding Mesh.StatusText}" />
+
+                        <TextBlock Margin="0,6,0,0"
+                                   TextWrapping="Wrap"
+                                   FontSize="{StaticResource Font.Size.Small}"
+                                   Foreground="{StaticResource SectionCoverage.Uncovered.Brush}"
+                                   Text="{Binding Mesh.LastError}"
+                                   Visibility="{Binding Mesh.LastError, Converter={StaticResource StringToVisibility}}" />
+
+                        <Button Margin="0,12,0,0"
+                                HorizontalAlignment="Left"
+                                Command="{Binding ToggleMeshCommand}">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                    <Setter Property="Content" Value="Start mesh node" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Mesh.IsRunning}" Value="True">
+                                            <Setter Property="Content" Value="Stop mesh node" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                    </StackPanel>
+                </Border>
+
+                <!-- Contribution card -->
+                <Border Style="{StaticResource Card}" Margin="0,14,0,0">
+                    <StackPanel>
+                        <DockPanel>
+                            <Border DockPanel.Dock="Right"
+                                    Width="18"
+                                    Height="18"
+                                    CornerRadius="9"
+                                    BorderThickness="1"
+                                    BorderBrush="{StaticResource Text.Secondary.Brush}"
+                                    VerticalAlignment="Center"
+                                    Background="Transparent"
+                                    ToolTip="The memory cap is enforced by the mesh planner, not merely declared: a model that does not fit inside it is never placed on this machine.">
                                 <TextBlock Text="?"
                                            HorizontalAlignment="Center"
                                            VerticalAlignment="Center"
@@ -301,127 +350,115 @@
                                        FontWeight="SemiBold" />
                         </DockPanel>
 
-                        <TextBlock Margin="0,6,0,0"
-                                   FontSize="{StaticResource Font.Size.Small}"
-                                   TextWrapping="Wrap"
-                                   Foreground="{StaticResource Text.Secondary.Brush}"
-                                   Text="{Binding Worker.StatusText}" />
+                        <CheckBox Margin="0,10,0,0"
+                                  Content="Offer this machine's compute"
+                                  IsChecked="{Binding Contribute}" />
 
-                        <Grid Margin="0,10,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="12" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="12" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource FieldLabel}" Margin="0,12,0,4" Text="Model this machine serves" />
+                        <ComboBox ItemsSource="{Binding Catalog.Models}"
+                                  SelectedItem="{Binding OfferedModel}"
+                                  DisplayMemberPath="Name"
+                                  IsEnabled="{Binding Contribute}" />
 
-                            <StackPanel Grid.Column="0">
-                                <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,4" Text="Port" />
-                                <TextBox Text="{Binding Worker.Port, UpdateSourceTrigger=LostFocus}">
-                                    <TextBox.Style>
-                                        <Style TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding Worker.IsRunning}" Value="True">
-                                                    <Setter Property="IsEnabled" Value="False" />
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </TextBox.Style>
-                                </TextBox>
-                            </StackPanel>
+                        <TextBlock Style="{StaticResource FieldLabel}" Margin="0,12,0,4" Text="Memory cap in GB, blank to let the engine decide" />
+                        <TextBox Text="{Binding MaxVramGb, UpdateSourceTrigger=LostFocus}"
+                                 IsEnabled="{Binding Contribute}" />
 
-                            <StackPanel Grid.Column="2">
-                                <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,4" Text="Memory offer (MiB)" />
-                                <TextBox Text="{Binding Registry.ThisMachine.Capabilities.MemoryMb, UpdateSourceTrigger=LostFocus}" />
-                            </StackPanel>
+                        <CheckBox Margin="0,12,0,0"
+                                  Content="Publish this mesh publicly"
+                                  IsChecked="{Binding Publish}"
+                                  ToolTip="Off by default. A private mesh stays on the local network and is joined only with its invite token." />
 
-                            <Button Grid.Column="4"
-                                    VerticalAlignment="Bottom"
-                                    Command="{Binding ToggleContributionCommand}">
-                                <Button.Style>
-                                    <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-                                        <Setter Property="Content" Value="Contribute" />
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding Worker.IsRunning}" Value="True">
-                                                <Setter Property="Content" Value="Stop" />
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Button.Style>
-                            </Button>
-                        </Grid>
+                        <Button Margin="0,14,0,0"
+                                HorizontalAlignment="Left"
+                                Content="Apply"
+                                Command="{Binding ApplySettingsCommand}" />
                     </StackPanel>
                 </Border>
 
-                <!-- Sources -->
+                <!-- Membership: the invite others need to join this mesh -->
+                <Border Style="{StaticResource Card}" Margin="0,14,0,0">
+                    <StackPanel>
+                        <TextBlock Text="Mesh"
+                                   FontSize="{StaticResource Font.Size.Large}"
+                                   FontWeight="SemiBold" />
+
+                        <TextBlock Style="{StaticResource FieldLabel}" Margin="0,10,0,4" Text="Name" />
+                        <TextBox Text="{Binding MeshName, UpdateSourceTrigger=LostFocus}" />
+
+                        <TextBlock Style="{StaticResource FieldLabel}"
+                                   Margin="0,12,0,4"
+                                   Text="Invite token for this mesh, share it to let a machine join"
+                                   Visibility="{Binding Mesh.HasInviteToken, Converter={StaticResource BooleanToVisibility}}" />
+                        <TextBox Text="{Binding Mesh.InviteToken, Mode=OneWay}"
+                                 IsReadOnly="True"
+                                 TextWrapping="Wrap"
+                                 MaxHeight="72"
+                                 FontFamily="{StaticResource Font.Mono}"
+                                 FontSize="{StaticResource Font.Size.Small}"
+                                 VerticalScrollBarVisibility="Auto"
+                                 Visibility="{Binding Mesh.HasInviteToken, Converter={StaticResource BooleanToVisibility}}" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Sources, secondary to the models above -->
                 <DockPanel Margin="0,22,0,10">
                     <Button DockPanel.Dock="Right"
                             Style="{StaticResource SmallButton}"
+                            VerticalAlignment="Center"
                             Content="+"
-                            Padding="10,2"
-                            FontSize="{StaticResource Font.Size.Large}"
-                            ToolTip="Add a source by address"
-                            Command="{Binding ToggleAddSourceCommand}" />
-                    <TextBlock Text="Sources"
-                               FontSize="{StaticResource Font.Size.Large}"
-                               FontWeight="SemiBold"
-                               VerticalAlignment="Center" />
+                            Width="26"
+                            ToolTip="Join a mesh with an invite token"
+                            Command="{Binding ToggleJoinCommand}" />
+                    <StackPanel>
+                        <TextBlock Text="Sources"
+                                   FontSize="{StaticResource Font.Size.Large}"
+                                   FontWeight="SemiBold" />
+                        <TextBlock Margin="0,3,0,0"
+                                   FontSize="{StaticResource Font.Size.Small}"
+                                   Foreground="{StaticResource Text.Secondary.Brush}"
+                                   Text="Reported by the mesh. Nothing here is configured by hand." />
+                    </StackPanel>
                 </DockPanel>
 
+                <!-- Join form, behind the plus rather than on the page -->
                 <Border Style="{StaticResource Card}"
                         Margin="0,0,0,12"
-                        Visibility="{Binding IsAddSourceOpen, Converter={StaticResource BooleanToVisibility}}">
+                        Visibility="{Binding IsJoinOpen, Converter={StaticResource BooleanToVisibility}}">
                     <StackPanel>
-                        <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,4" Text="Display name" />
-                        <TextBox Text="{Binding NewSourceName, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,4" Text="Invite token" />
+                        <TextBox Text="{Binding JoinToken, UpdateSourceTrigger=PropertyChanged}"
+                                 TextWrapping="Wrap"
+                                 MaxHeight="72"
+                                 FontFamily="{StaticResource Font.Mono}"
+                                 FontSize="{StaticResource Font.Size.Small}"
+                                 VerticalScrollBarVisibility="Auto" />
 
-                        <Grid Margin="0,8,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="2*" />
-                                <ColumnDefinition Width="10" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0">
-                                <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,4" Text="Host" />
-                                <TextBox Text="{Binding NewSourceHost, UpdateSourceTrigger=PropertyChanged}"
-                                         FontFamily="{StaticResource Font.Mono}" />
-                            </StackPanel>
-                            <StackPanel Grid.Column="2">
-                                <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,4" Text="Port" />
-                                <TextBox Text="{Binding NewSourcePort, UpdateSourceTrigger=PropertyChanged}"
-                                         FontFamily="{StaticResource Font.Mono}" />
-                            </StackPanel>
-                        </Grid>
+                        <TextBlock Margin="0,8,0,0"
+                                   TextWrapping="Wrap"
+                                   FontSize="{StaticResource Font.Size.Small}"
+                                   Foreground="{StaticResource Text.Secondary.Brush}"
+                                   Text="Joining restarts the mesh node. Leave the token blank to host a private mesh of your own instead." />
 
-                        <TextBlock Style="{StaticResource FieldLabel}" Text="Declared memory (MiB, blank for unknown)" />
-                        <TextBox Text="{Binding NewSourceMemoryMb, UpdateSourceTrigger=PropertyChanged}" />
-
-                        <CheckBox Content="Reached over the internet"
-                                  Margin="0,10,0,0"
-                                  IsChecked="{Binding NewSourceIsInternet}" />
-
-                        <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                        <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+                            <Button Content="Join"
+                                    Command="{Binding JoinMeshCommand}" />
                             <Button Style="{StaticResource SmallButton}"
-                                    Content="Add source"
-                                    Margin="0,0,8,0"
-                                    Command="{Binding AddSourceCommand}" />
+                                    Margin="8,0,0,0"
+                                    Content="Leave"
+                                    Command="{Binding LeaveMeshCommand}" />
                             <Button Style="{StaticResource SmallButton}"
+                                    Margin="8,0,0,0"
                                     Content="Cancel"
-                                    Command="{Binding ToggleAddSourceCommand}" />
+                                    Command="{Binding ToggleJoinCommand}" />
                         </StackPanel>
                     </StackPanel>
                 </Border>
 
-                <ItemsControl ItemsSource="{Binding Registry.Sources}">
+                <ItemsControl ItemsSource="{Binding Mesh.Sources}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="{x:Type distributed:InferenceSource}">
-                            <Border Background="{StaticResource Surface.Card.Brush}"
-                                    BorderBrush="{StaticResource Surface.Border.Brush}"
-                                    BorderThickness="1"
-                                    CornerRadius="8"
-                                    Padding="14,11"
-                                    Margin="0,0,0,10">
+                            <Border Style="{StaticResource Card}" Margin="0,0,0,10">
                                 <StackPanel>
                                     <DockPanel>
                                         <TextBlock DockPanel.Dock="Right"
@@ -429,88 +466,27 @@
                                                    VerticalAlignment="Center"
                                                    FontSize="{StaticResource Font.Size.Small}"
                                                    Foreground="{Binding State, Converter={StaticResource ResourceLookup}, ConverterParameter=SourceState}" />
-                                        <Ellipse Width="9"
-                                                 Height="9"
+                                        <Ellipse Width="8"
+                                                 Height="8"
                                                  Margin="0,0,8,0"
                                                  VerticalAlignment="Center"
                                                  Fill="{Binding State, Converter={StaticResource ResourceLookup}, ConverterParameter=SourceState}" />
                                         <TextBlock Text="{Binding DisplayName}"
                                                    FontWeight="SemiBold"
-                                                   VerticalAlignment="Center" />
+                                                   TextTrimming="CharacterEllipsis" />
                                     </DockPanel>
 
-                                    <TextBlock Margin="0,5,0,0"
+                                    <TextBlock Margin="0,8,0,0"
                                                FontSize="{StaticResource Font.Size.Small}"
                                                Foreground="{StaticResource Text.Secondary.Brush}">
-                                        <Run Text="{Binding EndpointText, Mode=OneWay}" FontFamily="Cascadia Mono, Consolas, Courier New" /><Run Text="    " /><Run Text="{Binding Locality, Mode=OneWay}" />
+                                        <Run Text="{Binding EndpointText, Mode=OneWay}" FontFamily="{StaticResource Font.Mono}" /><Run Text="    " /><Run Text="{Binding Locality, Mode=OneWay}" />
                                     </TextBlock>
 
-                                    <TextBlock Margin="0,3,0,0"
+                                    <TextBlock Margin="0,4,0,0"
                                                FontSize="{StaticResource Font.Size.Small}"
                                                Foreground="{StaticResource Text.Secondary.Brush}">
-                                        <Run Text="Last seen" /><Run Text=" " /><Run Text="{Binding LastSeenText, Mode=OneWay}" /><Run Text="    " /><Run Text="{Binding ReachabilitySummary, Mode=OneWay}" /><Run Text="    " /><Run Text="{Binding Capabilities.Summary, Mode=OneWay}" />
+                                        <Run Text="Last seen" /><Run Text=" " /><Run Text="{Binding LastSeenText, Mode=OneWay}" /><Run Text="    " /><Run Text="{Binding CapabilityText, Mode=OneWay}" />
                                     </TextBlock>
-
-                                    <Expander Header="Edit"
-                                              Margin="0,7,0,0"
-                                              Foreground="{StaticResource Text.Secondary.Brush}"
-                                              FontSize="{StaticResource Font.Size.Small}">
-                                        <StackPanel Margin="0,8,0,0">
-                                            <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,4" Text="Display name" />
-                                            <TextBox Text="{Binding DisplayName, UpdateSourceTrigger=LostFocus}" />
-
-                                            <Grid Margin="0,8,0,0">
-                                                <Grid.Style>
-                                                    <Style TargetType="Grid">
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsThisMachine}" Value="True">
-                                                                <Setter Property="Visibility" Value="Collapsed" />
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </Grid.Style>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="2*" />
-                                                    <ColumnDefinition Width="10" />
-                                                    <ColumnDefinition Width="*" />
-                                                </Grid.ColumnDefinitions>
-                                                <StackPanel Grid.Column="0">
-                                                    <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,4" Text="Host" />
-                                                    <TextBox Text="{Binding Host, UpdateSourceTrigger=LostFocus}"
-                                                             FontFamily="{StaticResource Font.Mono}" />
-                                                </StackPanel>
-                                                <StackPanel Grid.Column="2">
-                                                    <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,4" Text="Port" />
-                                                    <TextBox Text="{Binding Port, UpdateSourceTrigger=LostFocus}"
-                                                             FontFamily="{StaticResource Font.Mono}" />
-                                                </StackPanel>
-                                            </Grid>
-
-                                            <TextBlock Style="{StaticResource FieldLabel}" Text="Declared memory (MiB)" />
-                                            <TextBox Text="{Binding Capabilities.MemoryMb, UpdateSourceTrigger=LostFocus}" />
-
-                                            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                                                <StackPanel.Style>
-                                                    <Style TargetType="StackPanel">
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsThisMachine}" Value="True">
-                                                                <Setter Property="Visibility" Value="Collapsed" />
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </StackPanel.Style>
-                                                <Button Style="{StaticResource SmallButton}"
-                                                        Content="Probe now"
-                                                        Margin="0,0,8,0"
-                                                        CommandParameter="{Binding}"
-                                                        Command="{Binding DataContext.ProbeNowCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" />
-                                                <Button Style="{StaticResource SmallButton}"
-                                                        Content="Remove"
-                                                        CommandParameter="{Binding}"
-                                                        Command="{Binding DataContext.RemoveSourceCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" />
-                                            </StackPanel>
-                                        </StackPanel>
-                                    </Expander>
                                 </StackPanel>
                             </Border>
                         </DataTemplate>

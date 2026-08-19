@@ -1,25 +1,32 @@
 namespace LocalNEXUS.App.Services.Distributed;
 
 /// <summary>
-/// Which source currently fills which section, and how much of the model that section is.
+/// Which source currently holds which section, and how much slack stands behind it.
 /// </summary>
+/// <remarks>
+/// Both facts come from the mesh: the placement from the reported stage topology, the slack
+/// from how many usable peers are not already holding a stage of this model. Nothing here is
+/// planned by this install.
+/// </remarks>
 /// <param name="Section">The slot being filled.</param>
-/// <param name="Source">The source filling it, or null when nothing can. A null source in any assignment makes the plan incomplete.</param>
-/// <param name="Proportion">Fraction of the model assigned to this source, in the range zero to one.</param>
-/// <param name="Redundancy">How many known sources could cover this section right now, including the assigned one.</param>
+/// <param name="Source">The source holding it, or null when the mesh has not placed it. A null source in any assignment makes the plan incomplete.</param>
+/// <param name="IsReady">Whether the engine reports this stage as loaded and serving.</param>
+/// <param name="StateText">The engine's own word for the stage state, shown when it is not ready.</param>
+/// <param name="SpareSources">Usable peers not already holding a stage of this model, which is the slack the mesh could rebalance onto.</param>
 public sealed record SourceAssignment(
     ModelSection Section,
     InferenceSource? Source,
-    double Proportion,
-    int Redundancy)
+    bool IsReady,
+    string StateText,
+    int SpareSources)
 {
-    /// <summary>True when a source is assigned and was available when the plan was computed.</summary>
-    public bool IsCovered => Source is not null;
+    /// <summary>True when a source holds this section and the engine reports it serving.</summary>
+    public bool IsCovered => Source is not null && IsReady;
 
     /// <summary>Coverage depth of this section, for the chain's colour and strength bars.</summary>
     public SectionCoverage Coverage => !IsCovered
         ? SectionCoverage.Uncovered
-        : Redundancy >= 2 ? SectionCoverage.Healthy : SectionCoverage.Thin;
+        : SpareSources >= 1 ? SectionCoverage.Healthy : SectionCoverage.Thin;
 
     /// <summary>Label for the coverage chain in the panel.</summary>
     public string SourceText => Source?.DisplayName ?? "no source";
@@ -27,17 +34,17 @@ public sealed record SourceAssignment(
     /// <summary>The state word under the segment's strength bars.</summary>
     public string CoverageText => Coverage switch
     {
-        SectionCoverage.Healthy => $"{Redundancy} candidates",
-        SectionCoverage.Thin => "single source",
-        _ => "no source"
+        SectionCoverage.Healthy => SpareSources == 1 ? "1 spare source" : $"{SpareSources} spare sources",
+        SectionCoverage.Thin => "no spare source",
+        _ => Source is null ? "not placed" : StateText
     };
 
-    /// <summary>First strength bar: anything at all stands behind the section.</summary>
-    public bool Depth1 => IsCovered && Redundancy >= 1;
+    /// <summary>First strength bar: the section is held and serving.</summary>
+    public bool Depth1 => IsCovered;
 
-    /// <summary>Second strength bar: the section survives losing one source.</summary>
-    public bool Depth2 => IsCovered && Redundancy >= 2;
+    /// <summary>Second strength bar: a spare source exists for the mesh to move this stage to.</summary>
+    public bool Depth2 => IsCovered && SpareSources >= 1;
 
-    /// <summary>Third strength bar: comfortably covered.</summary>
-    public bool Depth3 => IsCovered && Redundancy >= 3;
+    /// <summary>Third strength bar: more than one spare source.</summary>
+    public bool Depth3 => IsCovered && SpareSources >= 2;
 }

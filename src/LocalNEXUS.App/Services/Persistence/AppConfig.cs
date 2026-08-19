@@ -1,7 +1,6 @@
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using LocalNEXUS.App.Services.Distributed;
 
 namespace LocalNEXUS.App.Services.Persistence;
 
@@ -27,25 +26,45 @@ public sealed class AppConfig
     public string? LastGraphPath { get; set; }
 
     /// <summary>
-    /// This install's stable source identity. Generated once on first use of the source
-    /// registry and never regenerated, because reputation will attach to it later.
+    /// This install's own identity, generated once and never regenerated. A running mesh node
+    /// has a stronger identity of its own, its public key, which is what peers and any later
+    /// reputation attach to; this one exists so an install still has a stable id of its own
+    /// before its node has ever been started.
     /// </summary>
     public Guid SourceId { get; set; }
 
-    /// <summary>Sources registered by the user, hydrated by the registry at startup.</summary>
-    public List<KnownSourceRecord> KnownSources { get; set; } = new();
+    /// <summary>Whether the mesh node is started with the application.</summary>
+    public bool MeshEnabled { get; set; }
+
+    /// <summary>Whether this machine offers its own compute to the mesh rather than only routing.</summary>
+    public bool MeshContribute { get; set; }
+
+    /// <summary>The GGUF this machine serves while contributing. Blank offers capacity without a model.</summary>
+    public string? MeshOfferedModelPath { get; set; }
 
     /// <summary>
-    /// Declared memory of this machine in MiB. Zero means detect automatically at startup.
-    /// This is also what this machine offers when it contributes to someone else's pipeline.
+    /// Cap on the memory this machine offers, in GB. Zero lets the engine decide. Unlike the
+    /// declared offer the previous engine took on trust, this one is enforced by the planner.
     /// </summary>
-    public long ThisMachineMemoryMb { get; set; }
+    public double MeshMaxVramGb { get; set; }
 
-    /// <summary>Whether this machine serves as a source for other orchestrators.</summary>
-    public bool ContributeEnabled { get; set; }
+    /// <summary>Invite token of a mesh to join. Blank means this install hosts its own private mesh.</summary>
+    public string? MeshJoinToken { get; set; }
 
-    /// <summary>Port the rpc-server listens on while this machine is contributing.</summary>
-    public int WorkerPort { get; set; } = 50052;
+    /// <summary>Friendly name of the mesh this install hosts.</summary>
+    public string? MeshName { get; set; }
+
+    /// <summary>
+    /// Advertises this mesh for public discovery. Off by default: a private mesh on the local
+    /// network is the default posture, and this is the only setting that changes it.
+    /// </summary>
+    public bool MeshPublish { get; set; }
+
+    /// <summary>Port the mesh node's OpenAI compatible API listens on.</summary>
+    public int MeshApiPort { get; set; } = 9337;
+
+    /// <summary>Port the mesh node's management API answers on.</summary>
+    public int MeshConsolePort { get; set; } = 3131;
 
     /// <summary>
     /// Reads the configuration from disk. A missing or unreadable file yields defaults rather

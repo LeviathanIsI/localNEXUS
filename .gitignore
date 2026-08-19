@@ -66,14 +66,17 @@ project.lock.json
 project.assets.json
 
 # ---------------------------------------------------------------------------
-# Bundled llama.cpp binaries
+# Bundled engine binaries
 #
 # These are fetched per machine rather than committed: they are large, they are
-# GPU build specific, and they carry their own license. See the README for how
-# to place a build here. The folder itself is kept so the path always exists.
+# GPU build specific, and they carry their own license. See the README in each
+# folder for how to place a build there. The folders themselves are kept so the
+# paths always exist.
 # ---------------------------------------------------------------------------
 vendor/llama/*
 !vendor/llama/README.md
+vendor/mesh/*
+!vendor/mesh/README.md
 
 # ---------------------------------------------------------------------------
 # Model weights. Never commit these, anywhere, at any size.

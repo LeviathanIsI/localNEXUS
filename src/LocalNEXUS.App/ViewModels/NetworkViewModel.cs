@@ -1,27 +1,32 @@
 using System.Collections.Specialized;
+using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using LocalNEXUS.App.Infrastructure;
+using LocalNEXUS.App.Models;
 using LocalNEXUS.App.Services.Distributed;
 using LocalNEXUS.App.Services.Inference;
+using LocalNEXUS.App.Services.Persistence;
 
 namespace LocalNEXUS.App.ViewModels;
 
 /// <summary>
 /// The Network tab: what the network can serve, the coverage chain of the selected model,
-/// the known sources, and this machine's contribution.
+/// the sources in the mesh, and this machine's contribution.
 /// </summary>
 /// <remarks>
 /// The models list leads and the sources are the underlying detail, because the question the
 /// screen answers is "which models can the network serve", not "which machines do I know
-/// about". Everything binds to the index and the registry directly; when discovery starts
-/// feeding them, this view model does not change.
+/// about". Everything binds to the mesh manager directly, so what is drawn is what the engine
+/// reports rather than anything this view model computes.
+///
+/// Membership and contribution are launch settings of the node process, so changing one saves
+/// it and restarts the node. That is deliberate: a half applied membership change would be a
+/// worse surprise than a visible restart.
 /// </remarks>
 public sealed partial class NetworkViewModel : ObservableObject
 {
-    private readonly SourceRegistry _registry;
-    private readonly RpcWorkerManager _worker;
-    private readonly SourceHealthMonitor _monitor;
+    private readonly AppConfig _config;
     private readonly IActivityFeed _feed;
 
     /// <summary>The model whose coverage chain is shown. Selecting a complete one arms it for use.</summary>
@@ -29,152 +34,174 @@ public sealed partial class NetworkViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(HasSelection))]
     private NetworkServedModel? _selectedModel;
 
-    /// <summary>Whether the add source form is open. It lives behind the plus, not on the page.</summary>
+    /// <summary>Whether the join form is open. It lives behind the plus, not on the page.</summary>
     [ObservableProperty]
-    private bool _isAddSourceOpen;
+    private bool _isJoinOpen;
 
-    /// <summary>Display name typed into the add source form.</summary>
+    /// <summary>Invite token typed into the join form.</summary>
     [ObservableProperty]
-    private string _newSourceName = string.Empty;
+    private string _joinToken = string.Empty;
 
-    /// <summary>Host typed into the add source form.</summary>
+    /// <summary>Name this install gives the mesh it hosts.</summary>
     [ObservableProperty]
-    private string _newSourceHost = string.Empty;
+    private string _meshName;
 
-    /// <summary>Port typed into the add source form. rpc-server's default is 50052.</summary>
+    /// <summary>Whether this machine offers its own compute rather than only routing.</summary>
     [ObservableProperty]
-    private string _newSourcePort = "50052";
+    private bool _contribute;
 
-    /// <summary>Declared memory typed into the add source form. Blank means unknown.</summary>
+    /// <summary>The GGUF this machine serves while contributing.</summary>
     [ObservableProperty]
-    private string _newSourceMemoryMb = string.Empty;
+    private LocalModelInfo? _offeredModel;
 
-    /// <summary>True when the new source is reached over the internet rather than the LAN.</summary>
+    /// <summary>Cap on the memory offered, in GB. Blank lets the engine decide.</summary>
     [ObservableProperty]
-    private bool _newSourceIsInternet;
+    private string _maxVramGb;
 
-    public NetworkViewModel(
-        NetworkModelIndex index,
-        SourceRegistry registry,
-        RpcWorkerManager worker,
-        SourceHealthMonitor monitor,
-        IActivityFeed feed)
+    /// <summary>Advertises this mesh publicly. Off by default and the only setting that leaves the local network.</summary>
+    [ObservableProperty]
+    private bool _publish;
+
+    public NetworkViewModel(MeshManager mesh, ModelCatalog catalog, AppConfig config, IActivityFeed feed)
     {
-        Index = index;
-        _registry = registry;
-        _worker = worker;
-        _monitor = monitor;
+        Mesh = mesh;
+        Catalog = catalog;
+        _config = config;
         _feed = feed;
 
-        Index.Models.CollectionChanged += OnModelsChanged;
-        SelectedModel = Index.Models.FirstOrDefault();
+        _meshName = string.IsNullOrWhiteSpace(config.MeshName) ? "LocalNEXUS" : config.MeshName;
+        _contribute = config.MeshContribute;
+        _publish = config.MeshPublish;
+        _joinToken = config.MeshJoinToken ?? string.Empty;
+        _maxVramGb = config.MeshMaxVramGb > 0
+            ? config.MeshMaxVramGb.ToString("0.##", CultureInfo.InvariantCulture)
+            : string.Empty;
+        _offeredModel = catalog.FindByPath(config.MeshOfferedModelPath) ?? catalog.Models.FirstOrDefault();
+
+        Mesh.Models.CollectionChanged += OnModelsChanged;
+        SelectedModel = Mesh.Models.FirstOrDefault();
     }
 
-    /// <summary>The live list of models the network can serve. The primary surface.</summary>
-    public NetworkModelIndex Index { get; }
+    /// <summary>This install's mesh node and everything it reports. The primary surface.</summary>
+    public MeshManager Mesh { get; }
 
-    /// <summary>The known sources, this machine always included.</summary>
-    public SourceRegistry Registry => _registry;
-
-    /// <summary>The contribution manager the serve card binds to directly.</summary>
-    public RpcWorkerManager Worker => _worker;
+    /// <summary>The local GGUF files, which is what this machine can offer to serve.</summary>
+    public ModelCatalog Catalog { get; }
 
     /// <summary>True when a model is selected, which is when the chain has something to draw.</summary>
     public bool HasSelection => SelectedModel is not null;
 
-    /// <summary>Recomputes the list against the current sources on demand.</summary>
+    /// <summary>Starts or stops this install's mesh node.</summary>
     [RelayCommand]
-    private void RefreshModels() => Index.Refresh();
-
-    /// <summary>Starts or stops serving this machine's compute to other orchestrators.</summary>
-    [RelayCommand]
-    private async Task ToggleContributionAsync()
+    private async Task ToggleMeshAsync()
     {
         try
         {
-            if (_worker.IsRunning)
+            if (Mesh.IsRunning)
             {
-                await _worker.StopAsync();
+                await Mesh.StopAsync();
             }
             else
             {
-                await _worker.StartAsync(CancellationToken.None);
+                SaveSettings();
+                await Mesh.StartAsync(CancellationToken.None);
             }
         }
         catch (ModelClientException ex)
         {
-            _feed.Error("Contribution failed", ex.Message);
+            _feed.Error("Mesh node failed", ex.Message);
         }
     }
 
-    /// <summary>Opens or closes the add source form.</summary>
+    /// <summary>Applies the contribution and membership settings, restarting the node if it is up.</summary>
     [RelayCommand]
-    private void ToggleAddSource() => IsAddSourceOpen = !IsAddSourceOpen;
-
-    /// <summary>Registers the source described by the form and probes it straight away.</summary>
-    [RelayCommand]
-    private async Task AddSourceAsync()
+    private async Task ApplySettingsAsync()
     {
-        if (!int.TryParse(NewSourcePort, out var port) || port is < 1 or > 65535)
+        SaveSettings();
+
+        if (!Mesh.IsRunning)
         {
-            _feed.Error("Source not added", "The port has to be a number between 1 and 65535.");
             return;
         }
 
-        long memoryMb = 0;
-        if (!string.IsNullOrWhiteSpace(NewSourceMemoryMb)
-            && (!long.TryParse(NewSourceMemoryMb, out memoryMb) || memoryMb < 0))
+        try
         {
-            _feed.Error("Source not added", "Declared memory has to be a number of MiB, or blank for unknown.");
-            return;
+            await Mesh.StopAsync();
+            await Mesh.StartAsync(CancellationToken.None);
         }
-
-        var locality = NewSourceIsInternet ? SourceLocality.Remote : SourceLocality.LocalNetwork;
-        var added = _registry.AddSource(NewSourceName, NewSourceHost, port, locality, memoryMb);
-
-        if (added is null)
+        catch (ModelClientException ex)
         {
-            _feed.Error("Source not added", "The host is empty or that endpoint is already registered.");
-            return;
-        }
-
-        NewSourceName = string.Empty;
-        NewSourceHost = string.Empty;
-        NewSourceMemoryMb = string.Empty;
-        IsAddSourceOpen = false;
-
-        await _monitor.ProbeNowAsync(added, CancellationToken.None);
-    }
-
-    /// <summary>Removes a source. This machine cannot be removed and the button is hidden for it.</summary>
-    [RelayCommand]
-    private void RemoveSource(InferenceSource? source)
-    {
-        if (source is not null)
-        {
-            _registry.RemoveSource(source);
+            _feed.Error("Mesh node failed", ex.Message);
         }
     }
 
-    /// <summary>Probes one source immediately, outside the ten second cadence.</summary>
+    /// <summary>Opens or closes the join form.</summary>
     [RelayCommand]
-    private async Task ProbeNowAsync(InferenceSource? source)
+    private void ToggleJoin() => IsJoinOpen = !IsJoinOpen;
+
+    /// <summary>Joins the mesh the pasted invite token describes.</summary>
+    [RelayCommand]
+    private async Task JoinMeshAsync()
     {
-        if (source is { IsThisMachine: false })
+        if (string.IsNullOrWhiteSpace(JoinToken))
         {
-            await _monitor.ProbeNowAsync(source, CancellationToken.None);
+            _feed.Error("Mesh not joined", "Paste the invite token printed by the machine hosting the mesh.");
+            return;
         }
+
+        IsJoinOpen = false;
+        await ApplySettingsAsync();
+    }
+
+    /// <summary>Leaves the joined mesh and goes back to hosting a private one.</summary>
+    [RelayCommand]
+    private async Task LeaveMeshAsync()
+    {
+        JoinToken = string.Empty;
+        await ApplySettingsAsync();
+    }
+
+    private void SaveSettings()
+    {
+        _config.MeshContribute = Contribute;
+        _config.MeshPublish = Publish;
+        _config.MeshName = string.IsNullOrWhiteSpace(MeshName) ? "LocalNEXUS" : MeshName.Trim();
+        _config.MeshJoinToken = string.IsNullOrWhiteSpace(JoinToken) ? null : JoinToken.Trim();
+        _config.MeshOfferedModelPath = OfferedModel?.Path;
+        _config.MeshMaxVramGb = ParseMaxVram(MaxVramGb);
+        _config.Save();
+    }
+
+    /// <summary>
+    /// Reads the memory cap. Unlike the previous engine's declared offer, which orchestrators
+    /// merely honoured, this value is enforced by the mesh planner, so a bad one is worth
+    /// refusing rather than silently treating as unlimited.
+    /// </summary>
+    private double ParseMaxVram(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return 0d;
+        }
+
+        if (double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed) && parsed > 0)
+        {
+            return parsed;
+        }
+
+        _feed.Error("Memory cap ignored", "The memory cap has to be a number of GB, or blank to let the engine decide.");
+        return 0d;
     }
 
     private void OnModelsChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         // Keep a sensible selection without ever stealing one the user made: pick the first
         // row when nothing is selected, and let go of a row that no longer exists.
-        if (SelectedModel is not null && !Index.Models.Contains(SelectedModel))
+        if (SelectedModel is not null && !Mesh.Models.Contains(SelectedModel))
         {
             SelectedModel = null;
         }
 
-        SelectedModel ??= Index.Models.FirstOrDefault();
+        SelectedModel ??= Mesh.Models.FirstOrDefault();
     }
 }

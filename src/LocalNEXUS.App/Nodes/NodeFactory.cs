@@ -15,12 +15,12 @@ namespace LocalNEXUS.App.Nodes;
 public sealed class NodeFactory
 {
     private readonly ModelCatalog _catalog;
-    private readonly NetworkModelIndex _networkModels;
+    private readonly MeshManager _mesh;
 
-    public NodeFactory(ModelCatalog catalog, NetworkModelIndex networkModels)
+    public NodeFactory(ModelCatalog catalog, MeshManager mesh)
     {
         _catalog = catalog;
-        _networkModels = networkModels;
+        _mesh = mesh;
     }
 
     /// <summary>A node type as offered by the palette.</summary>
@@ -43,7 +43,7 @@ public sealed class NodeFactory
     public NodeBase Create(string typeKey) => typeKey switch
     {
         "Input" => new InputNode(),
-        "Model" => new ModelNode(_catalog, _networkModels),
+        "Model" => new ModelNode(_catalog, _mesh),
         "Transform" => new TransformNode(),
         "Output" => new OutputNode(),
         _ => throw new NotSupportedException($"Unknown node type '{typeKey}'.")

@@ -23,8 +23,7 @@ public partial class App : Application
 {
     private LlamaServerManager? _llamaServers;
     private OpenAiCompatibleClient? _modelClient;
-    private SourceHealthMonitor? _healthMonitor;
-    private RpcWorkerManager? _rpcWorker;
+    private MeshManager? _mesh;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -60,20 +59,15 @@ public partial class App : Application
         var unityProject = new UnityProjectService();
         RestoreLastProject(config, unityProject, feed);
 
-        var sources = new SourceRegistry(config);
-        var coverage = new CoveragePlanner(sources);
-        var networkModels = new NetworkModelIndex(catalog, sources, coverage, Dispatcher);
+        var mesh = new MeshManager(config, feed, Dispatcher);
+        _mesh = mesh;
 
-        var factory = new NodeFactory(catalog, networkModels);
+        var factory = new NodeFactory(catalog, mesh);
         var serializer = new GraphSerializer(factory);
 
-        var healthMonitor = new SourceHealthMonitor(sources, feed);
-        _healthMonitor = healthMonitor;
-        healthMonitor.Start();
-
-        var rpcWorker = new RpcWorkerManager(config, feed);
-        _rpcWorker = rpcWorker;
-        _ = rpcWorker.RestoreAsync();
+        // Restoring the node is deliberately not awaited: composition must not block on a
+        // child process, and the Network tab shows the node coming up on its own.
+        _ = mesh.RestoreAsync();
 
         _llamaServers = new LlamaServerManager();
         _modelClient = new OpenAiCompatibleClient();
@@ -81,9 +75,7 @@ public partial class App : Application
         var services = new ExecutionServices(
             _modelClient,
             _llamaServers,
-            sources,
-            coverage,
-            healthMonitor,
+            mesh,
             unityProject,
             new FileWriter(),
             feed);
@@ -91,7 +83,7 @@ public partial class App : Application
 
         var feedViewModel = new ActivityFeedViewModel(executor, graph, feed, Dispatcher);
         var catalogViewModel = new ModelCatalogViewModel(catalog, dialogs);
-        var networkViewModel = new NetworkViewModel(networkModels, sources, rpcWorker, healthMonitor, feed);
+        var networkViewModel = new NetworkViewModel(mesh, catalog, config, feed);
 
         var mainViewModel = new MainViewModel(
             graph,
@@ -115,8 +107,7 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         // Child processes and background loops are ours to clean up. Nothing must outlive the window.
-        _healthMonitor?.Dispose();
-        _rpcWorker?.Dispose();
+        _mesh?.Dispose();
         _llamaServers?.Dispose();
         _modelClient?.Dispose();
 

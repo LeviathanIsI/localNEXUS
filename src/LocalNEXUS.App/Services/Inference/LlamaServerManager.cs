@@ -8,7 +8,7 @@ using LocalNEXUS.App.Services.Persistence;
 namespace LocalNEXUS.App.Services.Inference;
 
 /// <summary>
-/// Owns the llama-server child processes that serve local GGUF models.
+/// Owns the llama-server child processes that serve local GGUF models on this machine.
 /// </summary>
 /// <remarks>
 /// One server is started per model and configuration pair and then reused for every later
@@ -87,8 +87,6 @@ public sealed class LlamaServerManager : IDisposable
                 }
             }
 
-            EvictRpcConflicts(options, key);
-
             var instance = StartServer(fullPath, options);
             lock (_sync)
             {
@@ -97,7 +95,7 @@ public sealed class LlamaServerManager : IDisposable
 
             try
             {
-                await WaitUntilHealthyAsync(instance, options, status, ct).ConfigureAwait(false);
+                await WaitUntilHealthyAsync(instance, status, ct).ConfigureAwait(false);
             }
             catch
             {
@@ -115,35 +113,6 @@ public sealed class LlamaServerManager : IDisposable
         finally
         {
             gate.Release();
-        }
-    }
-
-    /// <summary>
-    /// Stops running servers that hold a connection to an rpc worker the new launch needs.
-    /// llama.cpp's rpc-server serves one coordinator at a time, so a second coordinator pointed
-    /// at a worker that is already claimed would sit blocked in startup until the first one
-    /// exits. The newest plan wins; the old coordinator is disposed and relaunched on demand.
-    /// </summary>
-    private void EvictRpcConflicts(LlamaLaunchOptions options, string newKey)
-    {
-        if (options.RpcEndpoints.Count == 0)
-        {
-            return;
-        }
-
-        lock (_sync)
-        {
-            var conflicts = _servers
-                .Where(pair =>
-                    pair.Key != newKey &&
-                    pair.Value.RpcEndpoints.Intersect(options.RpcEndpoints, StringComparer.OrdinalIgnoreCase).Any())
-                .ToList();
-
-            foreach (var pair in conflicts)
-            {
-                pair.Value.Dispose();
-                _servers.Remove(pair.Key);
-            }
         }
     }
 
@@ -225,26 +194,6 @@ public sealed class LlamaServerManager : IDisposable
         startInfo.ArgumentList.Add("-ngl");
         startInfo.ArgumentList.Add(options.GpuLayers.ToString());
 
-        if (options.IsDistributed)
-        {
-            // The coordinator's own HTTP listener stays on loopback above; --rpc is what
-            // reaches out to the sources. Verified against the bundled build: rpc devices
-            // register ahead of the local GPU in the order listed here, and -ts proportions
-            // are applied in that same device order.
-            startInfo.ArgumentList.Add("--rpc");
-            startInfo.ArgumentList.Add(string.Join(",", options.RpcEndpoints));
-            startInfo.ArgumentList.Add("-sm");
-            startInfo.ArgumentList.Add("layer");
-
-            if (options.TensorSplit.Count > 0)
-            {
-                startInfo.ArgumentList.Add("-ts");
-                startInfo.ArgumentList.Add(string.Join(
-                    ",",
-                    options.TensorSplit.Select(p => p.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture))));
-            }
-        }
-
         Process process;
         try
         {
@@ -257,21 +206,18 @@ public sealed class LlamaServerManager : IDisposable
         }
 
         var logPath = AppPaths.CreateLogFilePath($"llama-{Path.GetFileNameWithoutExtension(ggufPath)}");
-        var instance = new LlamaServerInstance(process, ggufPath, port, logPath, options.RpcEndpoints);
+        var instance = new LlamaServerInstance(process, ggufPath, port, logPath);
         instance.BeginCapturingOutput();
         return instance;
     }
 
     private async Task WaitUntilHealthyAsync(
         LlamaServerInstance instance,
-        LlamaLaunchOptions options,
         IProgress<string>? status,
         CancellationToken ct)
     {
         var modelName = Path.GetFileNameWithoutExtension(instance.GgufPath);
-        status?.Report(options.IsDistributed
-            ? $"Assembling {modelName} across {options.RpcEndpoints.Count + 1} sources on port {instance.Port}"
-            : $"Loading {modelName} on port {instance.Port}");
+        status?.Report($"Loading {modelName} on port {instance.Port}");
 
         var deadline = DateTime.UtcNow + StartupTimeout;
         var announcedWait = false;
@@ -288,9 +234,7 @@ public sealed class LlamaServerManager : IDisposable
 
             if (await IsHealthyAsync(instance, ct).ConfigureAwait(false))
             {
-                status?.Report(options.IsDistributed
-                    ? $"Coordinator ready on port {instance.Port} across {options.RpcEndpoints.Count + 1} sources"
-                    : $"Model ready on port {instance.Port}");
+                status?.Report($"Model ready on port {instance.Port}");
                 return;
             }
 

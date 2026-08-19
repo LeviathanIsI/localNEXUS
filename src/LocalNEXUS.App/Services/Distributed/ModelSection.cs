@@ -5,15 +5,18 @@ namespace LocalNEXUS.App.Services.Distributed;
 /// the pipeline to exist. Sections are the core concept of distributed inference here; peers
 /// and machines are just whatever happens to fill them.
 /// </summary>
+/// <remarks>
+/// A section is a Skippy stage. The engine plans the ranges and reports them; this record is
+/// the shape the chain draws them in. Engine ranges are half open, so the conversion to an
+/// inclusive last layer happens once, where the report is read, and never again.
+/// </remarks>
 /// <param name="Index">Position of this section in the pipeline, starting at zero.</param>
-/// <param name="ModelName">The model's own name from its metadata, not a local file path.</param>
-/// <param name="Quantization">Quantization label, part of the section's identity.</param>
+/// <param name="ModelId">The model this section belongs to, as the mesh identifies it.</param>
 /// <param name="FirstLayer">First transformer layer this section covers, inclusive.</param>
 /// <param name="LastLayer">Last transformer layer this section covers, inclusive.</param>
 public sealed record ModelSection(
     int Index,
-    string ModelName,
-    string Quantization,
+    string ModelId,
     int FirstLayer,
     int LastLayer)
 {
