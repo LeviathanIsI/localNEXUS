@@ -1,4 +1,5 @@
 using LocalNEXUS.App.Infrastructure;
+using LocalNEXUS.App.Services.Distributed;
 using LocalNEXUS.App.Services.Files;
 using LocalNEXUS.App.Services.Inference;
 
@@ -14,12 +15,18 @@ public sealed class ExecutionServices
     public ExecutionServices(
         IModelClient modelClient,
         LlamaServerManager llamaServers,
+        SourceRegistry sources,
+        CoveragePlanner coverage,
+        SourceHealthMonitor healthMonitor,
         UnityProjectService unityProject,
         FileWriter fileWriter,
         IActivityFeed feed)
     {
         ModelClient = modelClient;
         LlamaServers = llamaServers;
+        Sources = sources;
+        Coverage = coverage;
+        HealthMonitor = healthMonitor;
         UnityProject = unityProject;
         FileWriter = fileWriter;
         Feed = feed;
@@ -28,8 +35,17 @@ public sealed class ExecutionServices
     /// <summary>Sends chat requests to local and cloud endpoints alike.</summary>
     public IModelClient ModelClient { get; }
 
-    /// <summary>Starts and reuses llama-server processes for local models.</summary>
+    /// <summary>Starts and reuses llama-server processes, local and distributed alike.</summary>
     public LlamaServerManager LlamaServers { get; }
+
+    /// <summary>Every source this install knows about, this machine included.</summary>
+    public SourceRegistry Sources { get; }
+
+    /// <summary>Computes which sources fill which sections and gates distributed launches.</summary>
+    public CoveragePlanner Coverage { get; }
+
+    /// <summary>Probes sources on demand, used before a launch and after a failure.</summary>
+    public SourceHealthMonitor HealthMonitor { get; }
 
     /// <summary>The Unity project that output nodes write into.</summary>
     public UnityProjectService UnityProject { get; }

@@ -73,7 +73,16 @@ public partial class App : Application
         _llamaServers = new LlamaServerManager();
         _modelClient = new OpenAiCompatibleClient();
 
-        var services = new ExecutionServices(_modelClient, _llamaServers, unityProject, new FileWriter(), feed);
+        var coverage = new CoveragePlanner(sources);
+        var services = new ExecutionServices(
+            _modelClient,
+            _llamaServers,
+            sources,
+            coverage,
+            _healthMonitor,
+            unityProject,
+            new FileWriter(),
+            feed);
         var executor = new GraphExecutor(services);
 
         var feedViewModel = new ActivityFeedViewModel(executor, graph, feed, Dispatcher);

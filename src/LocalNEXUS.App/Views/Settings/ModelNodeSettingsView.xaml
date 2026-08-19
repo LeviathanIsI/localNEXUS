@@ -13,6 +13,9 @@
             <RadioButton Content="Local"
                          GroupName="Provider"
                          IsChecked="{Binding Provider, Converter={StaticResource EnumToBoolean}, ConverterParameter=Local}" />
+            <RadioButton Content="Self hosted"
+                         GroupName="Provider"
+                         IsChecked="{Binding Provider, Converter={StaticResource EnumToBoolean}, ConverterParameter=SelfHosted}" />
             <RadioButton Content="OpenRouter"
                          GroupName="Provider"
                          IsChecked="{Binding Provider, Converter={StaticResource EnumToBoolean}, ConverterParameter=OpenRouter}" />
@@ -61,6 +64,34 @@
             </Grid>
             <TextBlock Style="{StaticResource HintText}"
                        Text="Applied when LocalNEXUS starts the server for this model. 999 layers means offload everything." />
+
+            <TextBlock Style="{StaticResource SectionHeader}" Margin="0,16,0,0" Text="Distribution" />
+            <CheckBox Content="Force a split across sources"
+                      Margin="0,6,0,0"
+                      IsChecked="{Binding ForceSplit}" />
+            <TextBlock Style="{StaticResource HintText}"
+                       Text="Splitting happens automatically when a model does not fit on this machine. Forcing exists to test the split path with a small model." />
+
+            <TextBlock Style="{StaticResource FieldLabel}" Text="Split proportions" />
+            <TextBox Text="{Binding SplitProportions, UpdateSourceTrigger=PropertyChanged}"
+                     FontFamily="{StaticResource Font.Mono}" />
+            <TextBlock Style="{StaticResource HintText}"
+                       Text="Blank divides by declared memory. Otherwise comma separated with dot decimals, one value per source: remote sources first, this machine last. For example 1,1 for an even two way split." />
+        </StackPanel>
+
+        <!-- Self hosted server -->
+        <StackPanel Visibility="{Binding IsSelfHosted, Converter={StaticResource BooleanToVisibility}}">
+            <TextBlock Style="{StaticResource FieldLabel}" Text="Model id" />
+            <TextBox Text="{Binding SelfHostedModelId, UpdateSourceTrigger=PropertyChanged}"
+                     FontFamily="{StaticResource Font.Mono}" />
+            <TextBlock Style="{StaticResource HintText}"
+                       Text="The model name your server expects in requests. Set the server's address under Endpoint below; nothing is spawned." />
+
+            <TextBlock Style="{StaticResource FieldLabel}" Text="API key (optional)" />
+            <TextBox Text="{Binding ApiKey, UpdateSourceTrigger=PropertyChanged}"
+                     FontFamily="{StaticResource Font.Mono}" />
+            <TextBlock Style="{StaticResource HintText}"
+                       Text="Sent as a bearer token when your server requires one. Stored in plain text inside the saved graph file." />
         </StackPanel>
 
         <!-- OpenRouter model selection -->
@@ -112,6 +143,6 @@
         <TextBox Text="{Binding BaseUrl, UpdateSourceTrigger=PropertyChanged}"
                  FontFamily="{StaticResource Font.Mono}" />
         <TextBlock Style="{StaticResource HintText}"
-                   Text="Leave blank for a local model and LocalNEXUS starts and reuses its own llama-server. Set it to point this node at a server that is already running." />
+                   Text="Leave blank for a local model and LocalNEXUS starts and reuses its own servers, splitting across sources when needed. Set it to point this node at a server that is already running; nothing is spawned then." />
     </StackPanel>
 </UserControl>
