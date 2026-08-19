@@ -48,6 +48,8 @@ public sealed partial class MeshManager : ObservableObject, IDisposable
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsRunning))]
     [NotifyPropertyChangedFor(nameof(CanJoinOrHost))]
+    [NotifyPropertyChangedFor(nameof(EmptyModelsText))]
+    [NotifyPropertyChangedFor(nameof(EmptySourcesText))]
     private MeshNodeState _state = MeshNodeState.Stopped;
 
     /// <summary>One line for the contribution card: what the node is doing.</summary>
@@ -84,6 +86,9 @@ public sealed partial class MeshManager : ObservableObject, IDisposable
         _config = config;
         _feed = feed;
         _dispatcher = dispatcher;
+
+        Models.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasModels));
+        Sources.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasSources));
     }
 
     /// <summary>Every model the mesh can serve or is trying to. The Network tab's primary surface.</summary>
@@ -91,6 +96,37 @@ public sealed partial class MeshManager : ObservableObject, IDisposable
 
     /// <summary>Every source in the mesh, this machine first. Populated entirely from mesh reports.</summary>
     public ObservableCollection<InferenceSource> Sources { get; } = new();
+
+    /// <summary>True when the mesh has reported at least one model.</summary>
+    public bool HasModels => Models.Count > 0;
+
+    /// <summary>True when the mesh has reported at least one source, which includes this machine.</summary>
+    public bool HasSources => Sources.Count > 0;
+
+    /// <summary>
+    /// What an empty model list means, which is never the same thing twice.
+    /// </summary>
+    /// <remarks>
+    /// A node that has not answered yet and a mesh that genuinely serves nothing look identical
+    /// on screen unless the difference is said out loud, and the first of those is the ordinary
+    /// state of the tab for the first few seconds after the window opens.
+    /// </remarks>
+    public string EmptyModelsText => State switch
+    {
+        MeshNodeState.Starting => "Starting the mesh node. Models appear here as the mesh reports them.",
+        MeshNodeState.Failed => "The mesh node is not running. Its last error is under This machine.",
+        MeshNodeState.Stopped => "The mesh node is not running. Start it to see what the network can serve.",
+        _ => "The mesh node is up and has not reported a model yet."
+    };
+
+    /// <summary>The same distinction for the source list.</summary>
+    public string EmptySourcesText => State switch
+    {
+        MeshNodeState.Starting => "Starting the mesh node. Sources appear here as it finds them.",
+        MeshNodeState.Failed => "The mesh node is not running.",
+        MeshNodeState.Stopped => "The mesh node is not running.",
+        _ => "The mesh node is up and has not reported a source yet."
+    };
 
     /// <summary>True when a node process is up, whatever it is doing.</summary>
     public bool IsRunning => State is MeshNodeState.Starting or MeshNodeState.Client or MeshNodeState.Serving;
@@ -449,7 +485,7 @@ public sealed partial class MeshManager : ObservableObject, IDisposable
         ReconcileSources(snapshot);
         ReconcileModels(snapshot);
 
-        var complete = Models.Count(m => m.IsComplete);
+        var complete = Models.Count(m => m.CanRun);
         StatusText = State == MeshNodeState.Serving
             ? $"Serving in {DescribeMesh()}, {Sources.Count} source(s), {complete} model(s) ready"
             : $"Routing in {DescribeMesh()}, {Sources.Count} source(s), {complete} model(s) ready";
@@ -575,8 +611,8 @@ public sealed partial class MeshManager : ObservableObject, IDisposable
             var plan = BuildPlan(id, entry.LayerCount, isRoutable, snapshot);
 
             entry.Plan = plan;
-            entry.IsComplete = plan.IsComplete;
-            entry.IncompleteReason = plan.IncompleteReason;
+            entry.Availability = plan.Availability;
+            entry.StatusDetail = plan.StatusDetail;
             entry.PeerCount = plan.SourceCount;
             entry.WeakestSpare = plan.WeakestSpare;
         }
@@ -624,15 +660,20 @@ public sealed partial class MeshManager : ObservableObject, IDisposable
             }
 
             var spare = CountSpareSources(holders);
-            var section = new ModelSection(0, modelId, 0, Math.Max(0, layerCount - 1));
+            // A layer count of zero means the mesh has not reported the model's shape, which
+            // leaves the section's bounds unknown rather than empty.
+            var section = new ModelSection(0, modelId, 0, layerCount - 1);
 
+            // With no topology reported there is nothing to be blocked on. The model was
+            // announced by somebody, so either it is loading or routing has not converged yet,
+            // and neither of those is a failure this install can assert.
             return new CoveragePlan(new[]
             {
                 new SourceAssignment(
                     section,
                     holder,
-                    isRoutable,
-                    isRoutable ? "serving" : holder is null ? "not placed" : "announced but not routable here",
+                    isRoutable ? StageReadiness.Ready : StageReadiness.Pending,
+                    isRoutable ? "serving" : "announced, not routable here yet",
                     spare)
             });
         }
@@ -643,19 +684,48 @@ public sealed partial class MeshManager : ObservableObject, IDisposable
             .Select((stage, ordinal) =>
             {
                 var source = ResolveSource(stage.NodeId);
-                var state = string.IsNullOrWhiteSpace(stage.State) ? "not reported" : stage.State;
-                var ready = isRoutable || string.Equals(state, "ready", StringComparison.OrdinalIgnoreCase);
 
                 return new SourceAssignment(
                     new ModelSection(ordinal, modelId, stage.FirstLayer, stage.LastLayer),
                     source,
-                    ready,
-                    state,
+                    Classify(stage, source, isRoutable),
+                    string.IsNullOrWhiteSpace(stage.State) ? "not reported yet" : stage.State,
                     spareForSplit);
             })
             .ToList();
 
         return new CoveragePlan(assignments);
+    }
+
+    /// <summary>
+    /// Maps one reported stage onto what is actually known about it.
+    /// </summary>
+    /// <remarks>
+    /// The default is deliberately <see cref="StageReadiness.Loading"/>: an engine word this
+    /// version has never seen is a reason to say nothing, not a reason to declare a failure.
+    /// Only two things count as knowing the section cannot serve, namely a placement onto a node
+    /// the mesh no longer lists and a state word that names a failure outright.
+    /// </remarks>
+    private static StageReadiness Classify(MeshStage stage, InferenceSource? source, bool isRoutable)
+    {
+        // Routable settles it for every stage at once: the engine only routes to stage zero
+        // once each stage behind it reports ready.
+        if (isRoutable)
+        {
+            return StageReadiness.Ready;
+        }
+
+        if (source is null)
+        {
+            return string.IsNullOrWhiteSpace(stage.NodeId) ? StageReadiness.Pending : StageReadiness.Missing;
+        }
+
+        return stage.State.ToLowerInvariant() switch
+        {
+            "ready" or "running" or "serving" => StageReadiness.Ready,
+            "failed" or "error" or "stopped" or "dead" or "evicted" or "cancelled" => StageReadiness.Failed,
+            _ => StageReadiness.Loading
+        };
     }
 
     /// <summary>

@@ -85,7 +85,7 @@
                 <ComboBox.ItemContainerStyle>
                     <Style TargetType="ComboBoxItem" BasedOn="{StaticResource {x:Type ComboBoxItem}}">
                         <Style.Triggers>
-                            <DataTrigger Binding="{Binding IsComplete}" Value="False">
+                            <DataTrigger Binding="{Binding CanRun}" Value="False">
                                 <Setter Property="IsEnabled" Value="False" />
                             </DataTrigger>
                         </Style.Triggers>
@@ -106,7 +106,7 @@
                 </ComboBox.ItemTemplate>
             </ComboBox>
             <TextBlock Style="{StaticResource HintText}"
-                       Text="Models the mesh can serve right now, from the Network tab. Blocked models cannot be picked; the tab shows which section is at fault. Whether the model runs on one machine or as layer stages across several is the mesh's decision, made at run time." />
+                       Text="Models the mesh can serve right now, from the Network tab. A model that is starting or blocked cannot be picked; the tab shows which section it is waiting on. Whether the model runs on one machine or as layer stages across several is the mesh's decision, made at run time." />
         </StackPanel>
 
         <!-- Self hosted server -->

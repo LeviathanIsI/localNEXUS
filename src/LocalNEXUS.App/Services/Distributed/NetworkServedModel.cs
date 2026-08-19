@@ -43,16 +43,18 @@ public sealed partial class NetworkServedModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(Strength))]
     [NotifyPropertyChangedFor(nameof(StatusText))]
     [NotifyPropertyChangedFor(nameof(ChainStatusText))]
+    [NotifyPropertyChangedFor(nameof(CanRun))]
     [NotifyPropertyChangedFor(nameof(HasDepth1))]
     [NotifyPropertyChangedFor(nameof(HasDepth2))]
     [NotifyPropertyChangedFor(nameof(HasDepth3))]
-    private bool _isComplete;
+    private ModelAvailability _availability = ModelAvailability.Starting;
 
-    /// <summary>Why the model cannot run, naming the section at fault. Null when complete.</summary>
+    /// <summary>
+    /// What the section at fault, or the section still arriving, is doing. Null when complete.
+    /// </summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(StatusText))]
     [NotifyPropertyChangedFor(nameof(ChainStatusText))]
-    private string? _incompleteReason;
+    private string? _statusDetail;
 
     /// <summary>How many distinct sources hold pieces of this model in the current assembly.</summary>
     [ObservableProperty]
@@ -82,29 +84,43 @@ public sealed partial class NetworkServedModel : ObservableObject
     /// <summary>Stable identity the manager reconciles on and graphs persist.</summary>
     public string ModelKey => ModelId;
 
-    /// <summary>Overall strength: the weakest section decides.</summary>
-    public SectionCoverage Strength => !IsComplete
-        ? SectionCoverage.Uncovered
-        : WeakestSpare >= 1 ? SectionCoverage.Healthy : SectionCoverage.Thin;
+    /// <summary>True only when the model can be run right now, which is what a node gates on.</summary>
+    public bool CanRun => Availability == ModelAvailability.Complete;
 
-    /// <summary>One word for the row badge, with the reason carried separately.</summary>
-    public string StatusText => IsComplete ? "Complete" : "Blocked";
+    /// <summary>Overall strength: the weakest section decides, and a model still arriving has none yet.</summary>
+    public SectionCoverage Strength => Availability switch
+    {
+        ModelAvailability.Blocked => SectionCoverage.Uncovered,
+        ModelAvailability.Starting => SectionCoverage.Starting,
+        _ => WeakestSpare >= 1 ? SectionCoverage.Healthy : SectionCoverage.Thin
+    };
+
+    /// <summary>One word for the row badge, with the detail carried separately.</summary>
+    public string StatusText => Availability switch
+    {
+        ModelAvailability.Complete => "Complete",
+        ModelAvailability.Blocked => "Blocked",
+        _ => "Starting"
+    };
 
     /// <summary>The sentence above the coverage chain.</summary>
-    public string ChainStatusText => IsComplete
-        ? WeakestSpare > 0
+    public string ChainStatusText => Availability switch
+    {
+        ModelAvailability.Complete => WeakestSpare > 0
             ? $"Complete and armed. Every section is serving, with {WeakestSpare} spare source(s) behind the weakest."
-            : "Complete and armed. Every section is serving, with no spare source behind the weakest."
-        : IncompleteReason ?? "Blocked: the mesh cannot assemble this model right now.";
+            : "Complete and armed. Every section is serving, with no spare source behind the weakest.",
+        ModelAvailability.Blocked => StatusDetail ?? "Blocked: the mesh cannot assemble this model right now.",
+        _ => StatusDetail ?? "Starting. Waiting for the mesh to report how this model is assembled."
+    };
 
     /// <summary>First strength bar of the row: the model can run at all.</summary>
-    public bool HasDepth1 => IsComplete;
+    public bool HasDepth1 => CanRun;
 
     /// <summary>Second strength bar: a spare source stands behind every section.</summary>
-    public bool HasDepth2 => IsComplete && WeakestSpare >= 1;
+    public bool HasDepth2 => CanRun && WeakestSpare >= 1;
 
     /// <summary>Third strength bar: more than one spare source everywhere.</summary>
-    public bool HasDepth3 => IsComplete && WeakestSpare >= 2;
+    public bool HasDepth3 => CanRun && WeakestSpare >= 2;
 
     /// <summary>What this model takes to run, from the metadata the mesh reports.</summary>
     public string RequirementText

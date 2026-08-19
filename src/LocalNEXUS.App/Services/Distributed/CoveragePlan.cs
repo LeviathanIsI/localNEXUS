@@ -2,13 +2,17 @@ namespace LocalNEXUS.App.Services.Distributed;
 
 /// <summary>
 /// The computed answer to "can this model run right now": the section chain, who holds each
-/// section, how much slack each section has, and a single gate the model node checks before
-/// it sends anything. A gap in any section means there is no valid pipeline.
+/// section, how much slack each section has, and a single verdict the model node checks before
+/// it sends anything.
 /// </summary>
 /// <remarks>
-/// The plan is now a reading of the mesh's own topology rather than something this install
-/// computes. The gate stays, because a node still has to refuse a model the network cannot
-/// currently assemble, and it should say which section is missing when it does.
+/// The plan is a reading of the mesh's own topology rather than something this install
+/// computes. The verdict stays, because a node still has to refuse a model the network cannot
+/// currently assemble and should say which section is at fault when it does.
+///
+/// The verdict is three way. A section the mesh has not finished bringing up leaves the plan
+/// starting, not blocked, and a genuine gap beats a section still loading: knowing one section
+/// cannot serve settles the question whatever the rest are doing.
 /// </remarks>
 public sealed class CoveragePlan
 {
@@ -20,16 +24,22 @@ public sealed class CoveragePlan
         }
 
         Assignments = assignments;
-        WeakestAssignment = assignments.MinBy(a => a.Depth3 ? 3 : a.Depth2 ? 2 : a.Depth1 ? 1 : 0)!;
+        WeakestAssignment = assignments.MinBy(Strength)!;
 
-        var uncovered = assignments.FirstOrDefault(a => !a.IsCovered);
-        IsComplete = uncovered is null;
-        IncompleteReason = uncovered switch
+        if (assignments.FirstOrDefault(a => a.IsBlocking) is { } blocking)
         {
-            null => null,
-            { Source: null } => $"No source holds {uncovered.Section.Label}.",
-            _ => $"{uncovered.Section.Label} is on {uncovered.SourceText} but not serving ({uncovered.StateText})."
-        };
+            Availability = ModelAvailability.Blocked;
+            StatusDetail = blocking.StatusDetail;
+        }
+        else if (assignments.FirstOrDefault(a => !a.IsCovered) is { } arriving)
+        {
+            Availability = ModelAvailability.Starting;
+            StatusDetail = arriving.StatusDetail;
+        }
+        else
+        {
+            Availability = ModelAvailability.Complete;
+        }
     }
 
     /// <summary>One entry per section, in pipeline order.</summary>
@@ -38,11 +48,11 @@ public sealed class CoveragePlan
     /// <summary>The assignment with the least slack: the weakest link in the chain.</summary>
     public SourceAssignment WeakestAssignment { get; }
 
-    /// <summary>The single gate. False means the run must be refused, with <see cref="IncompleteReason"/> as the message.</summary>
-    public bool IsComplete { get; }
+    /// <summary>The verdict. Anything but <see cref="ModelAvailability.Complete"/> means the run must be refused.</summary>
+    public ModelAvailability Availability { get; }
 
-    /// <summary>Why the plan is incomplete, naming the section at fault. Null when complete.</summary>
-    public string? IncompleteReason { get; }
+    /// <summary>What the section at fault, or the section still arriving, is doing. Null when complete.</summary>
+    public string? StatusDetail { get; }
 
     /// <summary>True when the pipeline spans more than one section, which means the mesh split it.</summary>
     public bool IsSplit => Assignments.Count > 1;
@@ -61,4 +71,8 @@ public sealed class CoveragePlan
     /// <summary>One line for status messages: who holds what.</summary>
     public string Summary => string.Join(", ", Assignments.Select(a =>
         $"{a.Section.Label}: {a.SourceText}"));
+
+    /// <summary>Orders sections from the least to the most slack, so the weakest link sorts first.</summary>
+    private static int Strength(SourceAssignment assignment)
+        => assignment.Depth3 ? 3 : assignment.Depth2 ? 2 : assignment.Depth1 ? 1 : 0;
 }

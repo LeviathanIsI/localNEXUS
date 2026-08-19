@@ -32,17 +32,28 @@
     <SolidColorBrush x:Key="Pin.Text.Brush" Color="#FF6FB1FF" />
     <SolidColorBrush x:Key="Pin.Code.Brush" Color="#FFFFB454" />
 
-    <!-- Section coverage in the network tab's chain and model list. -->
+    <!--
+        Section coverage in the network tab's chain and model list. Starting is the same blue as
+        a running node rather than a shade of red, because a section that has not finished
+        loading has not failed at anything.
+    -->
+    <SolidColorBrush x:Key="SectionCoverage.Starting.Brush" Color="#FF4EA1FF" />
     <SolidColorBrush x:Key="SectionCoverage.Healthy.Brush" Color="#FF4ADE80" />
     <SolidColorBrush x:Key="SectionCoverage.Thin.Brush" Color="#FFFFB454" />
     <SolidColorBrush x:Key="SectionCoverage.Uncovered.Brush" Color="#FFF87171" />
 
     <!-- Source states in the peer panel. -->
     <SolidColorBrush x:Key="SourceState.Unknown.Brush" Color="#FF6B7686" />
-    <SolidColorBrush x:Key="SourceState.Probing.Brush" Color="#FF4EA1FF" />
     <SolidColorBrush x:Key="SourceState.Available.Brush" Color="#FF4ADE80" />
-    <SolidColorBrush x:Key="SourceState.Busy.Brush" Color="#FFFFB454" />
+    <SolidColorBrush x:Key="SourceState.Serving.Brush" Color="#FF4ADE80" />
     <SolidColorBrush x:Key="SourceState.Unreachable.Brush" Color="#FFF87171" />
+
+    <!-- This install's own mesh node, on the This machine card. -->
+    <SolidColorBrush x:Key="MeshNodeState.Stopped.Brush" Color="#FF6B7686" />
+    <SolidColorBrush x:Key="MeshNodeState.Starting.Brush" Color="#FF4EA1FF" />
+    <SolidColorBrush x:Key="MeshNodeState.Client.Brush" Color="#FF4ADE80" />
+    <SolidColorBrush x:Key="MeshNodeState.Serving.Brush" Color="#FF4ADE80" />
+    <SolidColorBrush x:Key="MeshNodeState.Failed.Brush" Color="#FFF87171" />
 
     <!-- Node execution states. -->
     <SolidColorBrush x:Key="NodeState.Pending.Brush" Color="#FF6B7686" />

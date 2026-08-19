@@ -34,9 +34,10 @@ than a fixed pipeline, so the features on the roadmap drop in without rework.
   peers, the run is gated on the mesh being able to assemble it, and the Network tab shows which
   source holds which layer range of the assembled pipeline.
 - **Model browsing.** The Network tab lists every model the mesh knows about, with its metadata,
-  how many sources hold pieces of it, the slack behind the weakest section and a clear Complete
-  or Blocked verdict; a Model node on the Network provider picks from that list and refuses
-  blocked models with the reason.
+  how many sources hold pieces of it, the slack behind the weakest section and a clear verdict:
+  Complete, Starting while it is still coming up, or Blocked when the mesh is known to be unable
+  to assemble it; a Model node on the Network provider picks from that list and refuses anything
+  that is not ready, with the reason.
 - **Contribution.** Any install can serve its GPU to another orchestrator with one
   toggle; roles are interchangeable, there is no dedicated worker machine.
 
@@ -181,14 +182,20 @@ then appear in each other's source lists with their announced memory and measure
 first time, allow the node through the Windows firewall.
 
 **Browse what the network can serve.** The Available models list leads the tab: every model the
-mesh knows about, its metadata, how many sources hold pieces of it, and a Complete or Blocked
-verdict. Selecting one draws its coverage chain: the pipeline of sections in order, which source
-holds which layer range, and how much slack stands behind each. A section that is not serving is
-shown in red and named as the reason the model is blocked.
+mesh knows about, its metadata, how many sources hold pieces of it, and a verdict. Selecting one
+draws its coverage chain: the pipeline of sections in order, which source holds which layer
+range, and how much slack stands behind each.
+
+The verdict is three way, because a model that is still loading has not failed at anything. A
+section still coming up is blue and says what it is waiting on; only a section the mesh is known
+to be unable to serve, because no source holds it or the source holding it reports it stopped,
+is red and named as the reason the model is Blocked. The same distinction runs through the tab:
+before the node has answered, the model and source lists say the mesh is starting rather than
+sitting empty as though the network were bare.
 
 **Run across the mesh.** Set a Model node's provider to **Network** and pick a model from the
-list. Blocked models cannot be picked, and a model that becomes blocked between selection and
-run refuses the run with the reason. Whether the model runs on one peer or as layer stages
+list. Only a Complete model can be picked, and a model that stops being complete between
+selection and run refuses the run, saying whether it is still coming up or blocked outright. Whether the model runs on one peer or as layer stages
 across several is the mesh's decision, made at run time and echoed to the activity feed.
 
 Nothing about sources is configured by hand any more. Membership, placement, liveness and

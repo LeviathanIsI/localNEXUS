@@ -36,6 +36,26 @@
                 </StackPanel>
             </DockPanel>
 
+            <TextBlock Grid.Row="1"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       MaxWidth="360"
+                       TextAlignment="Center"
+                       TextWrapping="Wrap"
+                       Foreground="{StaticResource Text.Secondary.Brush}"
+                       Text="{Binding Mesh.EmptyModelsText}">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding Mesh.HasModels}" Value="False">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+
             <ListBox Grid.Row="1"
                      ItemsSource="{Binding Mesh.Models}"
                      SelectedItem="{Binding SelectedModel}"
@@ -87,7 +107,7 @@
                                 </Rectangle>
                             </StackPanel>
 
-                            <!-- Complete or blocked, the signal that matters most -->
+                            <!-- The verdict, which is the signal that matters most -->
                             <Border DockPanel.Dock="Right"
                                     VerticalAlignment="Center"
                                     CornerRadius="10"
@@ -130,26 +150,40 @@
                                 <TextBlock Margin="0,3,0,0"
                                            FontSize="{StaticResource Font.Size.Small}"
                                            TextWrapping="Wrap"
-                                           Foreground="{StaticResource SectionCoverage.Uncovered.Brush}"
-                                           Text="{Binding IncompleteReason}"
-                                           Visibility="{Binding IncompleteReason, Converter={StaticResource StringToVisibility}}" />
+                                           Foreground="{Binding Strength, Converter={StaticResource ResourceLookup}, ConverterParameter=SectionCoverage}"
+                                           Text="{Binding StatusDetail}"
+                                           Visibility="{Binding StatusDetail, Converter={StaticResource StringToVisibility}}" />
                             </StackPanel>
                         </DockPanel>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>
 
-            <!-- The chain: sections in pipeline order, left to right -->
-            <StackPanel Grid.Row="2" Margin="0,18,0,0">
+            <!-- The chain: sections in pipeline order, left to right. Nothing to assemble is
+                 said once, by the placeholder above, rather than twice. -->
+            <StackPanel Grid.Row="2"
+                        Margin="0,18,0,0"
+                        Visibility="{Binding Mesh.HasModels, Converter={StaticResource BooleanToVisibility}}">
                 <TextBlock Text="Coverage chain"
                            FontSize="{StaticResource Font.Size.Title}"
                            FontWeight="SemiBold" />
 
                 <TextBlock Margin="0,4,0,0"
                            FontSize="{StaticResource Font.Size.Small}"
-                           TextWrapping="Wrap"
-                           Text="{Binding SelectedModel.ChainStatusText, FallbackValue='Select a model to see how it is assembled.'}"
-                           Foreground="{Binding SelectedModel.Strength, Converter={StaticResource ResourceLookup}, ConverterParameter=SectionCoverage, FallbackValue={StaticResource Text.Secondary.Brush}}" />
+                           TextWrapping="Wrap">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                            <Setter Property="Text" Value="{Binding SelectedModel.ChainStatusText}" />
+                            <Setter Property="Foreground" Value="{Binding SelectedModel.Strength, Converter={StaticResource ResourceLookup}, ConverterParameter=SectionCoverage}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding HasSelection}" Value="False">
+                                    <Setter Property="Text" Value="Select a model to see how it is assembled." />
+                                    <Setter Property="Foreground" Value="{StaticResource Text.Secondary.Brush}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
 
                 <ScrollViewer HorizontalScrollBarVisibility="Auto"
                               VerticalScrollBarVisibility="Disabled"
@@ -206,8 +240,11 @@
                                                 <TextBlock.Style>
                                                     <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
                                                         <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsCovered}" Value="False">
+                                                            <DataTrigger Binding="{Binding Coverage}" Value="Uncovered">
                                                                 <Setter Property="Foreground" Value="{StaticResource SectionCoverage.Uncovered.Brush}" />
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding Coverage}" Value="Starting">
+                                                                <Setter Property="Foreground" Value="{StaticResource SectionCoverage.Starting.Brush}" />
                                                             </DataTrigger>
                                                         </Style.Triggers>
                                                     </Style>
@@ -291,6 +328,11 @@
                                            FontSize="{StaticResource Font.Size.Small}"
                                            Foreground="{StaticResource Text.Secondary.Brush}" />
                             </Border>
+                            <Ellipse Width="8"
+                                     Height="8"
+                                     Margin="0,0,8,0"
+                                     VerticalAlignment="Center"
+                                     Fill="{Binding Mesh.State, Converter={StaticResource ResourceLookup}, ConverterParameter=MeshNodeState}" />
                             <TextBlock Text="This machine"
                                        FontSize="{StaticResource Font.Size.Large}"
                                        FontWeight="SemiBold" />
@@ -454,6 +496,23 @@
                         </StackPanel>
                     </StackPanel>
                 </Border>
+
+                <TextBlock Margin="0,2,0,0"
+                           TextWrapping="Wrap"
+                           FontSize="{StaticResource Font.Size.Small}"
+                           Foreground="{StaticResource Text.Secondary.Brush}"
+                           Text="{Binding Mesh.EmptySourcesText}">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Mesh.HasSources}" Value="False">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
 
                 <ItemsControl ItemsSource="{Binding Mesh.Sources}">
                     <ItemsControl.ItemTemplate>

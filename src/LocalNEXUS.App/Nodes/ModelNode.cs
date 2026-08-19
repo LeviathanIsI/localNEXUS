@@ -357,10 +357,18 @@ public sealed partial class ModelNode : NodeBase
                 $"{Title} cannot use {networkModel.DisplayLabel}: this install's mesh node is not running. Start it from the Network tab.");
         }
 
-        if (!networkModel.IsComplete)
+        if (!networkModel.CanRun)
         {
+            // A model still coming up and one the mesh cannot assemble are both refusals, but
+            // they are not the same news, so the message says which it is.
+            var detail = networkModel.StatusDetail ?? (networkModel.Availability == ModelAvailability.Blocked
+                ? "the mesh cannot assemble it right now."
+                : "the mesh is still bringing it up.");
+
             throw new InvalidOperationException(
-                $"{Title} cannot use {networkModel.DisplayLabel}: {networkModel.IncompleteReason ?? "the mesh cannot assemble it right now."}");
+                networkModel.Availability == ModelAvailability.Blocked
+                    ? $"{Title} cannot use {networkModel.DisplayLabel}. {detail}"
+                    : $"{Title} cannot use {networkModel.DisplayLabel} yet. {detail}");
         }
 
         // Automatic but visible: the mesh chose the assembly, so the run shows its work.
