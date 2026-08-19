@@ -16,6 +16,11 @@ public sealed record SourceAssignment(
     /// <summary>True when a source is assigned and was available when the plan was computed.</summary>
     public bool IsCovered => Source is not null;
 
+    /// <summary>Coverage depth of this section, for the chain's colour and strength bars.</summary>
+    public SectionCoverage Coverage => !IsCovered
+        ? SectionCoverage.Uncovered
+        : Redundancy >= 2 ? SectionCoverage.Healthy : SectionCoverage.Thin;
+
     /// <summary>Label for the coverage chain in the panel.</summary>
     public string SourceText => Source?.DisplayName ?? "uncovered";
 }

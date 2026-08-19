@@ -9,17 +9,24 @@
 
     <StackPanel>
         <TextBlock Style="{StaticResource SectionHeader}" Text="Provider" />
-        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+        <WrapPanel Margin="0,6,0,0">
             <RadioButton Content="Local"
                          GroupName="Provider"
+                         Margin="0,0,0,4"
                          IsChecked="{Binding Provider, Converter={StaticResource EnumToBoolean}, ConverterParameter=Local}" />
+            <RadioButton Content="Network"
+                         GroupName="Provider"
+                         Margin="0,0,0,4"
+                         IsChecked="{Binding Provider, Converter={StaticResource EnumToBoolean}, ConverterParameter=Network}" />
             <RadioButton Content="Self hosted"
                          GroupName="Provider"
+                         Margin="0,0,0,4"
                          IsChecked="{Binding Provider, Converter={StaticResource EnumToBoolean}, ConverterParameter=SelfHosted}" />
             <RadioButton Content="OpenRouter"
                          GroupName="Provider"
+                         Margin="0,0,0,4"
                          IsChecked="{Binding Provider, Converter={StaticResource EnumToBoolean}, ConverterParameter=OpenRouter}" />
-        </StackPanel>
+        </WrapPanel>
 
         <!-- Local model selection -->
         <StackPanel Visibility="{Binding IsLocal, Converter={StaticResource BooleanToVisibility}}">
@@ -77,6 +84,38 @@
                      FontFamily="{StaticResource Font.Mono}" />
             <TextBlock Style="{StaticResource HintText}"
                        Text="Blank divides by declared memory. Otherwise comma separated with dot decimals, one value per source: remote sources first, this machine last. For example 1,1 for an even two way split." />
+        </StackPanel>
+
+        <!-- Network served model -->
+        <StackPanel Visibility="{Binding IsNetwork, Converter={StaticResource BooleanToVisibility}}">
+            <TextBlock Style="{StaticResource FieldLabel}" Text="Network model" />
+            <ComboBox ItemsSource="{Binding NetworkModels.Models}"
+                      SelectedItem="{Binding SelectedNetworkModel}">
+                <ComboBox.ItemContainerStyle>
+                    <Style TargetType="ComboBoxItem" BasedOn="{StaticResource {x:Type ComboBoxItem}}">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsComplete}" Value="False">
+                                <Setter Property="IsEnabled" Value="False" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </ComboBox.ItemContainerStyle>
+                <ComboBox.ItemTemplate>
+                    <DataTemplate>
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Right"
+                                       Margin="12,0,0,0"
+                                       VerticalAlignment="Center"
+                                       FontSize="{StaticResource Font.Size.Small}"
+                                       Text="{Binding StatusText}"
+                                       Foreground="{Binding Strength, Converter={StaticResource ResourceLookup}, ConverterParameter=SectionCoverage}" />
+                            <TextBlock Text="{Binding DisplayLabel}" VerticalAlignment="Center" />
+                        </DockPanel>
+                    </DataTemplate>
+                </ComboBox.ItemTemplate>
+            </ComboBox>
+            <TextBlock Style="{StaticResource HintText}"
+                       Text="Models the network can serve right now, from the Network tab. Blocked models cannot be picked; the tab shows which section has no coverage. How the model is assembled across sources is decided at run time." />
         </StackPanel>
 
         <!-- Self hosted server -->

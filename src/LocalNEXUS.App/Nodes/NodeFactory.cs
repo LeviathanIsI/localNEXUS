@@ -1,4 +1,5 @@
 using LocalNEXUS.App.Models;
+using LocalNEXUS.App.Services.Distributed;
 using LocalNEXUS.App.Services.Persistence;
 
 namespace LocalNEXUS.App.Nodes;
@@ -14,8 +15,13 @@ namespace LocalNEXUS.App.Nodes;
 public sealed class NodeFactory
 {
     private readonly ModelCatalog _catalog;
+    private readonly NetworkModelIndex _networkModels;
 
-    public NodeFactory(ModelCatalog catalog) => _catalog = catalog;
+    public NodeFactory(ModelCatalog catalog, NetworkModelIndex networkModels)
+    {
+        _catalog = catalog;
+        _networkModels = networkModels;
+    }
 
     /// <summary>A node type as offered by the palette.</summary>
     /// <param name="TypeKey">The discriminator written to the graph file.</param>
@@ -37,7 +43,7 @@ public sealed class NodeFactory
     public NodeBase Create(string typeKey) => typeKey switch
     {
         "Input" => new InputNode(),
-        "Model" => new ModelNode(_catalog),
+        "Model" => new ModelNode(_catalog, _networkModels),
         "Transform" => new TransformNode(),
         "Output" => new OutputNode(),
         _ => throw new NotSupportedException($"Unknown node type '{typeKey}'.")

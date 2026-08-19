@@ -53,9 +53,6 @@ public partial class App : Application
         var catalog = new ModelCatalog(config);
         catalog.Refresh();
 
-        var factory = new NodeFactory(catalog);
-        var serializer = new GraphSerializer(factory);
-
         var graph = new GraphModel();
         var feed = new ActivityFeed(Dispatcher);
         var dialogs = new WindowsDialogService();
@@ -64,6 +61,11 @@ public partial class App : Application
         RestoreLastProject(config, unityProject, feed);
 
         var sources = new SourceRegistry(config);
+        var coverage = new CoveragePlanner(sources);
+        var networkModels = new NetworkModelIndex(catalog, sources, coverage, Dispatcher);
+
+        var factory = new NodeFactory(catalog, networkModels);
+        var serializer = new GraphSerializer(factory);
 
         var healthMonitor = new SourceHealthMonitor(sources, feed);
         _healthMonitor = healthMonitor;
@@ -76,7 +78,6 @@ public partial class App : Application
         _llamaServers = new LlamaServerManager();
         _modelClient = new OpenAiCompatibleClient();
 
-        var coverage = new CoveragePlanner(sources);
         var services = new ExecutionServices(
             _modelClient,
             _llamaServers,

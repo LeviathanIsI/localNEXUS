@@ -39,6 +39,7 @@ public sealed partial class ModelNode : NodeBase
     /// <summary>Where this node's requests go.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsLocal))]
+    [NotifyPropertyChangedFor(nameof(IsNetwork))]
     [NotifyPropertyChangedFor(nameof(IsSelfHosted))]
     [NotifyPropertyChangedFor(nameof(IsOpenRouter))]
     [NotifyPropertyChangedFor(nameof(ModelDisplayName))]
@@ -48,6 +49,17 @@ public sealed partial class ModelNode : NodeBase
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ModelDisplayName))]
     private LocalModelInfo? _selectedLocalModel;
+
+    /// <summary>The network served model this node uses, when the provider is network.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ModelDisplayName))]
+    private NetworkServedModel? _selectedNetworkModel;
+
+    /// <summary>
+    /// The persisted network model identity when it could not be resolved at load time, kept
+    /// so saving the graph again does not silently drop the choice.
+    /// </summary>
+    private string? _unresolvedNetworkModelKey;
 
     /// <summary>The model slug sent to OpenRouter, for example <c>anthropic/claude-sonnet-4</c>.</summary>
     [ObservableProperty]
@@ -107,10 +119,11 @@ public sealed partial class ModelNode : NodeBase
     [ObservableProperty]
     private string _apiKey = string.Empty;
 
-    public ModelNode(ModelCatalog catalog)
+    public ModelNode(ModelCatalog catalog, NetworkModelIndex networkModels)
         : base("Model")
     {
         Catalog = catalog;
+        NetworkModels = networkModels;
 
         Prompt = AddInput("Text", PinType.Text);
         Completion = AddOutput("Code", PinType.Code);
@@ -121,6 +134,9 @@ public sealed partial class ModelNode : NodeBase
 
     /// <summary>The GGUF files available for the local provider.</summary>
     public ModelCatalog Catalog { get; }
+
+    /// <summary>The models the network serves, for the network provider's dropdown.</summary>
+    public NetworkModelIndex NetworkModels { get; }
 
     /// <summary>Receives the text to send to the model.</summary>
     public Pin Prompt { get; }
@@ -134,6 +150,9 @@ public sealed partial class ModelNode : NodeBase
     /// <summary>True when the local provider is selected. Drives which settings are shown.</summary>
     public bool IsLocal => Provider == ModelProvider.Local;
 
+    /// <summary>True when the network provider is selected.</summary>
+    public bool IsNetwork => Provider == ModelProvider.Network;
+
     /// <summary>True when the self hosted provider is selected.</summary>
     public bool IsSelfHosted => Provider == ModelProvider.SelfHosted;
 
@@ -144,6 +163,7 @@ public sealed partial class ModelNode : NodeBase
     public string ModelDisplayName => Provider switch
     {
         ModelProvider.Local => SelectedLocalModel?.Name ?? "no model selected",
+        ModelProvider.Network => SelectedNetworkModel?.DisplayLabel ?? "no network model",
         ModelProvider.SelfHosted => string.IsNullOrWhiteSpace(SelfHostedModelId) ? "no model id" : SelfHostedModelId,
         ModelProvider.OpenRouter => string.IsNullOrWhiteSpace(OpenRouterModel) ? "no model slug" : OpenRouterModel,
         _ => "unknown"
@@ -206,6 +226,7 @@ public sealed partial class ModelNode : NodeBase
     {
         ["provider"] = Provider.ToString(),
         ["localModelPath"] = SelectedLocalModel?.Path,
+        ["networkModel"] = SelectedNetworkModel?.ModelKey ?? _unresolvedNetworkModelKey,
         ["openRouterModel"] = OpenRouterModel,
         ["selfHostedModelId"] = SelfHostedModelId,
         ["systemPrompt"] = SystemPrompt,
@@ -231,6 +252,10 @@ public sealed partial class ModelNode : NodeBase
         var localPath = settings["localModelPath"]?.GetValue<string>();
         SelectedLocalModel = Catalog.FindByPath(localPath)
                              ?? (localPath is not null && File.Exists(localPath) ? new LocalModelInfo(localPath) : null);
+
+        var networkKey = settings["networkModel"]?.GetValue<string>();
+        SelectedNetworkModel = NetworkModels.FindByKey(networkKey);
+        _unresolvedNetworkModelKey = SelectedNetworkModel is null ? networkKey : null;
 
         OpenRouterModel = settings["openRouterModel"]?.GetValue<string>() ?? string.Empty;
         SelfHostedModelId = settings["selfHostedModelId"]?.GetValue<string>() ?? string.Empty;
@@ -298,6 +323,30 @@ public sealed partial class ModelNode : NodeBase
             return new EndpointResolution(new ModelEndpoint(openRouterUrl, OpenRouterModel, ApiKey), null);
         }
 
+        if (Provider == ModelProvider.Network)
+        {
+            var networkModel = SelectedNetworkModel
+                ?? throw new InvalidOperationException(
+                    $"{Title} has no network model selected. Pick one in the Network tab or the node settings.");
+
+            if (!networkModel.IsComplete)
+            {
+                throw new InvalidOperationException(
+                    $"{Title} cannot use {networkModel.DisplayLabel}: {networkModel.IncompleteReason ?? "coverage is incomplete."}");
+            }
+
+            if (string.IsNullOrWhiteSpace(networkModel.LocalPath))
+            {
+                throw new InvalidOperationException(
+                    $"{Title} cannot serve {networkModel.DisplayLabel}: this install holds no copy of the weights, and fetching them from the network does not exist yet.");
+            }
+
+            // Assembled however the planner decides, exactly like a local model that does not
+            // fit: sources are fungible and the graph does not care where inference happens.
+            return await ResolveManagedAsync(ctx, entry, networkModel.LocalPath, forceSplit: false, manualProportions: null, ct)
+                .ConfigureAwait(false);
+        }
+
         if (Provider == ModelProvider.SelfHosted)
         {
             if (string.IsNullOrWhiteSpace(BaseUrl))
@@ -328,17 +377,22 @@ public sealed partial class ModelNode : NodeBase
             return new EndpointResolution(new ModelEndpoint(BaseUrl, Path.GetFileNameWithoutExtension(modelPath)), null);
         }
 
-        return await ResolveManagedAsync(ctx, entry, modelPath, ct).ConfigureAwait(false);
+        return await ResolveManagedAsync(
+                ctx, entry, modelPath, ForceSplit, ParseSplitProportions(SplitProportions), ct)
+            .ConfigureAwait(false);
     }
 
     /// <summary>
-    /// The managed local path: decide whether the model runs on this machine alone or split
-    /// across sources, gate on coverage, and start or reuse the server the plan calls for.
+    /// The managed path shared by the local and network providers: decide whether the model
+    /// runs on this machine alone or split across sources, gate on coverage, and start or
+    /// reuse the server the plan calls for.
     /// </summary>
     private async Task<EndpointResolution> ResolveManagedAsync(
         NodeExecutionContext ctx,
         ActivityEvent entry,
         string modelPath,
+        bool forceSplit,
+        IReadOnlyList<double>? manualProportions,
         CancellationToken ct)
     {
         CoveragePlan? plan = null;
@@ -348,7 +402,7 @@ public sealed partial class ModelNode : NodeBase
         {
             // Without layer count and size there is nothing to plan with. A plain local
             // launch still works exactly as it always has; only splitting needs the header.
-            if (ForceSplit)
+            if (forceSplit)
             {
                 throw new InvalidOperationException($"{Title} cannot plan a split: {metadataError}");
             }
@@ -357,7 +411,7 @@ public sealed partial class ModelNode : NodeBase
         {
             await ProbeUnknownSourcesAsync(ctx, ct).ConfigureAwait(false);
 
-            plan = ctx.Services.Coverage.Plan(metadata, ForceSplit, ParseSplitProportions(SplitProportions));
+            plan = ctx.Services.Coverage.Plan(metadata, forceSplit, manualProportions);
             if (!plan.IsComplete)
             {
                 throw new InvalidOperationException($"{Title} cannot run: {plan.IncompleteReason}");
@@ -416,13 +470,19 @@ public sealed partial class ModelNode : NodeBase
             await Task.WhenAll(engaged.Select(s => ctx.Services.HealthMonitor.ProbeNowAsync(s, ct))).ConfigureAwait(false);
         }
 
-        var modelPath = SelectedLocalModel?.Path;
+        var modelPath = Provider == ModelProvider.Network
+            ? SelectedNetworkModel?.LocalPath
+            : SelectedLocalModel?.Path;
+
         if (string.IsNullOrWhiteSpace(modelPath))
         {
-            throw new InvalidOperationException($"{Title} no longer has a local model selected.");
+            throw new InvalidOperationException($"{Title} no longer has a model selected.");
         }
 
-        return await ResolveManagedAsync(ctx, entry, modelPath, ct).ConfigureAwait(false);
+        var forceSplit = Provider != ModelProvider.Network && ForceSplit;
+        var proportions = Provider == ModelProvider.Network ? null : ParseSplitProportions(SplitProportions);
+
+        return await ResolveManagedAsync(ctx, entry, modelPath, forceSplit, proportions, ct).ConfigureAwait(false);
     }
 
     private static async Task ProbeUnknownSourcesAsync(NodeExecutionContext ctx, CancellationToken ct)
