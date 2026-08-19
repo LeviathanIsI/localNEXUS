@@ -32,6 +32,13 @@
     <SolidColorBrush x:Key="Pin.Text.Brush" Color="#FF6FB1FF" />
     <SolidColorBrush x:Key="Pin.Code.Brush" Color="#FFFFB454" />
 
+    <!-- Source states in the peer panel. -->
+    <SolidColorBrush x:Key="SourceState.Unknown.Brush" Color="#FF6B7686" />
+    <SolidColorBrush x:Key="SourceState.Probing.Brush" Color="#FF4EA1FF" />
+    <SolidColorBrush x:Key="SourceState.Available.Brush" Color="#FF4ADE80" />
+    <SolidColorBrush x:Key="SourceState.Busy.Brush" Color="#FFFFB454" />
+    <SolidColorBrush x:Key="SourceState.Unreachable.Brush" Color="#FFF87171" />
+
     <!-- Node execution states. -->
     <SolidColorBrush x:Key="NodeState.Pending.Brush" Color="#FF6B7686" />
     <SolidColorBrush x:Key="NodeState.Running.Brush" Color="#FF4EA1FF" />

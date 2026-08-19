@@ -72,8 +72,11 @@ public sealed partial class InferenceSource : ObservableObject
     /// <summary>True for the source that represents this install itself.</summary>
     public bool IsThisMachine => Locality == SourceLocality.ThisMachine;
 
-    /// <summary>The endpoint in the form llama-server's --rpc flag expects.</summary>
-    public string EndpointText => $"{Host}:{Port}";
+    /// <summary>
+    /// The endpoint in the form llama-server's --rpc flag expects. This machine shows only its
+    /// host until it is actually serving a port.
+    /// </summary>
+    public string EndpointText => Port > 0 ? $"{Host}:{Port}" : Host;
 
     /// <summary>Last seen time formatted for the panel.</summary>
     public string LastSeenText => LastSeenUtc is { } seen

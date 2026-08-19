@@ -55,6 +55,7 @@ public sealed partial class MainViewModel : ObservableObject
         ActivityFeed feed,
         ActivityFeedViewModel feedViewModel,
         ModelCatalogViewModel catalog,
+        PeersViewModel peers,
         UnityProjectService unityProject,
         AppConfig config)
     {
@@ -67,6 +68,7 @@ public sealed partial class MainViewModel : ObservableObject
 
         Feed = feedViewModel;
         Catalog = catalog;
+        Peers = peers;
         UnityProject = unityProject;
         PendingConnection = new PendingConnectionViewModel(graph, message => _feed.Error("Connection refused", message));
 
@@ -85,6 +87,9 @@ public sealed partial class MainViewModel : ObservableObject
 
     /// <summary>Catalog commands used by the model node settings panel.</summary>
     public ModelCatalogViewModel Catalog { get; }
+
+    /// <summary>The peer panel: sources, contribution and coverage.</summary>
+    public PeersViewModel Peers { get; }
 
     /// <summary>The Unity project that output nodes write into.</summary>
     public UnityProjectService UnityProject { get; }
@@ -371,6 +376,9 @@ public sealed partial class MainViewModel : ObservableObject
             SelectedNode = Graph.Nodes.LastOrDefault(n => n.IsSelected);
         }
     }
+
+    /// <summary>The coverage preview in the peer panel follows canvas selection.</summary>
+    partial void OnSelectedNodeChanged(NodeBase? value) => Peers.SetContext(value);
 
     private void OnUnityProjectChanged(object? sender, PropertyChangedEventArgs e)
     {

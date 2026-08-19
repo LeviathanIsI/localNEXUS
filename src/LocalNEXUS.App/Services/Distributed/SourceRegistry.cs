@@ -177,5 +177,14 @@ public sealed partial class SourceRegistry : ObservableObject
         {
             Changed?.Invoke(this, EventArgs.Empty);
         }
+
+        // Edits made in the panel survive a restart without a separate save step.
+        if (e.PropertyName is nameof(InferenceSource.DisplayName)
+            or nameof(InferenceSource.Host)
+            or nameof(InferenceSource.Port)
+            or nameof(SourceCapabilities.MemoryMb))
+        {
+            Persist();
+        }
     }
 }

@@ -64,11 +64,14 @@ public partial class App : Application
         RestoreLastProject(config, unityProject, feed);
 
         var sources = new SourceRegistry(config);
-        _healthMonitor = new SourceHealthMonitor(sources, feed);
-        _healthMonitor.Start();
 
-        _rpcWorker = new RpcWorkerManager(config, feed);
-        _ = _rpcWorker.RestoreAsync();
+        var healthMonitor = new SourceHealthMonitor(sources, feed);
+        _healthMonitor = healthMonitor;
+        healthMonitor.Start();
+
+        var rpcWorker = new RpcWorkerManager(config, feed);
+        _rpcWorker = rpcWorker;
+        _ = rpcWorker.RestoreAsync();
 
         _llamaServers = new LlamaServerManager();
         _modelClient = new OpenAiCompatibleClient();
@@ -79,7 +82,7 @@ public partial class App : Application
             _llamaServers,
             sources,
             coverage,
-            _healthMonitor,
+            healthMonitor,
             unityProject,
             new FileWriter(),
             feed);
@@ -87,6 +90,7 @@ public partial class App : Application
 
         var feedViewModel = new ActivityFeedViewModel(executor, graph, feed, Dispatcher);
         var catalogViewModel = new ModelCatalogViewModel(catalog, dialogs);
+        var peersViewModel = new PeersViewModel(sources, rpcWorker, coverage, healthMonitor, feed);
 
         var mainViewModel = new MainViewModel(
             graph,
@@ -96,6 +100,7 @@ public partial class App : Application
             feed,
             feedViewModel,
             catalogViewModel,
+            peersViewModel,
             unityProject,
             config);
 

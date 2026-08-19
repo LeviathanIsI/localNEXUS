@@ -451,7 +451,12 @@ public sealed partial class ModelNode : NodeBase
         }
     }
 
-    private static IReadOnlyList<double>? ParseSplitProportions(string text)
+    /// <summary>
+    /// Parses manual split proportions. Public because the peer panel previews coverage with
+    /// exactly the proportions a run would use. Null when blank or unparsable, which means
+    /// automatic by memory.
+    /// </summary>
+    public static IReadOnlyList<double>? ParseSplitProportions(string text)
     {
         if (string.IsNullOrWhiteSpace(text))
         {

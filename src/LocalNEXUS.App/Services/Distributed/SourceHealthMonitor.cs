@@ -60,7 +60,7 @@ public sealed class SourceHealthMonitor : IDisposable
             return true;
         }
 
-        return await ProbeAsync(source, ct).ConfigureAwait(false);
+        return await ProbeAsync(source, showProbing: true, ct).ConfigureAwait(false);
     }
 
     public void Dispose()
@@ -103,13 +103,19 @@ public sealed class SourceHealthMonitor : IDisposable
             return;
         }
 
-        await Task.WhenAll(targets.Select(t => ProbeAsync(t, ct))).ConfigureAwait(false);
+        await Task.WhenAll(targets.Select(t => ProbeAsync(t, showProbing: false, ct))).ConfigureAwait(false);
     }
 
-    private async Task<bool> ProbeAsync(InferenceSource source, CancellationToken ct)
+    private async Task<bool> ProbeAsync(InferenceSource source, bool showProbing, CancellationToken ct)
     {
+        // The background sweep leaves the settled state in place while it works, so the panel
+        // does not flicker through Probing every ten seconds and no change events fire unless
+        // something actually changed. An explicit probe now shows its work.
         var settledState = source.State;
-        source.State = SourceState.Probing;
+        if (showProbing)
+        {
+            source.State = SourceState.Probing;
+        }
 
         bool reachable;
         try
