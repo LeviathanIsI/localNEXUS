@@ -26,7 +26,8 @@ The counterbalance, equally important: build seams and interfaces for the vision
 - Windows 11 desktop, WPF, .NET 8, C#
 - Node canvas: Nodify (MVVM). Wiki: https://miroiu.github.io/nodify
 - MVVM: CommunityToolkit.Mvvm
-- Local inference: bundled llama.cpp (`llama-server`, and `rpc-server` for distributed), spawned as silent child processes, called over the OpenAI-compatible HTTP API
+- Local inference: bundled llama.cpp (`llama-server`), spawned as a silent child process, called over the OpenAI-compatible HTTP API
+- Distributed inference: bundled Mesh LLM (`mesh-llm`), spawned as a silent child process, called over the same OpenAI-compatible HTTP API
 - Cloud inference: OpenRouter, same OpenAI-compatible API
 - Serialization: System.Text.Json
 
@@ -47,7 +48,7 @@ The counterbalance, equally important: build seams and interfaces for the vision
 
 - Publish self-contained single-file to `dist/`, overwriting what is there. No separate .NET install required by the user.
 - `dist/` is gitignored (build artifact).
-- Bundled llama.cpp binaries land in `dist/` alongside the exe with their expected relative paths intact.
+- Bundled engine binaries (llama.cpp in `vendor/llama`, Mesh LLM in `vendor/mesh`) land in `dist/` alongside the exe with their expected relative paths intact.
 - Binary path resolution must work identically whether running from the IDE or from the published single-file exe. This is a known single-file publishing gotcha; handle it explicitly.
 - "It compiles" is not done. "The exe in `dist/` runs and works" is done.
 - No reliance on opening the solution in an IDE for normal use. Debug runs only when chasing a specific bug.
@@ -72,13 +73,26 @@ These are settled. Do not relitigate them without being asked.
 
 **Automatic but visible.** Wherever the system decides something for the user (source assembly, split proportions, routing), show what it chose and allow an override. Same philosophy as breakpoints on wires: hands-off until you need to reach in.
 
-**Failure assumptions.** Sources drop without warning. Structure request paths so a section can be re-attempted against a different source. Cache activations per section where the underlying engine exposes the seam (the Petals technique). Where llama.cpp RPC does not expose that seam, build the interface anyway and leave it unwired rather than designing around its absence.
+**Failure assumptions.** Sources drop without warning. The engine owns recovery: it detects a dead peer, retires it, and replans. Do not add a competing retry or replan layer above it, because anything doing that is racing the only component that actually knows the topology. Surface what the engine reports and refuse clearly when it cannot assemble a model.
 
-**Identity and trust seams.** Sources have a stable id that persists across sessions, ready for reputation later. Sources carry a trust attribute that today always resolves to trusted for the user's own machines. The code asks the question now even though the answer is always yes.
+**The distributed engine is Mesh LLM, and llama.cpp RPC is history.** The v0.2 slice ran distribution on llama.cpp's `rpc-server`. Two limitations, both found by testing rather than by reading documentation, made it unfit for the end goal:
+
+1. **No in-flight failover.** Killing a worker left the coordinator's `/health` still reporting ok, and the next completion crashed the coordinator process outright. Recovery could only be relaunch-shaped, which does not survive a network where peers drop constantly.
+2. **One coordinator per worker.** `rpc-server` serves a single coordinator at a time, so a machine with spare VRAM could contribute to exactly one consumer. The vision requires a peer to participate in many pipelines at once.
+
+Mesh LLM (Apache-2.0) replaced it in v0.5. It pools GPUs behind one OpenAI-compatible API, routes by model, splits models too large for one box into contiguous layer stages, and brings its own discovery and NAT-traversing transport. Verified on this hardware: multi-consumer works, and an in-flight streaming request survives its stage peer being killed rather than taking the coordinator down. Not verified: prompt re-convergence after a peer is replaced, which did not complete within the test window on a single-GPU loopback topology. Treat that as an open question, not a settled property.
+
+**llama.cpp is still the local engine.** A model that fits on one machine is served by `llama-server` exactly as before. The mesh is for what one machine cannot do alone. Never route a purely local run through the mesh to make the code look uniform.
+
+**The engine owns discovery, placement and liveness.** This application starts the node process, reads what it reports, and renders it. It does not probe peers, address them by host and port, plan layer ranges, or manage the process lifecycle of remote workers. Anything that assumes otherwise is a bug, not a feature.
+
+**Identity and trust seams.** A source's stable id is its mesh peer public key, assigned by the engine and persistent across sessions, which is what reputation attaches to later. Sources carry a trust attribute that today always resolves to trusted, because a private mesh is joined by invitation and so every peer in it was let in deliberately. The code asks the question now even though the answer is always yes.
+
+**Private by default.** The node hosts or joins a private mesh over LAN-scoped discovery, which keeps the engine off public relays entirely. Publishing to the public mesh is a separate, explicit opt-in and is the only setting that causes any contact beyond the local network.
 
 **Coverage is a real computed concept.** Sections, who covers each, redundancy count, weakest link. A run is gated on complete coverage: a gap in any section means no valid pipeline. Compute and expose this properly even when there are only two machines and it always passes.
 
-**Deliberately deferred.** Do not design these until asked, they need real-world shape first: the peer discovery mechanism (how strangers find each other), the trust scoring algorithm, and the contribution/barter economics.
+**Deliberately deferred.** Do not design these until asked, they need real-world shape first: the trust scoring algorithm and the contribution/barter economics. Peer discovery is no longer on this list because the engine provides it; do not build a second one.
 
 ## Working style
 

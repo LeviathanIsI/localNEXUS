@@ -7,12 +7,10 @@ You wire model nodes together on a Blueprints style canvas, type what you want i
 chat box, and watch the models plan, write code, and put files into your Unity project
 while their output streams into a live activity feed.
 
-This repository holds the **vertical slice** plus the first cut of **distributed
-inference**: one model split across several machines over llama.cpp RPC, with a source
-registry, live health monitoring, coverage tracking and a Network tab that browses what
-the network can serve. It is a real graph
-execution engine rather than a fixed pipeline, so the features on the roadmap drop in
-without rework.
+This repository holds the **vertical slice** plus **distributed inference**: one model run
+across several machines on a Mesh LLM node, with live mesh state, stage coverage tracking and a
+Network tab that browses what the network can serve. It is a real graph execution engine rather
+than a fixed pipeline, so the features on the roadmap drop in without rework.
 
 ## What the slice does
 
@@ -32,13 +30,13 @@ without rework.
 - **File writing.** The Output node writes into the Unity project you opened, optionally
   asking for confirmation in the feed first.
 - **Save and load.** Graphs round trip through JSON, positions and settings included.
-- **Distributed inference.** A model that does not fit on one machine is split across
-  sources over llama.cpp RPC, the run is gated on complete coverage, and the Network tab
-  shows which source holds which section of the assembled pipeline.
-- **Model browsing.** The Network tab lists every model the network could serve, with
-  size, requirements, per section redundancy and a clear Complete or Blocked verdict; a
-  Model node on the Network provider picks from that list and refuses incomplete models
-  with the reason.
+- **Distributed inference.** A model that does not fit on one machine is run across a mesh of
+  peers, the run is gated on the mesh being able to assemble it, and the Network tab shows which
+  source holds which layer range of the assembled pipeline.
+- **Model browsing.** The Network tab lists every model the mesh knows about, with its metadata,
+  how many sources hold pieces of it, the slack behind the weakest section and a clear Complete
+  or Blocked verdict; a Model node on the Network provider picks from that list and refuses
+  blocked models with the reason.
 - **Contribution.** Any install can serve its GPU to another orchestrator with one
   toggle; roles are interchangeable, there is no dedicated worker machine.
 
@@ -51,7 +49,7 @@ without rework.
 | MVVM             | [CommunityToolkit.Mvvm](https://www.nuget.org/packages/CommunityToolkit.Mvvm) |
 | Scripting        | Roslyn (`Microsoft.CodeAnalysis.CSharp.Scripting`)                            |
 | Local inference  | bundled llama.cpp `llama-server`, spawned as a silent child process           |
-| Distributed      | llama.cpp RPC: `llama-server --rpc` as coordinator, `ggml-rpc-server` as worker |
+| Distributed      | bundled [Mesh LLM](https://github.com/Mesh-LLM/mesh-llm) node, spawned as a silent child process |
 | Hosted inference | OpenRouter                                                                    |
 | Serialization    | `System.Text.Json`                                                            |
 
@@ -155,51 +153,62 @@ Select a Model node, switch **Provider** to `OpenRouter`, and fill in:
 
 ## Distributed inference: splitting a model across machines
 
-One model can run across several machines on your LAN over llama.cpp RPC. The machine
-you press Run on is the orchestrator; every other machine contributes sections of the
-model. Any install can play either role.
+One model can run across several machines over [Mesh LLM](https://github.com/Mesh-LLM/mesh-llm),
+which LocalNEXUS starts as a silent child process. The mesh pools the GPUs of every machine in
+it behind one OpenAI-compatible API, routes each request to whichever peer can serve the model,
+and splits models too large for one box into contiguous layer stages.
 
-**Set up the contributing machine.** Install LocalNEXUS there (or copy a published
-`dist\` folder), make sure `vendor\llama\` has the llama.cpp build, switch to the
-**Network** tab, and press **Contribute** on the contribution card. That starts the bundled
-`ggml-rpc-server` silently on the configured port (50052 by default) and remembers the
-choice across restarts. The first time, allow it through the Windows firewall or open
-the port yourself; the Network tab on the orchestrator will show the source as
-unreachable until inbound connections are allowed. The worker does not need the model
-file: weights stream from the orchestrator over the connection.
+Local single machine inference does not use any of this. A model that fits on one GPU is served
+by llama.cpp exactly as it always was, whether or not a mesh node is running.
 
-**Register it on the orchestrator.** In the Network tab, press **+** next to Sources
-and add it: a name, the other machine's address, the port, and ideally its GPU memory
-in MiB, which is what the automatic split proportions are computed from. The source is
-probed immediately and then every ten seconds, and its state, last seen time and
-reachability history live on its card.
+**Place the engine.** Put a Mesh LLM Windows build in `vendor\mesh` (see
+`vendor\mesh\README.md` for which flavour and the expected layout). A published `dist\`
+folder already carries it.
 
-**Browse what the network can serve.** The Available models list in the Network tab
-shows every known model with its size, memory requirement and a Complete or Blocked
-verdict. Selecting one draws its coverage chain: the pipeline of sections in order,
-which source holds which layer range, and how many candidates back each section. An
-uncovered section is shown in red and named as the reason the model is blocked.
+**Start your node.** Open the **Network** tab and press **Start mesh node**. With nothing else
+configured this hosts a private mesh on the local network: LAN-scoped discovery only, no public
+relays, joinable only by the invite token shown on the card. Publishing it for public discovery
+is a separate tick box and is the only setting that reaches beyond your network.
 
-**Run split.** Select a Model node with a local GGUF. If the model fits on this machine
-it runs here; splitting is a capability unlock, not a speedup, so it only happens when
-the model does not fit. To exercise the split path with a small model, tick **Force a
-split across sources** in the node's Distribution settings. Alternatively set the node's
-provider to **Network** and pick a model from the network list; incomplete models refuse
-to run and say why. A run is gated on complete coverage; a gap in any section refuses
-the run and names the uncovered section.
+**Contribute.** Tick **Offer this machine's compute**, choose which local GGUF this machine
+serves, and press **Apply**. Unlike the previous engine's declared offer, the memory cap here is
+enforced by the mesh planner: a model that does not fit inside it is never placed on this
+machine.
 
-**Proportions.** Blank split proportions divide the model by declared memory. To tune
-by hand, enter comma separated values with dot decimals, one per source, remote sources
-first and this machine last, for example `1,1` for an even two way split.
+**Add a second machine.** Install LocalNEXUS there, copy the invite token from the first
+machine's Network tab, press **+** next to Sources, paste it, and press **Join**. Both machines
+then appear in each other's source lists with their announced memory and measured latency. The
+first time, allow the node through the Windows firewall.
 
-Two things worth knowing about the llama.cpp RPC layer underneath:
+**Browse what the network can serve.** The Available models list leads the tab: every model the
+mesh knows about, its metadata, how many sources hold pieces of it, and a Complete or Blocked
+verdict. Selecting one draws its coverage chain: the pipeline of sections in order, which source
+holds which layer range, and how much slack stands behind each. A section that is not serving is
+shown in red and named as the reason the model is blocked.
 
-- The rpc worker enforces no memory cap of its own. The memory a machine offers is a
-  declared capability that orchestrators honour through their split proportions.
-- If a worker drops mid request, the whole coordinating server goes down with it.
-  LocalNEXUS probes the sources that were engaged, plans coverage again with whatever
-  still covers each section, relaunches, and re-sends the request once; if coverage is
-  no longer complete, the run fails with the reason.
+**Run across the mesh.** Set a Model node's provider to **Network** and pick a model from the
+list. Blocked models cannot be picked, and a model that becomes blocked between selection and
+run refuses the run with the reason. Whether the model runs on one peer or as layer stages
+across several is the mesh's decision, made at run time and echoed to the activity feed.
+
+Nothing about sources is configured by hand any more. Membership, placement, liveness and
+recovery all belong to the engine; the Network tab renders what it reports.
+
+Four things worth knowing about the layer underneath, all established by testing the bundled
+build rather than by reading its documentation:
+
+- **A splittable model is not the same as a local GGUF.** Stage splits need a published layer
+  package (a repository of per-layer GGUF fragments). A plain local GGUF can be served whole by
+  one machine and routed to across the mesh, but it cannot be split.
+- **The memory cap is real.** `--max-vram` is honoured by the planner, which will refuse to
+  place a model that does not fit rather than trying and failing.
+- **One node can serve many consumers at once.** This is the limitation that ended the previous
+  engine, and it is genuinely gone.
+- **A peer dying mid request no longer takes the pipeline down.** An in-flight streaming request
+  survived its stage peer being killed. Re-convergence afterwards is less certain: on a single
+  GPU loopback topology the mesh replanned onto a replacement node but did not become routable
+  again within the test window. Treat recovery-after-replacement as unproven rather than
+  guaranteed.
 
 ## Opening a Unity project
 
@@ -262,9 +271,9 @@ src/LocalNEXUS.App/
   Services/
     Execution/     GraphExecutor, RunContext, RunState, topological sort
     Inference/     IModelClient, OpenAiCompatibleClient, LlamaServerManager,
-                   RpcWorkerManager, LlamaLaunchOptions
-    Distributed/   sections, sources, coverage: InferenceSource, ModelSection,
-                   CoveragePlanner, SourceRegistry, SourceHealthMonitor
+                   LlamaLaunchOptions
+    Distributed/   the mesh and what it reports: MeshManager, MeshStatusReader,
+                   InferenceSource, ModelSection, CoveragePlan, NetworkServedModel
     Persistence/   AppPaths, AppConfig, ModelCatalog, GraphSerializer
     Files/         UnityProjectService, FileWriter
     Dialogs/       IDialogService and its Windows implementation
