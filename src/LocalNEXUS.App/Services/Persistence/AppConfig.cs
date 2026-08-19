@@ -1,6 +1,7 @@
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using LocalNEXUS.App.Services.Distributed;
 
 namespace LocalNEXUS.App.Services.Persistence;
 
@@ -24,6 +25,20 @@ public sealed class AppConfig
 
     /// <summary>The graph file that was last saved or loaded.</summary>
     public string? LastGraphPath { get; set; }
+
+    /// <summary>
+    /// This install's stable source identity. Generated once on first use of the source
+    /// registry and never regenerated, because reputation will attach to it later.
+    /// </summary>
+    public Guid SourceId { get; set; }
+
+    /// <summary>Sources registered by the user, hydrated by the registry at startup.</summary>
+    public List<KnownSourceRecord> KnownSources { get; set; } = new();
+
+    /// <summary>
+    /// Declared memory of this machine in MiB. Zero means detect automatically at startup.
+    /// </summary>
+    public long ThisMachineMemoryMb { get; set; }
 
     /// <summary>
     /// Reads the configuration from disk. A missing or unreadable file yields defaults rather

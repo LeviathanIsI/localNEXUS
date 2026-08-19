@@ -5,6 +5,7 @@ using LocalNEXUS.App.Infrastructure;
 using LocalNEXUS.App.Models;
 using LocalNEXUS.App.Nodes;
 using LocalNEXUS.App.Services.Dialogs;
+using LocalNEXUS.App.Services.Distributed;
 using LocalNEXUS.App.Services.Execution;
 using LocalNEXUS.App.Services.Files;
 using LocalNEXUS.App.Services.Inference;
@@ -22,6 +23,7 @@ public partial class App : Application
 {
     private LlamaServerManager? _llamaServers;
     private OpenAiCompatibleClient? _modelClient;
+    private SourceHealthMonitor? _healthMonitor;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -60,6 +62,10 @@ public partial class App : Application
         var unityProject = new UnityProjectService();
         RestoreLastProject(config, unityProject, feed);
 
+        var sources = new SourceRegistry(config);
+        _healthMonitor = new SourceHealthMonitor(sources, feed);
+        _healthMonitor.Start();
+
         _llamaServers = new LlamaServerManager();
         _modelClient = new OpenAiCompatibleClient();
 
@@ -89,7 +95,8 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
-        // Child llama-server processes are ours to clean up. Nothing must outlive the window.
+        // Child processes and background loops are ours to clean up. Nothing must outlive the window.
+        _healthMonitor?.Dispose();
         _llamaServers?.Dispose();
         _modelClient?.Dispose();
 
