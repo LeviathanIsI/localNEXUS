@@ -1,0 +1,19 @@
+<Application x:Class="LocalNEXUS.App.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             ShutdownMode="OnMainWindowClose">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <!-- Nodify's own control styles and its dark palette come first so that the
+                     application theme below can override anything it needs to. -->
+                <ResourceDictionary Source="pack://application:,,,/Nodify;component/Themes/Dark.xaml" />
+                <ResourceDictionary Source="pack://application:,,,/Nodify;component/Themes/Nodify.xaml" />
+
+                <ResourceDictionary Source="Views/Theme.xaml" />
+                <ResourceDictionary Source="Views/NodeTemplates.xaml" />
+                <ResourceDictionary Source="Views/SettingsTemplates.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

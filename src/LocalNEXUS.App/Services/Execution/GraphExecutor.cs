@@ -1,0 +1,165 @@
+using System.Diagnostics;
+using LocalNEXUS.App.Infrastructure;
+using LocalNEXUS.App.Models;
+
+// System.Diagnostics also defines an ActivityKind; this file needs Stopwatch from that namespace
+// and the feed's own entry classification, so the ambiguity is resolved explicitly.
+using ActivityKind = LocalNEXUS.App.Infrastructure.ActivityKind;
+
+namespace LocalNEXUS.App.Services.Execution;
+
+/// <summary>
+/// Walks a graph and executes its nodes in dependency order.
+/// </summary>
+/// <remarks>
+/// The executor knows nothing about what any particular node does. It orders nodes, hands each
+/// one the values arriving on its inputs, stores what comes back, and reports the transitions to
+/// the feed. Adding a node type therefore requires no change here.
+/// </remarks>
+public sealed class GraphExecutor
+{
+    private readonly ExecutionServices _services;
+    private readonly IActivityFeed _feed;
+
+    private int _isRunning;
+
+    public GraphExecutor(ExecutionServices services)
+    {
+        _services = services;
+        _feed = services.Feed;
+    }
+
+    /// <summary>
+    /// Raised as soon as a run context exists, before the first node executes. The UI subscribes
+    /// so that pause, cancel and state display work while the run is still in progress rather
+    /// than only once <see cref="RunAsync"/> has returned.
+    /// </summary>
+    public event EventHandler<RunContext>? RunCreated;
+
+    /// <summary>The run in progress, or the most recent one. Null before the first run.</summary>
+    public RunContext? Current { get; private set; }
+
+    /// <summary>True while a run is in progress. The slice permits one run at a time.</summary>
+    public bool IsRunning => Volatile.Read(ref _isRunning) == 1;
+
+    /// <summary>
+    /// Executes every node of the graph in topological order.
+    /// </summary>
+    /// <param name="graph">The graph to run.</param>
+    /// <param name="userRequest">The text typed into the chat box, delivered to input nodes.</param>
+    /// <param name="ct">Stops the run between nodes and cancels the node currently executing.</param>
+    /// <returns>The run context, whose <see cref="RunContext.State"/> reports the outcome.</returns>
+    /// <exception cref="InvalidOperationException">A run is already in progress.</exception>
+    public async Task<RunContext> RunAsync(GraphModel graph, string userRequest, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(graph);
+
+        if (Interlocked.CompareExchange(ref _isRunning, 1, 0) == 1)
+        {
+            throw new InvalidOperationException("A run is already in progress.");
+        }
+
+        var run = new RunContext(graph, userRequest ?? string.Empty);
+        Current = run;
+        RunCreated?.Invoke(this, run);
+
+        try
+        {
+            return await ExecuteAsync(run, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            run.CurrentNode = null;
+            run.ReleasePauseGate();
+            Volatile.Write(ref _isRunning, 0);
+        }
+    }
+
+    private async Task<RunContext> ExecuteAsync(RunContext run, CancellationToken ct)
+    {
+        foreach (var node in run.Graph.Nodes)
+        {
+            node.ResetState();
+        }
+
+        run.State = RunState.Running;
+        _feed.Add(ActivityKind.RunStarted, "Run started", $"{run.Graph.Nodes.Count} nodes, {run.Graph.Connections.Count} connections");
+
+        var sort = GraphTopology.Sort(run.Graph);
+        if (!sort.IsAcyclic)
+        {
+            var names = string.Join(", ", sort.Cycle.Select(n => n.Title));
+            return Fault(run, "The graph contains a cycle", $"These nodes form or feed a loop: {names}");
+        }
+
+        if (sort.Ordered.Count == 0)
+        {
+            return Fault(run, "Nothing to run", "The canvas is empty. Add nodes and wire them together first.");
+        }
+
+        var stopwatch = Stopwatch.StartNew();
+
+        foreach (var node in sort.Ordered)
+        {
+            try
+            {
+                await run.WaitWhilePausedAsync(ct).ConfigureAwait(false);
+                ct.ThrowIfCancellationRequested();
+
+                await ExecuteNodeAsync(node, run, ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                node.State = NodeState.Faulted;
+                node.StatusMessage = "Cancelled";
+                return Fault(run, "Run cancelled", $"Stopped while running {node.Title}.");
+            }
+            catch (Exception ex)
+            {
+                node.State = NodeState.Faulted;
+                node.StatusMessage = ex.Message;
+                _feed.Add(ActivityKind.NodeFaulted, node.Title, ex.Message, node.Id);
+                return Fault(run, "Run faulted", $"{node.Title} failed: {ex.Message}");
+            }
+        }
+
+        stopwatch.Stop();
+        run.State = RunState.Completed;
+        _feed.Add(
+            ActivityKind.RunCompleted,
+            "Run completed",
+            $"{sort.Ordered.Count} nodes in {stopwatch.Elapsed.TotalSeconds:0.0} s");
+
+        return run;
+    }
+
+    private async Task ExecuteNodeAsync(NodeBase node, RunContext run, CancellationToken ct)
+    {
+        run.CurrentNode = node;
+        node.State = NodeState.Running;
+        node.StatusMessage = null;
+        _feed.Add(ActivityKind.NodeStarted, node.Title, null, node.Id);
+
+        var context = new NodeExecutionContext(node, run, _services);
+        var result = await node.ExecuteAsync(context, ct).ConfigureAwait(false);
+
+        foreach (var pin in node.Outputs)
+        {
+            if (result.Outputs.TryGetValue(pin.Id, out var value))
+            {
+                run.SetValue(pin, value);
+            }
+        }
+
+        node.State = NodeState.Completed;
+        _feed.Add(ActivityKind.NodeCompleted, node.Title, node.StatusMessage, node.Id);
+    }
+
+    private RunContext Fault(RunContext run, string title, string detail)
+    {
+        run.State = RunState.Faulted;
+        run.FaultMessage = detail;
+        _feed.Add(ActivityKind.RunFaulted, title, detail);
+        return run;
+    }
+}

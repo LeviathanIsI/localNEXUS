@@ -1,0 +1,28 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:nodes="clr-namespace:LocalNEXUS.App.Nodes"
+                    xmlns:settings="clr-namespace:LocalNEXUS.App.Views.Settings">
+
+    <!--
+        Typed settings panels. The right hand panel is a content control bound to the selected
+        node, so WPF picks the matching panel by the node's own type. Adding a node type means
+        adding its view and one entry here.
+    -->
+
+    <DataTemplate DataType="{x:Type nodes:InputNode}">
+        <settings:InputNodeSettingsView />
+    </DataTemplate>
+
+    <DataTemplate DataType="{x:Type nodes:ModelNode}">
+        <settings:ModelNodeSettingsView />
+    </DataTemplate>
+
+    <DataTemplate DataType="{x:Type nodes:TransformNode}">
+        <settings:TransformNodeSettingsView />
+    </DataTemplate>
+
+    <DataTemplate DataType="{x:Type nodes:OutputNode}">
+        <settings:OutputNodeSettingsView />
+    </DataTemplate>
+
+</ResourceDictionary>

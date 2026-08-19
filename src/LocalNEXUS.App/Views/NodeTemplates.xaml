@@ -1,0 +1,144 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:nodify="clr-namespace:Nodify;assembly=Nodify">
+
+    <!--
+        Canvas visuals. One template serves every node type: the base class already exposes the
+        title, the pins and the execution state, and the only per type difference is the header
+        accent, which is resolved from the node's type key.
+    -->
+
+    <!--
+        The pin marker. Colour comes from the pin type, so a Text pin can never be mistaken for a
+        Code pin, and the centre is filled only once something is wired to it, which makes an
+        unconnected input visible at a glance.
+
+        Nodify's default connector template paints the whole pin row with the control Background
+        and leaves the dot itself transparent, so the dot is drawn here instead and the row is
+        left unpainted. The data context inside this template is the Pin.
+    -->
+    <ControlTemplate x:Key="PinConnectorTemplate" TargetType="Control">
+        <Grid Width="14" Height="14">
+            <Ellipse Stroke="{Binding PinType, Converter={StaticResource ResourceLookup}, ConverterParameter=Pin}"
+                     StrokeThickness="2.5"
+                     Fill="Transparent" />
+            <Ellipse x:Name="Core"
+                     Margin="3.5"
+                     Visibility="Collapsed"
+                     Fill="{Binding PinType, Converter={StaticResource ResourceLookup}, ConverterParameter=Pin}" />
+        </Grid>
+        <ControlTemplate.Triggers>
+            <DataTrigger Binding="{Binding IsConnected}" Value="True">
+                <Setter TargetName="Core" Property="Visibility" Value="Visible" />
+            </DataTrigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <DataTemplate x:Key="InputConnectorTemplate">
+        <nodify:NodeInput Header="{Binding Name}"
+                          IsConnected="{Binding IsConnected}"
+                          Anchor="{Binding Anchor, Mode=OneWayToSource}"
+                          ConnectorTemplate="{StaticResource PinConnectorTemplate}"
+                          Background="Transparent"
+                          BorderBrush="{Binding PinType, Converter={StaticResource ResourceLookup}, ConverterParameter=Pin}"
+                          Foreground="{StaticResource Text.Secondary.Brush}"
+                          FontSize="{StaticResource Font.Size.Small}"
+                          ToolTip="{Binding}" />
+    </DataTemplate>
+
+    <DataTemplate x:Key="OutputConnectorTemplate">
+        <nodify:NodeOutput Header="{Binding Name}"
+                           IsConnected="{Binding IsConnected}"
+                           Anchor="{Binding Anchor, Mode=OneWayToSource}"
+                           ConnectorTemplate="{StaticResource PinConnectorTemplate}"
+                           Background="Transparent"
+                           BorderBrush="{Binding PinType, Converter={StaticResource ResourceLookup}, ConverterParameter=Pin}"
+                           Foreground="{StaticResource Text.Secondary.Brush}"
+                           FontSize="{StaticResource Font.Size.Small}"
+                           ToolTip="{Binding}" />
+    </DataTemplate>
+
+    <DataTemplate x:Key="NodeTemplate">
+        <nodify:Node Input="{Binding Inputs}"
+                     Output="{Binding Outputs}"
+                     InputConnectorTemplate="{StaticResource InputConnectorTemplate}"
+                     OutputConnectorTemplate="{StaticResource OutputConnectorTemplate}"
+                     HeaderBrush="{Binding TypeKey, Converter={StaticResource ResourceLookup}, ConverterParameter=NodeType}"
+                     ContentBrush="{StaticResource Surface.Card.Brush}"
+                     Background="{StaticResource Surface.Panel.Brush}"
+                     BorderBrush="{Binding State, Converter={StaticResource ResourceLookup}, ConverterParameter=NodeState}"
+                     BorderThickness="1.5"
+                     Foreground="{StaticResource Text.Primary.Brush}"
+                     MinWidth="188">
+
+            <nodify:Node.Header>
+                <StackPanel Margin="2,1">
+                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding TypeKey}"
+                               Foreground="{StaticResource Text.Secondary.Brush}"
+                               FontSize="{StaticResource Font.Size.Small}" />
+                </StackPanel>
+            </nodify:Node.Header>
+
+            <!-- Live state: the dot mirrors NodeState and the line below it carries whatever the
+                 node last reported, such as a token rate or the path it wrote. -->
+            <StackPanel Margin="2,4">
+                <StackPanel Orientation="Horizontal">
+                    <Ellipse Width="8" Height="8"
+                             VerticalAlignment="Center"
+                             Fill="{Binding State, Converter={StaticResource ResourceLookup}, ConverterParameter=NodeState}" />
+                    <TextBlock Text="{Binding State}"
+                               Margin="6,0,0,0"
+                               FontSize="{StaticResource Font.Size.Small}"
+                               Foreground="{StaticResource Text.Secondary.Brush}" />
+                </StackPanel>
+                <TextBlock Text="{Binding StatusMessage}"
+                           Margin="0,4,0,0"
+                           MaxWidth="230"
+                           TextWrapping="Wrap"
+                           TextTrimming="CharacterEllipsis"
+                           MaxHeight="46"
+                           FontSize="{StaticResource Font.Size.Small}"
+                           Foreground="{StaticResource Text.Secondary.Brush}"
+                           Visibility="{Binding StatusMessage, Converter={StaticResource StringToVisibility}}" />
+            </StackPanel>
+        </nodify:Node>
+    </DataTemplate>
+
+    <!-- Position and selection are the node's own state, so the container binds straight to it. -->
+    <Style x:Key="NodeContainerStyle" TargetType="nodify:ItemContainer">
+        <Setter Property="Location" Value="{Binding Location, Mode=TwoWay}" />
+        <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
+        <Setter Property="SelectedBrush" Value="{StaticResource Accent.Primary.Brush}" />
+        <Setter Property="HighlightBrush" Value="{StaticResource Accent.Primary.Brush}" />
+    </Style>
+
+    <DataTemplate x:Key="ConnectionTemplate">
+        <nodify:Connection Source="{Binding Source.Anchor}"
+                           Target="{Binding Target.Anchor}"
+                           Stroke="{Binding PinType, Converter={StaticResource ResourceLookup}, ConverterParameter=Pin}"
+                           StrokeThickness="2.5"
+                           Foreground="{StaticResource Text.Secondary.Brush}"
+                           FontSize="{StaticResource Font.Size.Small}"
+                           ArrowEnds="End"
+                           ArrowSize="8,8" />
+    </DataTemplate>
+
+    <!-- The wire being dragged. It turns red and states the reason as soon as the pin under the
+         cursor would be refused, so an invalid drop is visible before the mouse is released. -->
+    <DataTemplate x:Key="PendingConnectionTemplate">
+        <nodify:PendingConnection IsVisible="{Binding IsVisible}"
+                                  PreviewTarget="{Binding PreviewTarget, Mode=OneWayToSource}"
+                                  StartedCommand="{Binding StartCommand}"
+                                  CompletedCommand="{Binding CompleteCommand}"
+                                  AllowOnlyConnectors="True"
+                                  EnablePreview="True"
+                                  EnableSnapping="True"
+                                  StrokeThickness="2.5"
+                                  Stroke="{Binding IsValid, Converter={StaticResource ResourceLookup}, ConverterParameter=Wire}"
+                                  Foreground="{StaticResource Text.Primary.Brush}"
+                                  FontSize="{StaticResource Font.Size.Small}"
+                                  Content="{Binding Text}" />
+    </DataTemplate>
+
+</ResourceDictionary>

@@ -1,0 +1,97 @@
+<UserControl x:Class="LocalNEXUS.App.Views.Settings.ModelNodeSettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:nodes="clr-namespace:LocalNEXUS.App.Nodes"
+             d:DataContext="{d:DesignInstance Type=nodes:ModelNode}"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d">
+
+    <StackPanel>
+        <TextBlock Style="{StaticResource SectionHeader}" Text="Provider" />
+        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+            <RadioButton Content="Local"
+                         GroupName="Provider"
+                         IsChecked="{Binding Provider, Converter={StaticResource EnumToBoolean}, ConverterParameter=Local}" />
+            <RadioButton Content="OpenRouter"
+                         GroupName="Provider"
+                         IsChecked="{Binding Provider, Converter={StaticResource EnumToBoolean}, ConverterParameter=OpenRouter}" />
+        </StackPanel>
+
+        <!-- Local model selection -->
+        <StackPanel Visibility="{Binding IsLocal, Converter={StaticResource BooleanToVisibility}}">
+            <TextBlock Style="{StaticResource FieldLabel}" Text="Local model (GGUF)" />
+            <ComboBox ItemsSource="{Binding Catalog.Models}"
+                      SelectedItem="{Binding SelectedLocalModel}"
+                      DisplayMemberPath="DisplayName" />
+
+            <TextBlock Style="{StaticResource HintText}"
+                       Text="{Binding DataContext.Catalog.SearchSummary, RelativeSource={RelativeSource AncestorType=Window}}" />
+
+            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                <Button Style="{StaticResource SmallButton}"
+                        Content="Add folder"
+                        Margin="0,0,6,0"
+                        Command="{Binding DataContext.Catalog.AddFolderCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
+                <Button Style="{StaticResource SmallButton}"
+                        Content="Rescan"
+                        Margin="0,0,6,0"
+                        Command="{Binding DataContext.Catalog.RefreshCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
+                <Button Style="{StaticResource SmallButton}"
+                        Content="Open models folder"
+                        Command="{Binding DataContext.Catalog.OpenModelsFolderCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
+            </StackPanel>
+        </StackPanel>
+
+        <!-- OpenRouter model selection -->
+        <StackPanel Visibility="{Binding IsOpenRouter, Converter={StaticResource BooleanToVisibility}}">
+            <TextBlock Style="{StaticResource FieldLabel}" Text="OpenRouter model slug" />
+            <TextBox Text="{Binding OpenRouterModel, UpdateSourceTrigger=PropertyChanged}"
+                     FontFamily="{StaticResource Font.Mono}" />
+            <TextBlock Style="{StaticResource HintText}"
+                       Text="For example anthropic/claude-sonnet-4 or meta-llama/llama-3.3-70b-instruct" />
+
+            <TextBlock Style="{StaticResource FieldLabel}" Text="API key" />
+            <TextBox Text="{Binding ApiKey, UpdateSourceTrigger=PropertyChanged}"
+                     FontFamily="{StaticResource Font.Mono}" />
+            <TextBlock Style="{StaticResource HintText}"
+                       Text="Stored in plain text inside the saved graph file. Keep shared graphs free of keys." />
+        </StackPanel>
+
+        <TextBlock Style="{StaticResource SectionHeader}" Margin="0,20,0,0" Text="Prompt" />
+
+        <TextBlock Style="{StaticResource FieldLabel}" Text="System prompt" />
+        <TextBox Style="{StaticResource MonoTextBox}"
+                 Text="{Binding SystemPrompt, UpdateSourceTrigger=PropertyChanged}"
+                 MinHeight="120"
+                 MaxHeight="260" />
+
+        <TextBlock Style="{StaticResource SectionHeader}" Margin="0,20,0,0" Text="Sampling" />
+
+        <Grid Margin="0,6,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="10" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0">
+                <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,4" Text="Temperature" />
+                <TextBox Text="{Binding Temperature, UpdateSourceTrigger=LostFocus}" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="2">
+                <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,4" Text="Max tokens" />
+                <TextBox Text="{Binding MaxTokens, UpdateSourceTrigger=LostFocus}" />
+            </StackPanel>
+        </Grid>
+
+        <TextBlock Style="{StaticResource SectionHeader}" Margin="0,20,0,0" Text="Endpoint" />
+
+        <TextBlock Style="{StaticResource FieldLabel}" Text="Base URL" />
+        <TextBox Text="{Binding BaseUrl, UpdateSourceTrigger=PropertyChanged}"
+                 FontFamily="{StaticResource Font.Mono}" />
+        <TextBlock Style="{StaticResource HintText}"
+                   Text="Leave blank for a local model and LocalNEXUS starts and reuses its own llama-server. Set it to point this node at a server that is already running." />
+    </StackPanel>
+</UserControl>

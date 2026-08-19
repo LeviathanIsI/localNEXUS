@@ -1,0 +1,83 @@
+<UserControl x:Class="LocalNEXUS.App.Views.Settings.TransformNodeSettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:nodes="clr-namespace:LocalNEXUS.App.Nodes"
+             d:DataContext="{d:DesignInstance Type=nodes:TransformNode}"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d">
+
+    <StackPanel>
+        <TextBlock Style="{StaticResource SectionHeader}" Text="Mode" />
+        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+            <RadioButton Content="Template"
+                         GroupName="TransformMode"
+                         IsChecked="{Binding Mode, Converter={StaticResource EnumToBoolean}, ConverterParameter=Template}" />
+            <RadioButton Content="Script"
+                         GroupName="TransformMode"
+                         IsChecked="{Binding Mode, Converter={StaticResource EnumToBoolean}, ConverterParameter=Script}" />
+        </StackPanel>
+
+        <!-- Template mode -->
+        <StackPanel Visibility="{Binding IsTemplateMode, Converter={StaticResource BooleanToVisibility}}">
+            <TextBlock Style="{StaticResource FieldLabel}" Text="Template" />
+            <TextBox Style="{StaticResource MonoTextBox}"
+                     Text="{Binding Template, UpdateSourceTrigger=PropertyChanged}"
+                     MinHeight="110"
+                     MaxHeight="240" />
+            <TextBlock Style="{StaticResource HintText}"
+                       Text="Every occurrence of {{input}} is replaced with the incoming value, then the pairs below are applied in order." />
+
+            <Grid Margin="0,16,0,4">
+                <TextBlock Style="{StaticResource SectionHeader}" Text="Find and replace" VerticalAlignment="Center" />
+                <Button Style="{StaticResource SmallButton}"
+                        Content="Add pair"
+                        HorizontalAlignment="Right"
+                        Command="{Binding AddReplacementCommand}" />
+            </Grid>
+
+            <ItemsControl ItemsSource="{Binding Replacements}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Grid Margin="0,0,0,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="6" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="6" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <TextBox Grid.Column="0"
+                                     FontFamily="{StaticResource Font.Mono}"
+                                     FontSize="{StaticResource Font.Size.Small}"
+                                     Text="{Binding Find, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBox Grid.Column="2"
+                                     FontFamily="{StaticResource Font.Mono}"
+                                     FontSize="{StaticResource Font.Size.Small}"
+                                     Text="{Binding Replace, UpdateSourceTrigger=PropertyChanged}" />
+                            <Button Grid.Column="4"
+                                    Style="{StaticResource SmallButton}"
+                                    Content="Remove"
+                                    CommandParameter="{Binding}"
+                                    Command="{Binding DataContext.RemoveReplacementCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" />
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+
+        <!-- Script mode -->
+        <StackPanel Visibility="{Binding IsScriptMode, Converter={StaticResource BooleanToVisibility}}">
+            <TextBlock Style="{StaticResource FieldLabel}" Text="C# expression" />
+            <TextBox Style="{StaticResource MonoTextBox}"
+                     Text="{Binding ScriptExpression, UpdateSourceTrigger=LostFocus}"
+                     MinHeight="150"
+                     MaxHeight="300" />
+            <TextBlock Style="{StaticResource HintText}"
+                       Text="A single expression evaluated with the incoming value bound to input, a string. The result is converted to text and sent on. System, System.Linq, System.Text and System.Text.RegularExpressions are imported." />
+            <TextBlock Style="{StaticResource HintText}"
+                       Text="Compilation errors are reported in the activity feed when the node runs." />
+        </StackPanel>
+    </StackPanel>
+</UserControl>

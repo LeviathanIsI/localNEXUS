@@ -1,0 +1,191 @@
+<Window x:Class="LocalNEXUS.App.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:nodify="clr-namespace:Nodify;assembly=Nodify"
+        xmlns:views="clr-namespace:LocalNEXUS.App.Views"
+        xmlns:vm="clr-namespace:LocalNEXUS.App.ViewModels"
+        d:DataContext="{d:DesignInstance Type=vm:MainViewModel}"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Title="{Binding WindowTitle}"
+        Height="920"
+        Width="1560"
+        MinHeight="600"
+        MinWidth="1000"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource Surface.Window.Brush}"
+        Foreground="{StaticResource Text.Primary.Brush}"
+        TextOptions.TextFormattingMode="Ideal">
+
+    <Window.InputBindings>
+        <KeyBinding Key="Delete" Command="{Binding DeleteSelectionCommand}" />
+        <KeyBinding Key="S" Modifiers="Ctrl" Command="{Binding SaveGraphCommand}" />
+        <KeyBinding Key="O" Modifiers="Ctrl" Command="{Binding LoadGraphCommand}" />
+        <KeyBinding Key="N" Modifiers="Ctrl" Command="{Binding NewGraphCommand}" />
+    </Window.InputBindings>
+
+    <DockPanel>
+
+        <Menu DockPanel.Dock="Top">
+            <MenuItem Header="_File">
+                <MenuItem Header="_Open Unity Project or Folder..." Command="{Binding OpenUnityProjectCommand}" />
+                <Separator />
+                <MenuItem Header="_New Graph" InputGestureText="Ctrl+N" Command="{Binding NewGraphCommand}" />
+                <MenuItem Header="_Save Graph..." InputGestureText="Ctrl+S" Command="{Binding SaveGraphCommand}" />
+                <MenuItem Header="_Load Graph..." InputGestureText="Ctrl+O" Command="{Binding LoadGraphCommand}" />
+            </MenuItem>
+        </Menu>
+
+        <!-- Which project output nodes will write into -->
+        <Border DockPanel.Dock="Top"
+                Background="{StaticResource Surface.Panel.Brush}"
+                BorderBrush="{StaticResource Surface.Border.Brush}"
+                BorderThickness="0,1,0,1"
+                Padding="12,6">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="Unity project:"
+                           Foreground="{StaticResource Text.Secondary.Brush}"
+                           FontSize="{StaticResource Font.Size.Small}"
+                           VerticalAlignment="Center" />
+                <TextBlock Text="{Binding UnityProject.StatusText}"
+                           Margin="8,0,0,0"
+                           FontSize="{StaticResource Font.Size.Small}"
+                           VerticalAlignment="Center" />
+            </StackPanel>
+        </Border>
+
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="3*" MinHeight="260" />
+                <RowDefinition Height="5" />
+                <RowDefinition Height="2*" MinHeight="180" />
+            </Grid.RowDefinitions>
+
+            <Grid Grid.Row="0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" MinWidth="420" />
+                    <ColumnDefinition Width="5" />
+                    <ColumnDefinition Width="376" MinWidth="300" />
+                </Grid.ColumnDefinitions>
+
+                <!-- Canvas and palette -->
+                <DockPanel Grid.Column="0">
+
+                    <Border DockPanel.Dock="Top"
+                            Background="{StaticResource Surface.Panel.Brush}"
+                            BorderBrush="{StaticResource Surface.Border.Brush}"
+                            BorderThickness="0,0,0,1"
+                            Padding="10,7">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Add node"
+                                       Foreground="{StaticResource Text.Secondary.Brush}"
+                                       FontSize="{StaticResource Font.Size.Small}"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,10,0" />
+
+                            <ItemsControl ItemsSource="{Binding NodePalette}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Button Style="{StaticResource SmallButton}"
+                                                Margin="0,0,6,0"
+                                                Content="{Binding DisplayName}"
+                                                ToolTip="{Binding Description}"
+                                                CommandParameter="{Binding TypeKey}"
+                                                Command="{Binding DataContext.AddNodeCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <Rectangle Width="1"
+                                       Margin="6,2,10,2"
+                                       Fill="{StaticResource Surface.Border.Brush}" />
+
+                            <Button Style="{StaticResource SmallButton}"
+                                    Content="Delete selected"
+                                    Command="{Binding DeleteSelectionCommand}" />
+                        </StackPanel>
+                    </Border>
+
+                    <nodify:NodifyEditor ItemsSource="{Binding Graph.Nodes}"
+                                         Connections="{Binding Graph.Connections}"
+                                         PendingConnection="{Binding PendingConnection}"
+                                         ItemTemplate="{StaticResource NodeTemplate}"
+                                         ItemContainerStyle="{StaticResource NodeContainerStyle}"
+                                         ConnectionTemplate="{StaticResource ConnectionTemplate}"
+                                         PendingConnectionTemplate="{StaticResource PendingConnectionTemplate}"
+                                         DisconnectConnectorCommand="{Binding DisconnectPinCommand}"
+                                         RemoveConnectionCommand="{Binding RemoveConnectionCommand}"
+                                         GridCellSize="16"
+                                         DisplayConnectionsOnTop="False"
+                                         Background="{StaticResource Surface.Window.Brush}" />
+                </DockPanel>
+
+                <GridSplitter Grid.Column="1"
+                              HorizontalAlignment="Stretch"
+                              VerticalAlignment="Stretch"
+                              ResizeBehavior="PreviousAndNext" />
+
+                <!-- Settings for the selected node -->
+                <Border Grid.Column="2"
+                        Background="{StaticResource Surface.Panel.Brush}"
+                        BorderBrush="{StaticResource Surface.Border.Brush}"
+                        BorderThickness="1,0,0,0">
+                    <Grid>
+                        <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                      Padding="16,14"
+                                      Visibility="{Binding HasSelection, Converter={StaticResource BooleanToVisibility}}">
+                            <StackPanel>
+                                <TextBlock Text="Node settings"
+                                           FontWeight="SemiBold"
+                                           FontSize="14"
+                                           Margin="0,0,0,12" />
+
+                                <!-- Every node has a title, so it lives here rather than in each panel -->
+                                <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,4" Text="Title" />
+                                <TextBox Text="{Binding SelectedNode.Title, UpdateSourceTrigger=PropertyChanged}" />
+
+                                <Rectangle Height="1"
+                                           Margin="0,16,0,4"
+                                           Fill="{StaticResource Surface.Border.Brush}" />
+
+                                <ContentControl Content="{Binding SelectedNode}" />
+                            </StackPanel>
+                        </ScrollViewer>
+
+                        <TextBlock Text="Select a node to edit its settings."
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   TextWrapping="Wrap"
+                                   Margin="24"
+                                   TextAlignment="Center"
+                                   Foreground="{StaticResource Text.Secondary.Brush}">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding HasSelection}" Value="True">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </Grid>
+                </Border>
+            </Grid>
+
+            <GridSplitter Grid.Row="1"
+                          HorizontalAlignment="Stretch"
+                          VerticalAlignment="Stretch"
+                          ResizeBehavior="PreviousAndNext" />
+
+            <views:ActivityFeedView Grid.Row="2" DataContext="{Binding Feed}" />
+        </Grid>
+    </DockPanel>
+</Window>

@@ -1,0 +1,300 @@
+using System.IO;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using LocalNEXUS.App.Models;
+using LocalNEXUS.App.Nodes;
+
+namespace LocalNEXUS.App.Services.Persistence;
+
+/// <summary>
+/// Reads and writes graphs as JSON.
+/// </summary>
+/// <remarks>
+/// Pin identifiers are part of the saved document. Connections refer to pins by identifier, and
+/// a freshly constructed node generates new ones, so the identifiers recorded at save time are
+/// pushed back onto the reconstructed pins before connections are rebuilt. Without that step a
+/// loaded graph would come back with its nodes but none of its wires.
+/// </remarks>
+public sealed class GraphSerializer
+{
+    /// <summary>Version stamped into saved files so future format changes can be detected.</summary>
+    public const int FormatVersion = 1;
+
+    /// <summary>Extension used for saved graphs.</summary>
+    public const string FileExtension = ".nexusgraph.json";
+
+    private static readonly JsonSerializerOptions WriteOptions = new() { WriteIndented = true };
+
+    private readonly NodeFactory _factory;
+
+    public GraphSerializer(NodeFactory factory) => _factory = factory;
+
+    /// <summary>Writes the graph to <paramref name="path"/>, creating the folder if needed.</summary>
+    public void Save(GraphModel graph, string path)
+    {
+        ArgumentNullException.ThrowIfNull(graph);
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+
+        var directory = Path.GetDirectoryName(path);
+        if (!string.IsNullOrEmpty(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        var document = new JsonObject
+        {
+            ["version"] = FormatVersion,
+            ["nodes"] = SerializeNodes(graph),
+            ["connections"] = SerializeConnections(graph)
+        };
+
+        File.WriteAllText(path, document.ToJsonString(WriteOptions));
+    }
+
+    /// <summary>
+    /// Replaces the contents of <paramref name="target"/> with the graph stored at
+    /// <paramref name="path"/>. The graph instance itself is reused so that existing bindings
+    /// keep working.
+    /// </summary>
+    /// <returns>Warnings for anything in the file that could not be restored.</returns>
+    /// <exception cref="InvalidDataException">The file is not a graph this build can read.</exception>
+    public IReadOnlyList<string> LoadInto(GraphModel target, string path)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+
+        var json = File.ReadAllText(path);
+        var document = JsonNode.Parse(json) as JsonObject
+            ?? throw new InvalidDataException($"{Path.GetFileName(path)} is not a graph file.");
+
+        var version = document["version"]?.GetValue<int>() ?? 0;
+        if (version > FormatVersion)
+        {
+            throw new InvalidDataException(
+                $"{Path.GetFileName(path)} was saved by a newer version of LocalNEXUS (format {version}).");
+        }
+
+        var warnings = new List<string>();
+
+        target.Clear();
+
+        var restored = RestoreNodes(document["nodes"] as JsonArray, target, warnings);
+        RestoreConnections(document["connections"] as JsonArray, target, restored, warnings);
+
+        return warnings;
+    }
+
+    /// <summary>Builds a default file path inside the graphs folder for a given graph name.</summary>
+    public static string BuildDefaultPath(string graphName)
+    {
+        var safe = string.Concat(graphName.Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c));
+        return Path.Combine(AppPaths.Graphs, safe + FileExtension);
+    }
+
+    private static JsonArray SerializeNodes(GraphModel graph)
+    {
+        var nodes = new JsonArray();
+
+        foreach (var node in graph.Nodes)
+        {
+            nodes.Add(new JsonObject
+            {
+                ["type"] = node.TypeKey,
+                ["id"] = node.Id.ToString(),
+                ["title"] = node.Title,
+                ["x"] = node.X,
+                ["y"] = node.Y,
+                ["inputs"] = SerializePins(node.Inputs),
+                ["outputs"] = SerializePins(node.Outputs),
+                ["settings"] = node.SaveSettings()
+            });
+        }
+
+        return nodes;
+    }
+
+    private static JsonArray SerializePins(IEnumerable<Pin> pins)
+    {
+        var array = new JsonArray();
+
+        foreach (var pin in pins)
+        {
+            array.Add(new JsonObject
+            {
+                ["name"] = pin.Name,
+                ["id"] = pin.Id.ToString()
+            });
+        }
+
+        return array;
+    }
+
+    private static JsonArray SerializeConnections(GraphModel graph)
+    {
+        var array = new JsonArray();
+
+        foreach (var connection in graph.Connections)
+        {
+            array.Add(new JsonObject
+            {
+                ["sourceNodeId"] = connection.SourceNodeId.ToString(),
+                ["sourcePinId"] = connection.SourcePinId.ToString(),
+                ["targetNodeId"] = connection.TargetNodeId.ToString(),
+                ["targetPinId"] = connection.TargetPinId.ToString()
+            });
+        }
+
+        return array;
+    }
+
+    private Dictionary<Guid, Pin> RestoreNodes(JsonArray? nodes, GraphModel target, List<string> warnings)
+    {
+        var pinsById = new Dictionary<Guid, Pin>();
+
+        if (nodes is null)
+        {
+            return pinsById;
+        }
+
+        foreach (var element in nodes.OfType<JsonObject>())
+        {
+            var typeKey = element["type"]?.GetValue<string>();
+            if (string.IsNullOrWhiteSpace(typeKey))
+            {
+                warnings.Add("Skipped a node with no type.");
+                continue;
+            }
+
+            NodeBase node;
+            try
+            {
+                node = _factory.Create(typeKey);
+            }
+            catch (NotSupportedException)
+            {
+                warnings.Add($"Skipped a node of unknown type '{typeKey}'.");
+                continue;
+            }
+
+            if (Guid.TryParse(element["id"]?.GetValue<string>(), out var id))
+            {
+                node.Id = id;
+            }
+
+            node.Title = element["title"]?.GetValue<string>() ?? node.Title;
+            node.X = element["x"]?.GetValue<double>() ?? 0d;
+            node.Y = element["y"]?.GetValue<double>() ?? 0d;
+
+            RestorePinIds(node.Inputs, element["inputs"] as JsonArray);
+            RestorePinIds(node.Outputs, element["outputs"] as JsonArray);
+
+            if (element["settings"] is JsonObject settings)
+            {
+                try
+                {
+                    node.LoadSettings(settings);
+                }
+                catch (Exception ex) when (ex is FormatException or InvalidOperationException or NotSupportedException)
+                {
+                    warnings.Add($"{node.Title}: settings could not be fully restored ({ex.Message}).");
+                }
+            }
+
+            target.AddNode(node);
+
+            foreach (var pin in node.Inputs.Concat(node.Outputs))
+            {
+                pinsById[pin.Id] = pin;
+            }
+        }
+
+        return pinsById;
+    }
+
+    /// <summary>
+    /// Pushes saved pin identifiers back onto freshly created pins. Matching is by name, with a
+    /// positional fallback so that a renamed pin still finds its saved identity.
+    /// </summary>
+    private static void RestorePinIds(IList<Pin> pins, JsonArray? saved)
+    {
+        if (saved is null)
+        {
+            return;
+        }
+
+        var consumed = new HashSet<int>();
+
+        for (var i = 0; i < pins.Count; i++)
+        {
+            var match = FindByName(saved, pins[i].Name, consumed) ?? FindByIndex(saved, i, consumed);
+
+            if (match?["id"]?.GetValue<string>() is { } text && Guid.TryParse(text, out var id))
+            {
+                pins[i].Id = id;
+            }
+        }
+    }
+
+    private static JsonObject? FindByName(JsonArray saved, string name, HashSet<int> consumed)
+    {
+        for (var i = 0; i < saved.Count; i++)
+        {
+            if (consumed.Contains(i) || saved[i] is not JsonObject candidate)
+            {
+                continue;
+            }
+
+            if (string.Equals(candidate["name"]?.GetValue<string>(), name, StringComparison.Ordinal))
+            {
+                consumed.Add(i);
+                return candidate;
+            }
+        }
+
+        return null;
+    }
+
+    private static JsonObject? FindByIndex(JsonArray saved, int index, HashSet<int> consumed)
+    {
+        if (index >= saved.Count || consumed.Contains(index) || saved[index] is not JsonObject candidate)
+        {
+            return null;
+        }
+
+        consumed.Add(index);
+        return candidate;
+    }
+
+    private static void RestoreConnections(
+        JsonArray? connections,
+        GraphModel target,
+        IReadOnlyDictionary<Guid, Pin> pinsById,
+        List<string> warnings)
+    {
+        if (connections is null)
+        {
+            return;
+        }
+
+        foreach (var element in connections.OfType<JsonObject>())
+        {
+            if (!Guid.TryParse(element["sourcePinId"]?.GetValue<string>(), out var sourceId)
+                || !Guid.TryParse(element["targetPinId"]?.GetValue<string>(), out var targetId))
+            {
+                warnings.Add("Skipped a connection with malformed pin identifiers.");
+                continue;
+            }
+
+            if (!pinsById.TryGetValue(sourceId, out var source) || !pinsById.TryGetValue(targetId, out var pinTarget))
+            {
+                warnings.Add("Skipped a connection whose pins are no longer present.");
+                continue;
+            }
+
+            if (!target.TryConnect(source, pinTarget, out var reason))
+            {
+                warnings.Add($"Skipped the connection {source.Owner.Title} to {pinTarget.Owner.Title}: {reason}.");
+            }
+        }
+    }
+}

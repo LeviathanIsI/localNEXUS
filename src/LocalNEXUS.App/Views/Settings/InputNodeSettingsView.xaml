@@ -1,0 +1,15 @@
+<UserControl x:Class="LocalNEXUS.App.Views.Settings.InputNodeSettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:nodes="clr-namespace:LocalNEXUS.App.Nodes"
+             d:DataContext="{d:DesignInstance Type=nodes:InputNode}"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d">
+
+    <StackPanel>
+        <TextBlock Style="{StaticResource SectionHeader}" Text="Request source" />
+        <TextBlock Style="{StaticResource HintText}"
+                   Text="This node has no settings. When a run starts it emits whatever is typed into the chat box at the bottom of the window, on its Text output pin." />
+    </StackPanel>
+</UserControl>

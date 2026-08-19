@@ -1,0 +1,84 @@
+using System.Diagnostics;
+using System.IO;
+using System.Windows;
+using Microsoft.Win32;
+
+namespace LocalNEXUS.App.Services.Dialogs;
+
+/// <summary>The Windows implementation of <see cref="IDialogService"/>.</summary>
+public sealed class WindowsDialogService : IDialogService
+{
+    /// <inheritdoc />
+    public string? PickFolder(string title, string? initialDirectory = null)
+    {
+        var dialog = new OpenFolderDialog
+        {
+            Title = title,
+            Multiselect = false
+        };
+
+        ApplyInitialDirectory(directory => dialog.InitialDirectory = directory, initialDirectory);
+
+        return dialog.ShowDialog() == true ? dialog.FolderName : null;
+    }
+
+    /// <inheritdoc />
+    public string? PickSaveFile(string title, string defaultFileName, string filter, string? initialDirectory = null)
+    {
+        var dialog = new SaveFileDialog
+        {
+            Title = title,
+            FileName = defaultFileName,
+            Filter = filter,
+            AddExtension = false,
+            OverwritePrompt = true
+        };
+
+        ApplyInitialDirectory(directory => dialog.InitialDirectory = directory, initialDirectory);
+
+        return dialog.ShowDialog() == true ? dialog.FileName : null;
+    }
+
+    /// <inheritdoc />
+    public string? PickOpenFile(string title, string filter, string? initialDirectory = null)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = title,
+            Filter = filter,
+            CheckFileExists = true,
+            Multiselect = false
+        };
+
+        ApplyInitialDirectory(directory => dialog.InitialDirectory = directory, initialDirectory);
+
+        return dialog.ShowDialog() == true ? dialog.FileName : null;
+    }
+
+    /// <inheritdoc />
+    public void ShowError(string title, string message)
+        => MessageBox.Show(message, title, MessageBoxButton.OK, MessageBoxImage.Warning);
+
+    /// <inheritdoc />
+    public void OpenFolderInExplorer(string folder)
+    {
+        if (!Directory.Exists(folder))
+        {
+            return;
+        }
+
+        using var process = Process.Start(new ProcessStartInfo
+        {
+            FileName = folder,
+            UseShellExecute = true
+        });
+    }
+
+    private static void ApplyInitialDirectory(Action<string> assign, string? initialDirectory)
+    {
+        if (!string.IsNullOrWhiteSpace(initialDirectory) && Directory.Exists(initialDirectory))
+        {
+            assign(initialDirectory);
+        }
+    }
+}
