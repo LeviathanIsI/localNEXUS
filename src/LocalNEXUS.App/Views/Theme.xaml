@@ -32,6 +32,11 @@
     <SolidColorBrush x:Key="Pin.Text.Brush" Color="#FF6FB1FF" />
     <SolidColorBrush x:Key="Pin.Code.Brush" Color="#FFFFB454" />
 
+    <!-- Section coverage in the network tab's chain and model list. -->
+    <SolidColorBrush x:Key="SectionCoverage.Healthy.Brush" Color="#FF4ADE80" />
+    <SolidColorBrush x:Key="SectionCoverage.Thin.Brush" Color="#FFFFB454" />
+    <SolidColorBrush x:Key="SectionCoverage.Uncovered.Brush" Color="#FFF87171" />
+
     <!-- Source states in the peer panel. -->
     <SolidColorBrush x:Key="SourceState.Unknown.Brush" Color="#FF6B7686" />
     <SolidColorBrush x:Key="SourceState.Probing.Brush" Color="#FF4EA1FF" />
@@ -76,6 +81,8 @@
 
     <sys:Double x:Key="Font.Size.Small">11</sys:Double>
     <sys:Double x:Key="Font.Size.Normal">12.5</sys:Double>
+    <sys:Double x:Key="Font.Size.Large">14</sys:Double>
+    <sys:Double x:Key="Font.Size.Title">17</sys:Double>
     <FontFamily x:Key="Font.Mono">Cascadia Mono, Consolas, Courier New</FontFamily>
 
     <!-- Base text -->
@@ -387,10 +394,12 @@
         </Setter>
     </Style>
 
-    <!-- Menus -->
+    <!-- Menus. The system template paints a white popup with system colours, so every role
+         gets a dark template of its own. -->
     <Style TargetType="Menu">
         <Setter Property="Background" Value="{StaticResource Surface.Panel.Brush}" />
         <Setter Property="Foreground" Value="{StaticResource Text.Primary.Brush}" />
+        <Setter Property="FontSize" Value="{StaticResource Font.Size.Normal}" />
         <Setter Property="Padding" Value="4,2" />
     </Style>
 
@@ -398,6 +407,216 @@
         <Setter Property="Background" Value="{StaticResource Surface.Border.Brush}" />
         <Setter Property="Height" Value="1" />
         <Setter Property="Margin" Value="0,3" />
+    </Style>
+
+    <Style x:Key="{x:Static MenuItem.SeparatorStyleKey}" TargetType="Separator">
+        <Setter Property="Background" Value="{StaticResource Surface.Border.Brush}" />
+        <Setter Property="Height" Value="1" />
+        <Setter Property="Margin" Value="8,4" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Separator">
+                    <Rectangle Height="1" Fill="{TemplateBinding Background}" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <ControlTemplate x:Key="MenuItem.TopLevelHeaderTemplate" TargetType="MenuItem">
+        <Border x:Name="Root" Background="Transparent" CornerRadius="4" Padding="10,5">
+            <Grid>
+                <ContentPresenter ContentSource="Header"
+                                  RecognizesAccessKey="True"
+                                  VerticalAlignment="Center" />
+                <Popup x:Name="PART_Popup"
+                       Placement="Bottom"
+                       VerticalOffset="4"
+                       IsOpen="{TemplateBinding IsSubmenuOpen}"
+                       AllowsTransparency="True"
+                       Focusable="False"
+                       PopupAnimation="Fade">
+                    <Border Background="{StaticResource Surface.Card.Brush}"
+                            BorderBrush="{StaticResource Surface.Border.Brush}"
+                            BorderThickness="1"
+                            CornerRadius="6"
+                            Padding="4"
+                            MinWidth="240">
+                        <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Cycle" />
+                    </Border>
+                </Popup>
+            </Grid>
+        </Border>
+        <ControlTemplate.Triggers>
+            <Trigger Property="IsHighlighted" Value="True">
+                <Setter TargetName="Root" Property="Background" Value="{StaticResource Surface.Card.Brush}" />
+            </Trigger>
+            <Trigger Property="IsSubmenuOpen" Value="True">
+                <Setter TargetName="Root" Property="Background" Value="{StaticResource Surface.Card.Brush}" />
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Opacity" Value="0.4" />
+            </Trigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <ControlTemplate x:Key="MenuItem.TopLevelItemTemplate" TargetType="MenuItem">
+        <Border x:Name="Root" Background="Transparent" CornerRadius="4" Padding="10,5">
+            <ContentPresenter ContentSource="Header"
+                              RecognizesAccessKey="True"
+                              VerticalAlignment="Center" />
+        </Border>
+        <ControlTemplate.Triggers>
+            <Trigger Property="IsHighlighted" Value="True">
+                <Setter TargetName="Root" Property="Background" Value="{StaticResource Surface.Card.Brush}" />
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Opacity" Value="0.4" />
+            </Trigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <ControlTemplate x:Key="MenuItem.SubmenuItemTemplate" TargetType="MenuItem">
+        <Border x:Name="Root" Background="Transparent" CornerRadius="4" Padding="10,6" Margin="1">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <ContentPresenter Grid.Column="0"
+                                  ContentSource="Header"
+                                  RecognizesAccessKey="True"
+                                  VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1"
+                           Text="{TemplateBinding InputGestureText}"
+                           Margin="28,0,4,0"
+                           VerticalAlignment="Center"
+                           FontSize="{StaticResource Font.Size.Small}"
+                           Foreground="{StaticResource Text.Secondary.Brush}" />
+            </Grid>
+        </Border>
+        <ControlTemplate.Triggers>
+            <Trigger Property="IsHighlighted" Value="True">
+                <Setter TargetName="Root" Property="Background" Value="{StaticResource Surface.Input.Brush}" />
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Opacity" Value="0.4" />
+            </Trigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <ControlTemplate x:Key="MenuItem.SubmenuHeaderTemplate" TargetType="MenuItem">
+        <Border x:Name="Root" Background="Transparent" CornerRadius="4" Padding="10,6" Margin="1">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <ContentPresenter Grid.Column="0"
+                                  ContentSource="Header"
+                                  RecognizesAccessKey="True"
+                                  VerticalAlignment="Center" />
+                <Path Grid.Column="1"
+                      Data="M 0 0 L 4 4 L 0 8 Z"
+                      Fill="{StaticResource Text.Secondary.Brush}"
+                      Margin="28,0,4,0"
+                      VerticalAlignment="Center" />
+                <Popup x:Name="PART_Popup"
+                       Placement="Right"
+                       HorizontalOffset="6"
+                       IsOpen="{TemplateBinding IsSubmenuOpen}"
+                       AllowsTransparency="True"
+                       Focusable="False"
+                       PopupAnimation="Fade">
+                    <Border Background="{StaticResource Surface.Card.Brush}"
+                            BorderBrush="{StaticResource Surface.Border.Brush}"
+                            BorderThickness="1"
+                            CornerRadius="6"
+                            Padding="4"
+                            MinWidth="200">
+                        <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Cycle" />
+                    </Border>
+                </Popup>
+            </Grid>
+        </Border>
+        <ControlTemplate.Triggers>
+            <Trigger Property="IsHighlighted" Value="True">
+                <Setter TargetName="Root" Property="Background" Value="{StaticResource Surface.Input.Brush}" />
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Opacity" Value="0.4" />
+            </Trigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <Style TargetType="MenuItem">
+        <Setter Property="Foreground" Value="{StaticResource Text.Primary.Brush}" />
+        <Setter Property="FontSize" Value="{StaticResource Font.Size.Normal}" />
+        <Setter Property="Template" Value="{StaticResource MenuItem.SubmenuItemTemplate}" />
+        <Style.Triggers>
+            <Trigger Property="Role" Value="TopLevelHeader">
+                <Setter Property="Template" Value="{StaticResource MenuItem.TopLevelHeaderTemplate}" />
+            </Trigger>
+            <Trigger Property="Role" Value="TopLevelItem">
+                <Setter Property="Template" Value="{StaticResource MenuItem.TopLevelItemTemplate}" />
+            </Trigger>
+            <Trigger Property="Role" Value="SubmenuHeader">
+                <Setter Property="Template" Value="{StaticResource MenuItem.SubmenuHeaderTemplate}" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- Top level tabs. A flat strip with an accent underline on the active tab. -->
+    <Style TargetType="TabControl">
+        <Setter Property="Background" Value="{StaticResource Surface.Window.Brush}" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TabControl">
+                    <DockPanel>
+                        <Border DockPanel.Dock="Top"
+                                Background="{StaticResource Surface.Panel.Brush}"
+                                BorderBrush="{StaticResource Surface.Border.Brush}"
+                                BorderThickness="0,0,0,1">
+                            <TabPanel IsItemsHost="True" Margin="8,0,8,0" />
+                        </Border>
+                        <ContentPresenter ContentSource="SelectedContent" />
+                    </DockPanel>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="TabItem">
+        <Setter Property="Foreground" Value="{StaticResource Text.Secondary.Brush}" />
+        <Setter Property="FontSize" Value="{StaticResource Font.Size.Large}" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TabItem">
+                    <Border Background="Transparent" Padding="16,9,16,7">
+                        <StackPanel>
+                            <ContentPresenter ContentSource="Header" />
+                            <Rectangle x:Name="Underline"
+                                       Height="2"
+                                       Margin="0,6,0,0"
+                                       RadiusX="1"
+                                       RadiusY="1"
+                                       Fill="Transparent" />
+                        </StackPanel>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter Property="Foreground" Value="{StaticResource Text.Primary.Brush}" />
+                            <Setter TargetName="Underline" Property="Fill" Value="{StaticResource Accent.Primary.Brush}" />
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter Property="Foreground" Value="{StaticResource Text.Primary.Brush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
     <!-- Panels -->
