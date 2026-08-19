@@ -37,8 +37,15 @@ public sealed class AppConfig
 
     /// <summary>
     /// Declared memory of this machine in MiB. Zero means detect automatically at startup.
+    /// This is also what this machine offers when it contributes to someone else's pipeline.
     /// </summary>
     public long ThisMachineMemoryMb { get; set; }
+
+    /// <summary>Whether this machine serves as a source for other orchestrators.</summary>
+    public bool ContributeEnabled { get; set; }
+
+    /// <summary>Port the rpc-server listens on while this machine is contributing.</summary>
+    public int WorkerPort { get; set; } = 50052;
 
     /// <summary>
     /// Reads the configuration from disk. A missing or unreadable file yields defaults rather

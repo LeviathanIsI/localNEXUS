@@ -24,6 +24,7 @@ public partial class App : Application
     private LlamaServerManager? _llamaServers;
     private OpenAiCompatibleClient? _modelClient;
     private SourceHealthMonitor? _healthMonitor;
+    private RpcWorkerManager? _rpcWorker;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -66,6 +67,9 @@ public partial class App : Application
         _healthMonitor = new SourceHealthMonitor(sources, feed);
         _healthMonitor.Start();
 
+        _rpcWorker = new RpcWorkerManager(config, feed);
+        _ = _rpcWorker.RestoreAsync();
+
         _llamaServers = new LlamaServerManager();
         _modelClient = new OpenAiCompatibleClient();
 
@@ -97,6 +101,7 @@ public partial class App : Application
     {
         // Child processes and background loops are ours to clean up. Nothing must outlive the window.
         _healthMonitor?.Dispose();
+        _rpcWorker?.Dispose();
         _llamaServers?.Dispose();
         _modelClient?.Dispose();
 

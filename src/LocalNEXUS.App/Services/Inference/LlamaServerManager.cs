@@ -95,7 +95,7 @@ public sealed class LlamaServerManager : IDisposable
 
             try
             {
-                await WaitUntilHealthyAsync(instance, status, ct).ConfigureAwait(false);
+                await WaitUntilHealthyAsync(instance, options, status, ct).ConfigureAwait(false);
             }
             catch
             {
@@ -194,6 +194,26 @@ public sealed class LlamaServerManager : IDisposable
         startInfo.ArgumentList.Add("-ngl");
         startInfo.ArgumentList.Add(options.GpuLayers.ToString());
 
+        if (options.IsDistributed)
+        {
+            // The coordinator's own HTTP listener stays on loopback above; --rpc is what
+            // reaches out to the sources. Verified against the bundled build: rpc devices
+            // register ahead of the local GPU in the order listed here, and -ts proportions
+            // are applied in that same device order.
+            startInfo.ArgumentList.Add("--rpc");
+            startInfo.ArgumentList.Add(string.Join(",", options.RpcEndpoints));
+            startInfo.ArgumentList.Add("-sm");
+            startInfo.ArgumentList.Add("layer");
+
+            if (options.TensorSplit.Count > 0)
+            {
+                startInfo.ArgumentList.Add("-ts");
+                startInfo.ArgumentList.Add(string.Join(
+                    ",",
+                    options.TensorSplit.Select(p => p.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture))));
+            }
+        }
+
         Process process;
         try
         {
@@ -213,10 +233,14 @@ public sealed class LlamaServerManager : IDisposable
 
     private async Task WaitUntilHealthyAsync(
         LlamaServerInstance instance,
+        LlamaLaunchOptions options,
         IProgress<string>? status,
         CancellationToken ct)
     {
-        status?.Report($"Loading {Path.GetFileNameWithoutExtension(instance.GgufPath)} on port {instance.Port}");
+        var modelName = Path.GetFileNameWithoutExtension(instance.GgufPath);
+        status?.Report(options.IsDistributed
+            ? $"Assembling {modelName} across {options.RpcEndpoints.Count + 1} sources on port {instance.Port}"
+            : $"Loading {modelName} on port {instance.Port}");
 
         var deadline = DateTime.UtcNow + StartupTimeout;
         var announcedWait = false;
@@ -233,7 +257,9 @@ public sealed class LlamaServerManager : IDisposable
 
             if (await IsHealthyAsync(instance, ct).ConfigureAwait(false))
             {
-                status?.Report($"Model ready on port {instance.Port}");
+                status?.Report(options.IsDistributed
+                    ? $"Coordinator ready on port {instance.Port} across {options.RpcEndpoints.Count + 1} sources"
+                    : $"Model ready on port {instance.Port}");
                 return;
             }
 

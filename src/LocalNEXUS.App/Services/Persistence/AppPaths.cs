@@ -14,6 +14,12 @@ public static class AppPaths
     /// <summary>Name of the llama.cpp server executable that the app spawns for local models.</summary>
     public const string LlamaServerExecutableName = "llama-server.exe";
 
+    /// <summary>
+    /// Name of the llama.cpp rpc worker executable, spawned when this machine contributes to
+    /// another orchestrator. This is the name the official release archives ship it under.
+    /// </summary>
+    public const string RpcServerExecutableName = "ggml-rpc-server.exe";
+
     /// <summary>Root of the per user data folder.</summary>
     public static string Root { get; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -56,11 +62,19 @@ public static class AppPaths
     /// to the built application or in the repository's <c>vendor\llama</c> folder while working
     /// from a development build. Both are searched, followed by the user data folder.
     /// </remarks>
-    public static string? FindLlamaServerExecutable()
+    public static string? FindLlamaServerExecutable() => FindLlamaExecutable(LlamaServerExecutableName);
+
+    /// <summary>
+    /// Locates the bundled rpc-server executable, searched for in the same places as
+    /// llama-server because both ship in the same llama.cpp archive.
+    /// </summary>
+    public static string? FindRpcServerExecutable() => FindLlamaExecutable(RpcServerExecutableName);
+
+    private static string? FindLlamaExecutable(string executableName)
     {
         foreach (var candidate in EnumerateLlamaSearchDirectories())
         {
-            var executable = Path.Combine(candidate, LlamaServerExecutableName);
+            var executable = Path.Combine(candidate, executableName);
             if (File.Exists(executable))
             {
                 return executable;
@@ -70,12 +84,22 @@ public static class AppPaths
         return null;
     }
 
-    /// <summary>Every directory searched for the llama-server executable, in priority order.</summary>
+    /// <summary>Every directory searched for the llama.cpp executables, in priority order.</summary>
     public static IEnumerable<string> EnumerateLlamaSearchDirectories()
     {
         var baseDirectory = AppContext.BaseDirectory;
 
         yield return Path.Combine(baseDirectory, "vendor", "llama");
+
+        // For a self contained single file publish, AppContext.BaseDirectory is documented to
+        // be the directory of the executable, but the process path is yielded as well so the
+        // lookup cannot depend on that detail.
+        if (Environment.ProcessPath is { } processPath
+            && Path.GetDirectoryName(processPath) is { } processDirectory
+            && !string.Equals(processDirectory, baseDirectory.TrimEnd(Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase))
+        {
+            yield return Path.Combine(processDirectory, "vendor", "llama");
+        }
 
         // Walk up from the build output towards the repository root so that a development run
         // finds vendor\llama without a build step that copies the binaries around.
