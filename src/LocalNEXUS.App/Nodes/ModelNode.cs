@@ -61,6 +61,14 @@ public sealed partial class ModelNode : NodeBase
     [ObservableProperty]
     private int _maxTokens = 4096;
 
+    /// <summary>Context window requested when this node starts a llama-server.</summary>
+    [ObservableProperty]
+    private int _contextSize = LlamaLaunchOptions.DefaultContextSize;
+
+    /// <summary>GPU layers requested when this node starts a llama-server.</summary>
+    [ObservableProperty]
+    private int _gpuLayers = LlamaLaunchOptions.DefaultGpuLayers;
+
     /// <summary>
     /// The endpoint root. Filled in automatically when the provider changes. Leaving it blank for
     /// a local model means "use the llama-server this application starts"; setting it points the
@@ -166,6 +174,8 @@ public sealed partial class ModelNode : NodeBase
         ["systemPrompt"] = SystemPrompt,
         ["temperature"] = Temperature,
         ["maxTokens"] = MaxTokens,
+        ["contextSize"] = ContextSize,
+        ["gpuLayers"] = GpuLayers,
         ["baseUrl"] = BaseUrl,
         ["apiKey"] = ApiKey
     };
@@ -187,6 +197,8 @@ public sealed partial class ModelNode : NodeBase
         SystemPrompt = settings["systemPrompt"]?.GetValue<string>() ?? DefaultSystemPrompt;
         Temperature = settings["temperature"]?.GetValue<double>() ?? 0.4d;
         MaxTokens = settings["maxTokens"]?.GetValue<int>() ?? 4096;
+        ContextSize = settings["contextSize"]?.GetValue<int>() ?? LlamaLaunchOptions.DefaultContextSize;
+        GpuLayers = settings["gpuLayers"]?.GetValue<int>() ?? LlamaLaunchOptions.DefaultGpuLayers;
         BaseUrl = settings["baseUrl"]?.GetValue<string>() ?? DefaultBaseUrlFor(Provider);
         ApiKey = settings["apiKey"]?.GetValue<string>() ?? string.Empty;
     }
@@ -240,8 +252,14 @@ public sealed partial class ModelNode : NodeBase
             StatusMessage = message;
         });
 
+        var launchOptions = new LlamaLaunchOptions
+        {
+            ContextSize = ContextSize,
+            GpuLayers = GpuLayers
+        };
+
         var managedBaseUrl = await ctx.Services.LlamaServers
-            .EnsureServerAsync(modelPath, status, ct)
+            .EnsureServerAsync(modelPath, launchOptions, status, ct)
             .ConfigureAwait(false);
 
         return new ModelEndpoint(managedBaseUrl, modelId);

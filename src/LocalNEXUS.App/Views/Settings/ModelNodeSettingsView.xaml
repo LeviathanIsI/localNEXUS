@@ -41,6 +41,26 @@
                         Content="Open models folder"
                         Command="{Binding DataContext.Catalog.OpenModelsFolderCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
             </StackPanel>
+
+            <Grid Margin="0,8,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="10" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0">
+                    <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,4" Text="Context size" />
+                    <TextBox Text="{Binding ContextSize, UpdateSourceTrigger=LostFocus}" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="2">
+                    <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,4" Text="GPU layers" />
+                    <TextBox Text="{Binding GpuLayers, UpdateSourceTrigger=LostFocus}" />
+                </StackPanel>
+            </Grid>
+            <TextBlock Style="{StaticResource HintText}"
+                       Text="Applied when LocalNEXUS starts the server for this model. 999 layers means offload everything." />
         </StackPanel>
 
         <!-- OpenRouter model selection -->

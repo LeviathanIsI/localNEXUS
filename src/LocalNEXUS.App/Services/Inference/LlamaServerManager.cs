@@ -11,38 +11,39 @@ namespace LocalNEXUS.App.Services.Inference;
 /// Owns the llama-server child processes that serve local GGUF models.
 /// </summary>
 /// <remarks>
-/// One server is started per model file and then reused for every later request, because
-/// loading a large model onto the GPU is by far the most expensive part of a local run. Servers
-/// are started silently with no console window and are killed when the application exits.
+/// One server is started per model and configuration pair and then reused for every later
+/// request, because loading a large model onto the GPU is by far the most expensive part of a
+/// local run. Servers are started silently with no console window and are killed when the
+/// application exits. Startup is serialised per key rather than globally, so two different
+/// models can load at the same time while two requests for the same model still share one
+/// server.
 /// </remarks>
 public sealed class LlamaServerManager : IDisposable
 {
-    /// <summary>Context window passed to every server.</summary>
-    private const int ContextSize = 8192;
-
-    /// <summary>
-    /// Layers to offload to the GPU. The value is deliberately larger than any real model's
-    /// layer count, which llama.cpp treats as "offload everything".
-    /// </summary>
-    private const int GpuLayers = 999;
-
     private static readonly TimeSpan HealthPollInterval = TimeSpan.FromMilliseconds(400);
     private static readonly TimeSpan StartupTimeout = TimeSpan.FromMinutes(10);
 
+    private readonly object _sync = new();
     private readonly Dictionary<string, LlamaServerInstance> _servers = new(StringComparer.OrdinalIgnoreCase);
-    private readonly SemaphoreSlim _gate = new(1, 1);
+    private readonly Dictionary<string, SemaphoreSlim> _gates = new(StringComparer.OrdinalIgnoreCase);
     private readonly HttpClient _health = new() { Timeout = TimeSpan.FromSeconds(5) };
 
     private bool _disposed;
 
     /// <summary>
-    /// Returns the base URL of a running server for the given model, starting one if needed.
+    /// Returns the base URL of a running server for the given model and options, starting one
+    /// if needed.
     /// </summary>
     /// <param name="ggufPath">Absolute path of the GGUF file to serve.</param>
+    /// <param name="options">Per launch settings. Part of the identity of the server.</param>
     /// <param name="status">Receives progress messages while the model loads.</param>
     /// <param name="ct">Cancels the wait. A server that is already loading keeps loading.</param>
     /// <exception cref="ModelClientException">The executable or model is missing, or the server failed to become healthy.</exception>
-    public async Task<string> EnsureServerAsync(string ggufPath, IProgress<string>? status, CancellationToken ct)
+    public async Task<string> EnsureServerAsync(
+        string ggufPath,
+        LlamaLaunchOptions options,
+        IProgress<string>? status,
+        CancellationToken ct)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
@@ -56,13 +57,22 @@ public sealed class LlamaServerManager : IDisposable
             throw new ModelClientException($"The model file no longer exists: {ggufPath}");
         }
 
-        var key = Path.GetFullPath(ggufPath);
+        var fullPath = Path.GetFullPath(ggufPath);
+        var key = options.BuildServerKey(fullPath);
 
-        // Serialised so that two nodes asking for the same model at once start one server, not two.
-        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        // Serialised per key so that two nodes asking for the same model at once start one
+        // server, not two, while a different model is free to load concurrently.
+        var gate = GetGate(key);
+        await gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            if (_servers.TryGetValue(key, out var existing))
+            LlamaServerInstance? existing;
+            lock (_sync)
+            {
+                _servers.TryGetValue(key, out existing);
+            }
+
+            if (existing is not null)
             {
                 if (existing.IsRunning)
                 {
@@ -71,11 +81,17 @@ public sealed class LlamaServerManager : IDisposable
                 }
 
                 existing.Dispose();
-                _servers.Remove(key);
+                lock (_sync)
+                {
+                    _servers.Remove(key);
+                }
             }
 
-            var instance = StartServer(key);
-            _servers[key] = instance;
+            var instance = StartServer(fullPath, options);
+            lock (_sync)
+            {
+                _servers[key] = instance;
+            }
 
             try
             {
@@ -84,7 +100,11 @@ public sealed class LlamaServerManager : IDisposable
             catch
             {
                 instance.Dispose();
-                _servers.Remove(key);
+                lock (_sync)
+                {
+                    _servers.Remove(key);
+                }
+
                 throw;
             }
 
@@ -92,15 +112,14 @@ public sealed class LlamaServerManager : IDisposable
         }
         finally
         {
-            _gate.Release();
+            gate.Release();
         }
     }
 
     /// <summary>Stops every running server. Called when the application exits.</summary>
     public void ShutdownAll()
     {
-        _gate.Wait();
-        try
+        lock (_sync)
         {
             foreach (var server in _servers.Values)
             {
@@ -108,10 +127,6 @@ public sealed class LlamaServerManager : IDisposable
             }
 
             _servers.Clear();
-        }
-        finally
-        {
-            _gate.Release();
         }
     }
 
@@ -124,11 +139,35 @@ public sealed class LlamaServerManager : IDisposable
 
         _disposed = true;
         ShutdownAll();
-        _gate.Dispose();
+
+        lock (_sync)
+        {
+            foreach (var gate in _gates.Values)
+            {
+                gate.Dispose();
+            }
+
+            _gates.Clear();
+        }
+
         _health.Dispose();
     }
 
-    private static LlamaServerInstance StartServer(string ggufPath)
+    private SemaphoreSlim GetGate(string key)
+    {
+        lock (_sync)
+        {
+            if (!_gates.TryGetValue(key, out var gate))
+            {
+                gate = new SemaphoreSlim(1, 1);
+                _gates[key] = gate;
+            }
+
+            return gate;
+        }
+    }
+
+    private static LlamaServerInstance StartServer(string ggufPath, LlamaLaunchOptions options)
     {
         var executable = AppPaths.FindLlamaServerExecutable()
             ?? throw new ModelClientException(BuildMissingExecutableMessage());
@@ -151,9 +190,9 @@ public sealed class LlamaServerManager : IDisposable
         startInfo.ArgumentList.Add("--port");
         startInfo.ArgumentList.Add(port.ToString());
         startInfo.ArgumentList.Add("-c");
-        startInfo.ArgumentList.Add(ContextSize.ToString());
+        startInfo.ArgumentList.Add(options.ContextSize.ToString());
         startInfo.ArgumentList.Add("-ngl");
-        startInfo.ArgumentList.Add(GpuLayers.ToString());
+        startInfo.ArgumentList.Add(options.GpuLayers.ToString());
 
         Process process;
         try
