@@ -8,7 +8,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
-             Background="{StaticResource Surface.Window.Brush}">
+             Background="{DynamicResource Surface.Window.Brush}">
 
     <!--
         The bottom dock. Three tabs answering three different questions: what is wrong with the
@@ -19,8 +19,8 @@
     <DockPanel>
 
         <Border DockPanel.Dock="Top"
-                Background="{StaticResource Surface.Window.Brush}"
-                BorderBrush="{StaticResource Surface.Border.Brush}"
+                Background="{DynamicResource Surface.Window.Brush}"
+                BorderBrush="{DynamicResource Surface.Border.Brush}"
                 BorderThickness="0,1,0,1">
             <Grid>
                 <StackPanel Orientation="Horizontal">
@@ -33,7 +33,7 @@
                             <TextBlock Text="Problems" />
                             <TextBlock Style="{StaticResource CountText}"
                                        Text="{Binding Problems.Count}"
-                                       Foreground="{StaticResource Status.Danger.Brush}"
+                                       Foreground="{DynamicResource Status.Danger.Brush}"
                                        Visibility="{Binding Problems.Count, Converter={StaticResource CountToVisibility}}" />
                             <TextBlock Style="{StaticResource CountText}"
                                        Text="0"
@@ -63,11 +63,13 @@
                     <Button Style="{StaticResource IconButton}"
                             Content="&#xE74D;"
                             ToolTip="Clear the transcript"
+                            AutomationProperties.Name="Clear the transcript"
                             Command="{Binding Feed.ClearFeedCommand}" />
 
                     <Button Style="{StaticResource IconButton}"
                             Content="&#xE73F;"
                             ToolTip="Hide the panel"
+                            AutomationProperties.Name="Hide the panel"
                             Command="{Binding TogglePanelCommand}" />
                 </StackPanel>
             </Grid>
@@ -110,13 +112,13 @@
                                 <TextBlock Grid.Column="2"
                                            Style="{StaticResource MonoText}"
                                            Margin="0,0,10,0"
-                                           Foreground="{StaticResource Text.Muted.Brush}"
+                                           Foreground="{DynamicResource Text.Muted.Brush}"
                                            Text="{Binding LocationText}" />
 
                                 <TextBlock Grid.Column="3"
                                            Style="{StaticResource MonoText}"
                                            Margin="0,0,10,0"
-                                           Foreground="{StaticResource Text.Muted.Brush}"
+                                           Foreground="{DynamicResource Text.Muted.Brush}"
                                            Text="{Binding Id}" />
 
                                 <TextBlock Grid.Column="4"
@@ -132,7 +134,7 @@
             <TextBlock HorizontalAlignment="Center"
                        VerticalAlignment="Center"
                        IsHitTestVisible="False"
-                       Foreground="{StaticResource Text.Muted.Brush}"
+                       Foreground="{DynamicResource Text.Muted.Brush}"
                        Text="Nothing is wrong with the generated code right now."
                        Visibility="{Binding Problems.Count, Converter={StaticResource CountToVisibility}, ConverterParameter=Invert}" />
         </Grid>
@@ -145,7 +147,7 @@
         <Grid Visibility="{Binding PanelTab, Converter={StaticResource EnumToVisibility}, ConverterParameter=Output}">
             <DockPanel>
                 <Border DockPanel.Dock="Bottom"
-                        BorderBrush="{StaticResource Surface.Border.Brush}"
+                        BorderBrush="{DynamicResource Surface.Border.Brush}"
                         BorderThickness="0,1,0,0"
                         Padding="16,6">
                     <StackPanel Orientation="Horizontal">
@@ -173,7 +175,7 @@
                             <DataTemplate>
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,1">
                                     <TextBlock Style="{StaticResource MonoText}"
-                                               Foreground="{StaticResource Text.Muted.Brush}"
+                                               Foreground="{DynamicResource Text.Muted.Brush}"
                                                Text="{Binding TimeText}"
                                                Margin="0,0,10,0" />
 
@@ -186,7 +188,7 @@
 
                                     <TextBlock Style="{StaticResource MonoText}"
                                                Margin="10,0,0,0"
-                                               Foreground="{StaticResource Text.Muted.Brush}"
+                                               Foreground="{DynamicResource Text.Muted.Brush}"
                                                Text="{Binding Detail}" />
                                 </StackPanel>
                             </DataTemplate>

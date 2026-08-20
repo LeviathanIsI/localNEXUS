@@ -7,7 +7,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
              Width="48"
-             Background="{StaticResource Surface.Chrome.Brush}">
+             Background="{DynamicResource Surface.Chrome.Brush}">
 
     <!--
         The activity bar. Two primary views and the settings gear, and each icon carries a dot for
@@ -29,6 +29,7 @@
                 Margin="0,0,0,6"
                 Content="&#xE713;"
                 ToolTip="Settings"
+                AutomationProperties.Name="Settings"
                 Command="{Binding OpenSettingsCommand}" />
 
         <StackPanel DockPanel.Dock="Top">
@@ -37,9 +38,8 @@
                 <RadioButton Style="{StaticResource ActivityBarButton}"
                              GroupName="PrimarySection"
                              Content="&#xE8A9;"
-                             IsChecked="{Binding IsWorkspace, Mode=OneWay}"
-                             Command="{Binding ShowSectionCommand}"
-                             CommandParameter="{x:Static vm:PrimarySection.Workspace}" />
+                             AutomationProperties.Name="Workspace"
+                             IsChecked="{Binding IsWorkspace, Mode=TwoWay}" />
 
                 <Ellipse Style="{StaticResource StateDot}"
                          HorizontalAlignment="Right"
@@ -52,9 +52,8 @@
                 <RadioButton Style="{StaticResource ActivityBarButton}"
                              GroupName="PrimarySection"
                              Content="&#xE968;"
-                             IsChecked="{Binding IsNetwork, Mode=OneWay}"
-                             Command="{Binding ShowSectionCommand}"
-                             CommandParameter="{x:Static vm:PrimarySection.Network}" />
+                             AutomationProperties.Name="Network"
+                             IsChecked="{Binding IsNetwork, Mode=TwoWay}" />
 
                 <Ellipse Style="{StaticResource StateDot}"
                          HorizontalAlignment="Right"

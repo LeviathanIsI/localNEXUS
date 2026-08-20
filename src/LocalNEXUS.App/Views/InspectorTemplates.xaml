@@ -33,9 +33,9 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
-                <TextBlock Grid.Column="1" Style="{StaticResource MonoText}" Foreground="{StaticResource Text.Muted.Brush}" Text="LAYERS" />
-                <TextBlock Grid.Column="2" Style="{StaticResource MonoText}" Foreground="{StaticResource Text.Muted.Brush}" Text="COVERED BY" />
-                <TextBlock Grid.Column="3" Style="{StaticResource MonoText}" Foreground="{StaticResource Text.Muted.Brush}" Text="SPARE" />
+                <TextBlock Grid.Column="1" Style="{StaticResource MonoText}" Foreground="{DynamicResource Text.Muted.Brush}" Text="LAYERS" />
+                <TextBlock Grid.Column="2" Style="{StaticResource MonoText}" Foreground="{DynamicResource Text.Muted.Brush}" Text="COVERED BY" />
+                <TextBlock Grid.Column="3" Style="{StaticResource MonoText}" Foreground="{DynamicResource Text.Muted.Brush}" Text="SPARE" />
             </Grid>
 
             <!--
@@ -134,7 +134,7 @@
 
             <!-- This machine is the one thing on this screen that is a form rather than a report. -->
             <StackPanel Visibility="{Binding IsThisMachine, Converter={StaticResource BooleanToVisibility}}">
-                <Rectangle Height="1" Margin="0,16,0,4" Fill="{StaticResource Surface.Border.Brush}" />
+                <Rectangle Height="1" Margin="0,16,0,4" Fill="{DynamicResource Surface.Border.Brush}" />
 
                 <TextBlock Style="{StaticResource SectionHeader}" Margin="0,10,0,0" Text="What this machine offers" />
 

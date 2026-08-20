@@ -6,7 +6,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
-             Background="{StaticResource Surface.Panel.Brush}">
+             Background="{DynamicResource Surface.Panel.Brush}">
 
     <!--
         The explorer, which doubles as the live run outline. The rows are the same node view models
@@ -23,7 +23,7 @@
 
         <!-- What the graph writes into, and what is known about it. -->
         <Border DockPanel.Dock="Bottom"
-                BorderBrush="{StaticResource Surface.Border.Brush}"
+                BorderBrush="{DynamicResource Surface.Border.Brush}"
                 BorderThickness="0,1,0,0"
                 Padding="0,0,0,12">
             <StackPanel>
@@ -35,7 +35,7 @@
 
                 <TextBlock Style="{StaticResource MonoText}"
                            Margin="14,0,14,0"
-                           Foreground="{StaticResource Text.Muted.Brush}"
+                           Foreground="{DynamicResource Text.Muted.Brush}"
                            TextWrapping="Wrap"
                            Text="{Binding UnityProject.ProjectPath, TargetNullValue=Open one from the File menu}" />
 
@@ -45,7 +45,7 @@
                              Fill="{Binding ProjectIndex.State, Converter={StaticResource ResourceLookup}, ConverterParameter=ProjectIndexState}" />
 
                     <TextBlock Style="{StaticResource MonoText}"
-                               Foreground="{StaticResource Text.Muted.Brush}"
+                               Foreground="{DynamicResource Text.Muted.Brush}"
                                Text="{Binding ProjectIndex.StatusText}"
                                TextTrimming="CharacterEllipsis" />
                 </StackPanel>
@@ -78,7 +78,7 @@
                            Text="&#x25CF;"
                            FontSize="8"
                            VerticalAlignment="Center"
-                           Foreground="{StaticResource Text.Secondary.Brush}"
+                           Foreground="{DynamicResource Text.Secondary.Brush}"
                            ToolTip="Unsaved changes"
                            Visibility="{Binding Document.IsDirty, Converter={StaticResource BooleanToVisibility}}" />
             </Grid>
@@ -123,21 +123,21 @@
                                 <TextBlock Grid.Column="2"
                                            Style="{StaticResource MonoText}"
                                            Margin="8,0,0,0"
-                                           Foreground="{StaticResource Status.Info.Brush}"
+                                           Foreground="{DynamicResource Status.Info.Brush}"
                                            Text="{Binding ElapsedText}"
                                            Visibility="{Binding IsRunning, Converter={StaticResource BooleanToVisibility}}" />
 
                                 <TextBlock Grid.Column="2"
                                            Style="{StaticResource MonoText}"
                                            Margin="8,0,0,0"
-                                           Foreground="{StaticResource Status.Danger.Brush}"
+                                           Foreground="{DynamicResource Status.Danger.Brush}"
                                            Text="faulted"
                                            Visibility="{Binding DisplayState, Converter={StaticResource EnumToVisibility}, ConverterParameter=Faulted}" />
 
                                 <TextBlock Grid.Column="2"
                                            Style="{StaticResource MonoText}"
                                            Margin="8,0,0,0"
-                                           Foreground="{StaticResource Text.Muted.Brush}"
+                                           Foreground="{DynamicResource Text.Muted.Brush}"
                                            Text="skipped"
                                            Visibility="{Binding DisplayState, Converter={StaticResource EnumToVisibility}, ConverterParameter=Skipped}" />
                             </Grid>
@@ -154,10 +154,10 @@
                 <TextBlock Margin="14,6,14,0"
                            VerticalAlignment="Top"
                            TextWrapping="Wrap"
-                           Foreground="{StaticResource Text.Muted.Brush}"
+                           Foreground="{DynamicResource Text.Muted.Brush}"
                            FontSize="{StaticResource Font.Size.Small}"
                            IsHitTestVisible="False"
-                           Text="No nodes yet. Add one from the Run menu or the palette above the canvas."
+                           Text="No nodes yet. Add one from the Edit menu, or by right clicking the canvas."
                            Visibility="{Binding Document.Nodes.Count, Converter={StaticResource CountToVisibility}, ConverterParameter=Invert}" />
             </Grid>
         </ScrollViewer>

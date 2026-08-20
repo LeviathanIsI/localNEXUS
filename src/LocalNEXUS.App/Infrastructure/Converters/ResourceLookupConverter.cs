@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Data;
+using LocalNEXUS.App.Services.Theming;
 
 namespace LocalNEXUS.App.Infrastructure.Converters;
 
@@ -32,9 +33,11 @@ public sealed class ResourceLookupConverter : IValueConverter
         var token = value?.ToString() ?? "Null";
         var key = $"{prefix}.{token}.{Suffix}";
 
-        return Application.Current?.TryFindResource(key)
-               ?? Application.Current?.TryFindResource(FallbackKey)
-               ?? DependencyProperty.UnsetValue;
+        // From the live palette rather than the resources, because a converter is asked once and
+        // the brush it hands back has to be one that can still change colour when the theme does.
+        return ThemePalette.Get(key)
+               ?? ThemePalette.Get(FallbackKey)
+               ?? (object?)DependencyProperty.UnsetValue;
     }
 
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)

@@ -203,11 +203,35 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// <summary>True when a node is selected.</summary>
     public bool HasSelection => SelectedNode is not null;
 
-    /// <summary>True while the activity bar has the Workspace selected.</summary>
-    public bool IsWorkspace => ActiveSection == PrimarySection.Workspace;
+    /// <summary>
+    /// True while the activity bar has the Workspace selected. Settable, so the activity bar
+    /// expresses the choice as a radio button being chosen rather than as a command hanging off
+    /// one, which is what makes the keyboard and the narrator work in it without being asked to.
+    /// </summary>
+    public bool IsWorkspace
+    {
+        get => ActiveSection == PrimarySection.Workspace;
+        set
+        {
+            if (value)
+            {
+                ShowSection(PrimarySection.Workspace);
+            }
+        }
+    }
 
     /// <summary>True while the activity bar has the Network selected.</summary>
-    public bool IsNetwork => ActiveSection == PrimarySection.Network;
+    public bool IsNetwork
+    {
+        get => ActiveSection == PrimarySection.Network;
+        set
+        {
+            if (value)
+            {
+                ShowSection(PrimarySection.Network);
+            }
+        }
+    }
 
     /// <summary>
     /// Whatever the right hand inspector should be showing: the selected node in the Workspace,

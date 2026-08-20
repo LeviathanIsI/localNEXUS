@@ -17,6 +17,7 @@ dotnet publish $project `
     --self-contained true `
     -p:PublishSingleFile=true `
     -p:IncludeNativeLibrariesForSelfExtract=true `
+    -p:IncludeAllContentForSelfExtract=true `
     --output $dist
 
 if ($LASTEXITCODE -ne 0) {

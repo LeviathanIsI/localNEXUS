@@ -15,8 +15,8 @@
         MinHeight="620"
         MinWidth="1040"
         WindowStartupLocation="CenterScreen"
-        Background="{StaticResource Surface.Chrome.Brush}"
-        Foreground="{StaticResource Text.Primary.Brush}"
+        Background="{DynamicResource Surface.Chrome.Brush}"
+        Foreground="{DynamicResource Text.Primary.Brush}"
         FontFamily="{StaticResource Font.Sans}"
         TextOptions.TextFormattingMode="Ideal"
         behaviors:WindowCommandsBehavior.IsEnabled="True">
@@ -70,7 +70,7 @@
             <!-- Title bar -->
             <Border DockPanel.Dock="Top"
                     Height="30"
-                    Background="{StaticResource Surface.Chrome.Brush}">
+                    Background="{DynamicResource Surface.Chrome.Brush}">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
@@ -85,7 +85,7 @@
                             Margin="10,0,8,0"
                             CornerRadius="3"
                             BorderThickness="1.5"
-                            BorderBrush="{StaticResource Accent.Primary.Brush}" />
+                            BorderBrush="{DynamicResource Accent.Primary.Brush}" />
 
                     <Menu Grid.Column="1"
                           Background="Transparent"
@@ -145,7 +145,7 @@
                                HorizontalAlignment="Center"
                                VerticalAlignment="Center"
                                Style="{StaticResource MonoText}"
-                               Foreground="{StaticResource Text.Muted.Brush}"
+                               Foreground="{DynamicResource Text.Muted.Brush}"
                                Text="{Binding WindowTitle}"
                                TextTrimming="CharacterEllipsis" />
 
@@ -159,7 +159,7 @@
                         <TextBlock VerticalAlignment="Center"
                                    Margin="0,0,10,0"
                                    FontSize="{StaticResource Font.Size.Small}"
-                                   Foreground="{StaticResource Status.Danger.Brush}"
+                                   Foreground="{DynamicResource Status.Danger.Brush}"
                                    Text="Run faulted"
                                    Visibility="{Binding Feed.RunState, Converter={StaticResource EnumToVisibility}, ConverterParameter=Faulted}" />
 
@@ -191,23 +191,27 @@
                         <Button Style="{StaticResource WindowButton}"
                                 Content="&#xE921;"
                                 ToolTip="Minimise"
+                                AutomationProperties.Name="Minimise"
                                 Command="{x:Static SystemCommands.MinimizeWindowCommand}" />
 
                         <Button Style="{StaticResource WindowButton}"
                                 Content="&#xE922;"
                                 ToolTip="Maximise"
+                                AutomationProperties.Name="Maximise"
                                 Command="{x:Static SystemCommands.MaximizeWindowCommand}"
                                 Visibility="{Binding WindowState, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource EnumToVisibility}, ConverterParameter=!Maximized}" />
 
                         <Button Style="{StaticResource WindowButton}"
                                 Content="&#xE923;"
                                 ToolTip="Restore"
+                                AutomationProperties.Name="Restore"
                                 Command="{x:Static SystemCommands.RestoreWindowCommand}"
                                 Visibility="{Binding WindowState, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource EnumToVisibility}, ConverterParameter=Maximized}" />
 
                         <Button Style="{StaticResource WindowCloseButton}"
                                 Content="&#xE8BB;"
                                 ToolTip="Close"
+                                AutomationProperties.Name="Close"
                                 Command="{x:Static SystemCommands.CloseWindowCommand}" />
                     </StackPanel>
                 </Grid>
@@ -292,8 +296,8 @@
                                        Visibility="{Binding IsPanelShowing, Converter={StaticResource BooleanToVisibility}}" />
 
                 <Border Grid.Row="3"
-                        Background="{StaticResource Surface.Panel.Brush}"
-                        BorderBrush="{StaticResource Surface.Border.Brush}"
+                        Background="{DynamicResource Surface.Panel.Brush}"
+                        BorderBrush="{DynamicResource Surface.Border.Brush}"
                         BorderThickness="0,1,0,0"
                         Padding="16,10"
                         Visibility="{Binding IsChatShowing, Converter={StaticResource BooleanToVisibility}}">
@@ -329,19 +333,19 @@
                 -->
                 <Grid Grid.Row="0"
                       Grid.RowSpan="4"
-                      Background="{StaticResource Surface.Scrim.Brush}"
+                      Background="{DynamicResource Surface.Scrim.Brush}"
                       Visibility="{Binding IsSettingsOpen, Converter={StaticResource BooleanToVisibility}}">
 
                     <Border Margin="60,30"
                             MaxWidth="1000"
-                            Background="{StaticResource Surface.Window.Brush}"
-                            BorderBrush="{StaticResource Surface.Border.Brush}"
+                            Background="{DynamicResource Surface.Window.Brush}"
+                            BorderBrush="{DynamicResource Surface.Border.Brush}"
                             BorderThickness="1"
                             CornerRadius="6">
                         <DockPanel>
                             <Border DockPanel.Dock="Top"
-                                    Background="{StaticResource Surface.Chrome.Brush}"
-                                    BorderBrush="{StaticResource Surface.Border.Brush}"
+                                    Background="{DynamicResource Surface.Chrome.Brush}"
+                                    BorderBrush="{DynamicResource Surface.Border.Brush}"
                                     BorderThickness="0,0,0,1"
                                     Padding="16,8"
                                     CornerRadius="6,6,0,0">
@@ -350,6 +354,7 @@
                                             Style="{StaticResource IconButton}"
                                             Content="&#xE8BB;"
                                             ToolTip="Close settings"
+                                            AutomationProperties.Name="Close settings"
                                             Command="{Binding CloseSettingsCommand}" />
 
                                     <TextBlock Text="Settings"

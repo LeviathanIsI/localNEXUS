@@ -41,7 +41,7 @@
                                        Margin="12,0,0,0"
                                        VerticalAlignment="Center"
                                        FontSize="{StaticResource Font.Size.Small}"
-                                       Foreground="{StaticResource Text.Secondary.Brush}"
+                                       Foreground="{DynamicResource Text.Secondary.Brush}"
                                        Text="{Binding FormatLabel}" />
                             <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
                         </DockPanel>
@@ -76,14 +76,14 @@
             <Border Margin="0,10,0,0"
                     Padding="10,8"
                     CornerRadius="4"
-                    Background="{StaticResource Surface.Window.Brush}"
+                    Background="{DynamicResource Surface.Window.Brush}"
                     BorderThickness="1">
                 <Border.Style>
                     <Style TargetType="Border">
-                        <Setter Property="BorderBrush" Value="{StaticResource Surface.Border.Brush}" />
+                        <Setter Property="BorderBrush" Value="{DynamicResource Surface.Border.Brush}" />
                         <Style.Triggers>
                             <DataTrigger Binding="{Binding IsModelFileMissing}" Value="True">
-                                <Setter Property="BorderBrush" Value="{StaticResource Field.Error.Brush}" />
+                                <Setter Property="BorderBrush" Value="{DynamicResource Field.Error.Brush}" />
                             </DataTrigger>
                         </Style.Triggers>
                     </Style>
@@ -95,10 +95,10 @@
                                Text="{Binding ModelSourceText}">
                         <TextBlock.Style>
                             <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
-                                <Setter Property="Foreground" Value="{StaticResource Text.Secondary.Brush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource Text.Secondary.Brush}" />
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding IsModelFileMissing}" Value="True">
-                                        <Setter Property="Foreground" Value="{StaticResource Field.Error.Brush}" />
+                                        <Setter Property="Foreground" Value="{DynamicResource Field.Error.Brush}" />
                                     </DataTrigger>
                                 </Style.Triggers>
                             </Style>
@@ -115,10 +115,10 @@
                                Visibility="{Binding HasModelFile, Converter={StaticResource BooleanToVisibility}}">
                         <TextBlock.Style>
                             <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
-                                <Setter Property="Foreground" Value="{StaticResource Text.Primary.Brush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource Text.Primary.Brush}" />
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding IsModelFileMissing}" Value="True">
-                                        <Setter Property="Foreground" Value="{StaticResource Field.Error.Brush}" />
+                                        <Setter Property="Foreground" Value="{DynamicResource Field.Error.Brush}" />
                                     </DataTrigger>
                                 </Style.Triggers>
                             </Style>
@@ -179,9 +179,9 @@
             <Border Margin="0,6,0,0"
                     Padding="10,8"
                     CornerRadius="4"
-                    Background="{StaticResource Surface.Window.Brush}"
+                    Background="{DynamicResource Surface.Window.Brush}"
                     BorderThickness="1"
-                    BorderBrush="{StaticResource Surface.Border.Brush}"
+                    BorderBrush="{DynamicResource Surface.Border.Brush}"
                     DataContext="{Binding DataContext.PythonEnvironment, RelativeSource={RelativeSource AncestorType=Window}}">
                 <StackPanel>
                     <DockPanel>
@@ -200,13 +200,13 @@
                     <TextBlock Margin="16,6,0,0"
                                TextWrapping="Wrap"
                                FontSize="{StaticResource Font.Size.Small}"
-                               Foreground="{StaticResource Text.Secondary.Brush}"
+                               Foreground="{DynamicResource Text.Secondary.Brush}"
                                Text="{Binding Environment.Stage}" />
 
                     <TextBlock Margin="16,4,0,0"
                                FontFamily="{StaticResource Font.Mono}"
                                FontSize="{StaticResource Font.Size.Small}"
-                               Foreground="{StaticResource Text.Secondary.Brush}"
+                               Foreground="{DynamicResource Text.Secondary.Brush}"
                                TextTrimming="CharacterEllipsis"
                                Text="{Binding Environment.Detail}"
                                ToolTip="{Binding Environment.Detail}"
@@ -215,14 +215,14 @@
                     <TextBlock Margin="16,6,0,0"
                                TextWrapping="Wrap"
                                FontSize="{StaticResource Font.Size.Small}"
-                               Foreground="{StaticResource Field.Error.Brush}"
+                               Foreground="{DynamicResource Field.Error.Brush}"
                                Text="{Binding Environment.LastError}"
                                Visibility="{Binding Environment.LastError, Converter={StaticResource StringToVisibility}}" />
 
                     <TextBlock Margin="16,6,0,0"
                                TextWrapping="Wrap"
                                FontSize="{StaticResource Font.Size.Small}"
-                               Foreground="{StaticResource Text.Secondary.Brush}"
+                               Foreground="{DynamicResource Text.Secondary.Brush}"
                                Text="{Binding Environment.AcceleratorSummary}"
                                Visibility="{Binding Environment.AcceleratorSummary, Converter={StaticResource StringToVisibility}}" />
 

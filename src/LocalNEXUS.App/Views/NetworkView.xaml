@@ -7,7 +7,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
-             Background="{StaticResource Surface.Window.Brush}">
+             Background="{DynamicResource Surface.Window.Brush}">
 
     <!--
         Every model the network can serve, one per row, sortable.
@@ -40,14 +40,22 @@
 
         <!-- What the mesh itself is doing, above the table. -->
         <Border DockPanel.Dock="Top"
-                BorderBrush="{StaticResource Surface.Border.Brush}"
+                BorderBrush="{DynamicResource Surface.Border.Brush}"
                 BorderThickness="0,0,0,1"
                 Padding="16,9">
             <DockPanel>
-                <TextBox DockPanel.Dock="Right"
-                         Width="200"
-                         Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"
-                         Tag="Filter models" />
+                <Grid DockPanel.Dock="Right" Width="200">
+                    <TextBox Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <!-- A watermark, because a filter box that looks like an empty box is furniture. -->
+                    <TextBlock Text="Filter models"
+                               Margin="9,0,0,0"
+                               VerticalAlignment="Center"
+                               IsHitTestVisible="False"
+                               FontSize="{StaticResource Font.Size.Small}"
+                               Foreground="{DynamicResource Text.Muted.Brush}"
+                               Visibility="{Binding FilterText, Converter={StaticResource StringToVisibility}, ConverterParameter=Invert}" />
+                </Grid>
 
                 <Ellipse Style="{StaticResource StateDot}"
                          Margin="0,0,9,0"
@@ -66,7 +74,7 @@
 
         <!-- What the list amounts to, under the table. -->
         <Border DockPanel.Dock="Bottom"
-                BorderBrush="{StaticResource Surface.Border.Brush}"
+                BorderBrush="{DynamicResource Surface.Border.Brush}"
                 BorderThickness="0,1,0,0"
                 Padding="16,7">
             <TextBlock Style="{StaticResource MutedText}"
@@ -76,21 +84,21 @@
 
         <!-- Column headings. -->
         <Border DockPanel.Dock="Top"
-                BorderBrush="{StaticResource Surface.Border.Brush}"
+                BorderBrush="{DynamicResource Surface.Border.Brush}"
                 BorderThickness="0,0,0,1"
                 Padding="16,0">
             <Grid>
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="2*" MinWidth="150" />
-                    <ColumnDefinition Width="90" />
-                    <ColumnDefinition Width="130" />
-                    <ColumnDefinition Width="70" />
-                    <ColumnDefinition Width="60" />
-                    <ColumnDefinition Width="90" />
-                    <ColumnDefinition Width="70" />
+                    <ColumnDefinition Width="*" MinWidth="140" />
                     <ColumnDefinition Width="80" />
-                    <ColumnDefinition Width="100" />
-                    <ColumnDefinition Width="90" />
+                    <ColumnDefinition Width="120" />
+                    <ColumnDefinition Width="64" />
+                    <ColumnDefinition Width="54" />
+                    <ColumnDefinition Width="84" />
+                    <ColumnDefinition Width="64" />
+                    <ColumnDefinition Width="72" />
+                    <ColumnDefinition Width="92" />
+                    <ColumnDefinition Width="80" />
                 </Grid.ColumnDefinitions>
 
                 <Button Grid.Column="0" Style="{StaticResource ColumnHeader}" Content="NAME"
@@ -122,21 +130,21 @@
                      ItemContainerStyle="{StaticResource TableRow}"
                      Background="Transparent"
                      BorderThickness="0"
-                     ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                 <ListBox.ItemTemplate>
                     <DataTemplate>
                         <Grid>
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="2*" MinWidth="150" />
-                                <ColumnDefinition Width="90" />
-                                <ColumnDefinition Width="130" />
-                                <ColumnDefinition Width="70" />
-                                <ColumnDefinition Width="60" />
-                                <ColumnDefinition Width="90" />
-                                <ColumnDefinition Width="70" />
+                                <ColumnDefinition Width="*" MinWidth="140" />
                                 <ColumnDefinition Width="80" />
-                                <ColumnDefinition Width="100" />
-                                <ColumnDefinition Width="90" />
+                                <ColumnDefinition Width="120" />
+                                <ColumnDefinition Width="64" />
+                                <ColumnDefinition Width="54" />
+                                <ColumnDefinition Width="84" />
+                                <ColumnDefinition Width="64" />
+                                <ColumnDefinition Width="72" />
+                                <ColumnDefinition Width="92" />
+                                <ColumnDefinition Width="80" />
                             </Grid.ColumnDefinitions>
 
                             <!-- Name, quantization, and a lock when it is listed but invite gated. -->
@@ -147,7 +155,7 @@
                                            FontFamily="{StaticResource Font.Icons}"
                                            Margin="0,0,6,0"
                                            VerticalAlignment="Center"
-                                           Foreground="{StaticResource Text.Muted.Brush}"
+                                           Foreground="{DynamicResource Text.Muted.Brush}"
                                            ToolTip="In a private mesh, so reachable only with an invite."
                                            Visibility="{Binding IsInviteOnly, Converter={StaticResource BooleanToVisibility}}" />
 
@@ -165,7 +173,7 @@
 
                             <TextBlock Grid.Column="1"
                                        Style="{StaticResource MonoText}"
-                                       Foreground="{StaticResource Text.Muted.Brush}"
+                                       Foreground="{DynamicResource Text.Muted.Brush}"
                                        Text="{Binding SizeText}"
                                        VerticalAlignment="Center"
                                        TextTrimming="CharacterEllipsis" />
@@ -187,7 +195,7 @@
                                         HorizontalAlignment="Left"
                                         CornerRadius="1"
                                         VerticalAlignment="Center"
-                                        Background="{StaticResource Surface.Track.Brush}"
+                                        Background="{DynamicResource Surface.Track.Brush}"
                                         ToolTip="The mesh has not reported how this model is assembled yet."
                                         Visibility="{Binding HasSections, Converter={StaticResource BooleanToVisibility}, ConverterParameter=Invert}" />
                             </Grid>
@@ -227,14 +235,14 @@
 
                             <TextBlock Grid.Column="8"
                                        Style="{StaticResource MonoText}"
-                                       Foreground="{StaticResource Text.Muted.Brush}"
+                                       Foreground="{DynamicResource Text.Muted.Brush}"
                                        Text="{Binding ThroughputText}"
                                        VerticalAlignment="Center"
                                        TextTrimming="CharacterEllipsis" />
 
                             <TextBlock Grid.Column="9"
                                        Style="{StaticResource MonoText}"
-                                       Foreground="{StaticResource Text.Muted.Brush}"
+                                       Foreground="{DynamicResource Text.Muted.Brush}"
                                        Text="{Binding LastVerifiedText}"
                                        VerticalAlignment="Center"
                                        TextTrimming="CharacterEllipsis" />
@@ -249,7 +257,7 @@
                        TextAlignment="Center"
                        TextWrapping="Wrap"
                        IsHitTestVisible="False"
-                       Foreground="{StaticResource Text.Muted.Brush}"
+                       Foreground="{DynamicResource Text.Muted.Brush}"
                        Text="{Binding Mesh.EmptyModelsText}"
                        Visibility="{Binding VisibleRows.Count, Converter={StaticResource CountToVisibility}, ConverterParameter=Invert}" />
         </Grid>

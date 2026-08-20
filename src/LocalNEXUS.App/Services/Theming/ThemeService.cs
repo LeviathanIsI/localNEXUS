@@ -9,26 +9,25 @@ namespace LocalNEXUS.App.Services.Theming;
 /// Owns which theme the application is wearing, and swaps it without a restart.
 /// </summary>
 /// <remarks>
-/// A theme is a dictionary of colours and nothing else. Applying one replaces that dictionary in
-/// the application resources, and the brushes in Brushes.xaml, whose colours are dynamic
-/// references into it, repaint in place.
+/// A theme is a dictionary of colours and nothing else. <see cref="SemanticBrushes"/> says which
+/// colour each brush takes, and this puts the two together.
 ///
-/// Repainting in place rather than replacing the brushes is what makes the swap complete. Several
-/// brushes reach the screen through a converter that resolves them once during a layout pass and
-/// is never asked again, so a theme that handed out new brush objects would leave every node
-/// state, coverage bar and feed dot wearing the previous palette until something happened to
-/// invalidate it.
+/// Applying a theme repaints the existing brush objects in place rather than replacing them, and
+/// that is the whole design. Several brushes reach the screen through a converter that resolves
+/// them once during a layout pass and is never asked again, so handing out new brush objects would
+/// leave every node state, coverage bar and feed dot wearing the previous palette until something
+/// unrelated happened to invalidate it. Repainting in place means an element does not even have to
+/// have asked dynamically: the brush it is already holding simply changes colour.
 ///
-/// The colours are also copied straight onto the application itself, because a dynamic reference
-/// resolves against the dictionary it can see and the brushes are declared in a sibling
-/// dictionary rather than inside the theme. Copying makes the resolution unambiguous and costs
-/// one pass over thirty keys.
+/// The brushes are built here rather than declared in a resource dictionary, which is the obvious
+/// way to write it and does not work. A dictionary of brushes whose colours are dynamic references
+/// into the theme resolves each of those references once, when the brush is first created, and
+/// never again, so a theme change moves nothing that is already on screen. Reading the new colours
+/// by loading a second copy of that dictionary does not help either, because a dictionary loaded
+/// from a uri is cached and the second copy is the live one.
 /// </remarks>
 public sealed partial class ThemeService : ObservableObject
 {
-    /// <summary>The key every theme dictionary defines, used to find the one currently applied.</summary>
-    private const string ProbeKey = "Surface.WindowColor";
-
     private readonly AppConfig _config;
     private readonly ResourceDictionary _applicationResources;
 
@@ -50,27 +49,27 @@ public sealed partial class ThemeService : ObservableObject
             AppTheme.VsCodeDark,
             "VS Code Dark+",
             "The reference palette this interface was designed against.",
-            "pack://application:,,,/Views/Themes/VsCodeDark.xaml"),
+            "Views/Themes/VsCodeDark.xaml"),
         new ThemeDefinition(
             AppTheme.DeepSlate,
             "Deep slate",
             "Cool and very dark, with a bright blue accent.",
-            "pack://application:,,,/Views/Themes/DeepSlate.xaml"),
+            "Views/Themes/DeepSlate.xaml"),
         new ThemeDefinition(
             AppTheme.WarmCharcoal,
             "Warm charcoal",
             "Softer contrast than the others, which suits a long session.",
-            "pack://application:,,,/Views/Themes/WarmCharcoal.xaml"),
+            "Views/Themes/WarmCharcoal.xaml"),
         new ThemeDefinition(
             AppTheme.NearBlack,
             "Near black",
             "The highest contrast of the dark themes, with a violet accent.",
-            "pack://application:,,,/Views/Themes/NearBlack.xaml"),
+            "Views/Themes/NearBlack.xaml"),
         new ThemeDefinition(
             AppTheme.Light,
             "Light",
             "Every state colour chosen for a light background rather than inverted from a dark one.",
-            "pack://application:,,,/Views/Themes/Light.xaml")
+            "Views/Themes/Light.xaml")
     };
 
     /// <summary>The definition of the theme currently applied.</summary>
@@ -103,35 +102,31 @@ public sealed partial class ThemeService : ObservableObject
     public void ApplySaved() => Swap(Current);
 
     /// <summary>
-    /// Replaces the colour dictionary and copies its entries onto the application, so that a
-    /// dynamic reference from any dictionary resolves to the new value.
+    /// Reads the theme's colours and paints every semantic brush with them, creating the brushes
+    /// on the first call and only changing their colour on every call after that.
     /// </summary>
     private void Swap(AppTheme theme)
     {
         var definition = Definition(theme);
-        var loaded = new ResourceDictionary { Source = definition.Uri };
+        var colours = (ResourceDictionary)Application.LoadComponent(definition.Uri);
 
-        var existing = _applicationResources.MergedDictionaries
-            .FirstOrDefault(d => d.Contains(ProbeKey));
-
-        if (existing is null)
+        foreach (var (brushKey, colourKey) in SemanticBrushes.Map)
         {
-            // Nothing to replace means the shell has not merged a theme yet, which happens only
-            // if App.xaml stopped shipping one. Merging is the recoverable answer.
-            _applicationResources.MergedDictionaries.Insert(0, loaded);
-        }
-        else
-        {
-            var index = _applicationResources.MergedDictionaries.IndexOf(existing);
-            _applicationResources.MergedDictionaries[index] = loaded;
-        }
-
-        foreach (var key in loaded.Keys)
-        {
-            if (loaded[key] is Color colour)
+            if (colours[colourKey] is not Color colour)
             {
-                _applicationResources[key] = colour;
+                // A theme missing a colour is a mistake in that theme rather than something to
+                // paper over, and leaving the brush as it was makes it visible without making the
+                // window unreadable.
+                continue;
             }
+
+            // The live copy, repainted in place, which is what a converter result keeps pointing at.
+            ThemePalette.Set(brushKey, colour);
+
+            // And a fresh copy for the resource dictionary, which every dynamic reference in the
+            // XAML re-resolves to. It has to be a new object rather than the one above, because
+            // anything placed in the application resources is frozen on the way in.
+            _applicationResources[brushKey] = new SolidColorBrush(colour);
         }
     }
 }

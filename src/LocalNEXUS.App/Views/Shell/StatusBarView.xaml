@@ -7,7 +7,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
              Height="24"
-             Background="{StaticResource Surface.Chrome.Brush}">
+             Background="{DynamicResource Surface.Chrome.Brush}">
 
     <!--
         The status bar. Four things that are always true and one that depends on where you are.
@@ -52,7 +52,7 @@
                 <TextBlock FontSize="{StaticResource Font.Size.Micro}" Text="Python" />
                 <TextBlock FontSize="{StaticResource Font.Size.Micro}"
                            Margin="4,0,0,0"
-                           Foreground="{StaticResource Text.Secondary.Brush}"
+                           Foreground="{DynamicResource Text.Secondary.Brush}"
                            Text="{Binding PythonEnvironment.Environment.State}" />
             </StackPanel>
 
@@ -74,7 +74,7 @@
                    Margin="0,0,12,0"
                    Style="{StaticResource MonoText}"
                    FontSize="{StaticResource Font.Size.Micro}"
-                   Foreground="{StaticResource Text.Secondary.Brush}"
+                   Foreground="{DynamicResource Text.Secondary.Brush}"
                    Text="{Binding StatusSummary}" />
     </Grid>
 </UserControl>

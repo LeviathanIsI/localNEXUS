@@ -364,7 +364,7 @@ public sealed partial class NetworkViewModel : ObservableObject, IDisposable
     private IReadOnlyList<ModelFilterGroup> BuildFilterGroups() => new[]
     {
         new ModelFilterGroup(
-            "Status",
+            "STATUS",
             "Whether the mesh can assemble the model right now.",
             new[]
             {
@@ -375,7 +375,7 @@ public sealed partial class NetworkViewModel : ObservableObject, IDisposable
             }),
 
         new ModelFilterGroup(
-            "Format",
+            "FORMAT",
             "Inferred from the quantization label, because the mesh reports a quantization and not a format. "
             + "A label a GGUF file would carry counts as GGUF; anything else is left unknown rather than guessed.",
             new[]
@@ -386,7 +386,7 @@ public sealed partial class NetworkViewModel : ObservableObject, IDisposable
             }),
 
         new ModelFilterGroup(
-            "Provider",
+            "PROVIDER",
             "Where the model is served from. Cloud models are configured on a model node and are not "
             + "part of the mesh, so this list never has any.",
             new[]
@@ -397,7 +397,7 @@ public sealed partial class NetworkViewModel : ObservableObject, IDisposable
             }),
 
         new ModelFilterGroup(
-            "Sharing",
+            "SHARING",
             "Read from the posture of the mesh itself. A private mesh is joined by invitation, so "
             + "everything in it is invite only; publishing the mesh makes all of it public at once.",
             new[]

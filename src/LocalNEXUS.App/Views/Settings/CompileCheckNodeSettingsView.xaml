@@ -35,9 +35,9 @@
         <Border Margin="0,6,0,0"
                 Padding="10,8"
                 CornerRadius="4"
-                Background="{StaticResource Surface.Window.Brush}"
+                Background="{DynamicResource Surface.Window.Brush}"
                 BorderThickness="1"
-                BorderBrush="{StaticResource Surface.Border.Brush}">
+                BorderBrush="{DynamicResource Surface.Border.Brush}">
             <StackPanel>
                 <DockPanel>
                     <Ellipse DockPanel.Dock="Left"
@@ -56,7 +56,7 @@
                 <TextBlock Margin="16,6,0,0"
                            TextWrapping="Wrap"
                            FontSize="{StaticResource Font.Size.Small}"
-                           Foreground="{StaticResource Text.Secondary.Brush}"
+                           Foreground="{DynamicResource Text.Secondary.Brush}"
                            Text="{Binding ReferenceSummary}"
                            Visibility="{Binding ReferenceSummary, Converter={StaticResource StringToVisibility}}" />
 

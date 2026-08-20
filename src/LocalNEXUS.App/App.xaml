@@ -10,14 +10,13 @@
                 <ResourceDictionary Source="pack://application:,,,/Nodify;component/Themes/Nodify.xaml" />
 
                 <!--
-                    The theme, which is colours and nothing else. The theme service replaces this
-                    entry at startup with whichever theme was last chosen, and again whenever one
-                    is picked; the brushes below take their colours from it dynamically, so nothing
-                    is rebuilt and nothing has to be restarted.
+                    No colours are merged here. The theme service reads whichever theme was last
+                    chosen and puts the brushes straight into these resources before the window is
+                    built, and repaints those same brush objects whenever a theme is picked, so
+                    nothing is rebuilt and nothing has to be restarted. Everything below asks for
+                    its brushes dynamically, which is what lets them arrive after this file is
+                    parsed.
                 -->
-                <ResourceDictionary Source="Views/Themes/VsCodeDark.xaml" />
-
-                <ResourceDictionary Source="Views/Brushes.xaml" />
                 <ResourceDictionary Source="Views/Theme.xaml" />
                 <ResourceDictionary Source="Views/ShellStyles.xaml" />
                 <ResourceDictionary Source="Views/NodeTemplates.xaml" />

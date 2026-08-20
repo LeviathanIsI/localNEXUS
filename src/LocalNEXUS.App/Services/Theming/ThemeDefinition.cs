@@ -7,13 +7,19 @@ namespace LocalNEXUS.App.Services.Theming;
 /// <param name="Theme">The value written to the configuration file.</param>
 /// <param name="DisplayName">What the picker calls it.</param>
 /// <param name="Description">One line explaining when someone would pick it.</param>
-/// <param name="Source">Pack path of the dictionary holding its colours.</param>
+/// <param name="Source">Path of the dictionary holding its colours, relative to the assembly.</param>
 public sealed record ThemeDefinition(
     AppTheme Theme,
     string DisplayName,
     string Description,
     string Source)
 {
-    /// <summary>The dictionary this theme lives in, as an absolute pack uri.</summary>
-    public Uri Uri => new(Source, UriKind.RelativeOrAbsolute);
+    /// <summary>
+    /// Where this theme's colours live.
+    /// </summary>
+    /// <remarks>
+    /// Relative rather than an absolute pack uri, because it is used both to merge the dictionary
+    /// and to load a private uncached copy of it, and the loader takes only the relative form.
+    /// </remarks>
+    public Uri Uri => new(Source, UriKind.Relative);
 }

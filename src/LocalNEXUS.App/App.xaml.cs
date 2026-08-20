@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Media;
 using System.Windows.Threading;
 using LocalNEXUS.App.Infrastructure;
 using LocalNEXUS.App.Models;
@@ -325,6 +326,48 @@ public partial class App : Application
             catalog.Models.Count == 0
                 ? $"No models found. Drop one into {AppPaths.Models}, add a folder from a model node, or list a folder in {AppPaths.ModelPathsFile}."
                 : $"{catalog.Models.Count} model(s) available.");
+
+        ReportBundledFont(feed);
+
+        feed.Info(
+            TransformNode.CanCompileScripts ? "Script transforms ready" : "Script transforms unavailable",
+            TransformNode.CanCompileScripts
+                ? "A Transform node can compile a C# expression, which is what strips a markdown fence off a model reply."
+                : "The script compiler could not be built in this build, so a Transform node can only use its template. "
+                  + "Fence stripping, which the repair loop relies on, will not work.");
+    }
+
+    /// <summary>
+    /// Says whether the bundled monospace face actually loaded.
+    /// </summary>
+    /// <remarks>
+    /// A font that fails to resolve does not throw; WPF quietly falls back to the next name in the
+    /// family list and everything keeps working while looking different on every machine, which is
+    /// exactly what bundling one was meant to prevent. Asking the question out loud is the only way
+    /// to know, and it is the same path resolution gotcha the vendored binaries have, so it is
+    /// worth reporting from the published exe rather than assumed from a development run.
+    /// </remarks>
+    private static void ReportBundledFont(ActivityFeed feed)
+    {
+        const string Expected = "JetBrains Mono";
+
+        try
+        {
+            var loaded = Fonts
+                .GetFontFamilies(new Uri("pack://application:,,,/"), "./Assets/Fonts/")
+                .SelectMany(f => f.FamilyNames.Values)
+                .Any(name => string.Equals(name, Expected, StringComparison.OrdinalIgnoreCase));
+
+            feed.Info(
+                loaded ? "Bundled font loaded" : "Bundled font unavailable",
+                loaded
+                    ? $"{Expected} is rendering paths, identifiers and diagnostics."
+                    : $"{Expected} did not resolve from this build, so the monospace fallback is being used instead.");
+        }
+        catch (Exception ex) when (ex is IOException or UriFormatException or NotSupportedException)
+        {
+            feed.Info("Bundled font unavailable", ex.Message);
+        }
     }
 
     /// <summary>

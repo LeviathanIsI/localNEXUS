@@ -57,7 +57,7 @@ public sealed partial class AppSettingsViewModel : ObservableObject
         Network = network;
 
         ThemeChoices = ThemeService.Available
-            .Select(t => new ThemeChoiceViewModel(t, PickThemeCommand, t.Theme == themes.Current))
+            .Select(t => new ThemeChoiceViewModel(t, ApplyTheme, t.Theme == themes.Current))
             .ToList();
 
         RefreshFolders();
@@ -84,20 +84,22 @@ public sealed partial class AppSettingsViewModel : ObservableObject
     /// <summary>Every theme that can be picked, with the one in force marked.</summary>
     public IReadOnlyList<ThemeChoiceViewModel> ThemeChoices { get; }
 
-    /// <summary>Applies a theme, at once and for the next session.</summary>
-    [RelayCommand]
-    private void PickTheme(ThemeChoiceViewModel? choice)
-    {
-        if (choice is null)
-        {
-            return;
-        }
+    /// <summary>The sections of this panel, in the order they are listed.</summary>
+    public IReadOnlyList<SettingsSection> Sections { get; } = Enum.GetValues<SettingsSection>();
 
+    /// <summary>
+    /// Applies a theme, at once and for the next session, and takes the mark off the others.
+    /// </summary>
+    private void ApplyTheme(ThemeChoiceViewModel choice)
+    {
         Themes.Apply(choice.Definition.Theme);
 
         foreach (var candidate in ThemeChoices)
         {
-            candidate.IsSelected = candidate == choice;
+            if (candidate != choice)
+            {
+                candidate.SetSelectedQuietly(false);
+            }
         }
     }
 
@@ -222,10 +224,6 @@ public sealed partial class AppSettingsViewModel : ObservableObject
         AppPaths.EnsureCreated();
         _dialogs.OpenFolderInExplorer(AppPaths.Root);
     }
-
-    /// <summary>Shows one section of the panel.</summary>
-    [RelayCommand]
-    private void ShowSection(SettingsSection section) => Section = section;
 
     private void RefreshFolders()
     {

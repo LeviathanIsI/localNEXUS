@@ -6,7 +6,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
-             Background="{StaticResource Surface.Panel.Brush}">
+             Background="{DynamicResource Surface.Panel.Brush}">
 
     <!--
         Filter groups over a pinned card for this machine. The counts are live, because a filter
@@ -21,7 +21,7 @@
 
         <!-- What this machine gives the mesh. Pinned, because it is the one thing here that is an action. -->
         <Border DockPanel.Dock="Bottom"
-                BorderBrush="{StaticResource Surface.Border.Brush}"
+                BorderBrush="{DynamicResource Surface.Border.Brush}"
                 BorderThickness="0,1,0,0"
                 Padding="14,12">
             <StackPanel>
@@ -70,7 +70,7 @@
                     <TextBlock Style="{StaticResource MutedText}"
                                Margin="10,0,0,0"
                                VerticalAlignment="Center"
-                               Foreground="{StaticResource Status.Warning.Brush}"
+                               Foreground="{DynamicResource Status.Warning.Brush}"
                                Text="published publicly"
                                Visibility="{Binding Mesh.IsPublic, Converter={StaticResource BooleanToVisibility}}" />
                 </StackPanel>
@@ -103,15 +103,19 @@
                                                     Cursor="Hand">
                                                 <Button.Template>
                                                     <ControlTemplate TargetType="Button">
-                                                        <Border x:Name="Root" Background="Transparent" Padding="14,4">
-                                                            <ContentPresenter />
+                                                        <Border x:Name="Root" Background="Transparent">
+                                                            <Grid>
+                                                                <Rectangle x:Name="Rule" Width="2" HorizontalAlignment="Left" Fill="Transparent" />
+                                                                <ContentPresenter Margin="14,4" />
+                                                            </Grid>
                                                         </Border>
                                                         <ControlTemplate.Triggers>
                                                             <Trigger Property="IsMouseOver" Value="True">
-                                                                <Setter TargetName="Root" Property="Background" Value="{StaticResource Surface.Hover.Brush}" />
+                                                                <Setter TargetName="Root" Property="Background" Value="{DynamicResource Surface.Hover.Brush}" />
                                                             </Trigger>
                                                             <DataTrigger Binding="{Binding IsSelected}" Value="True">
-                                                                <Setter TargetName="Root" Property="Background" Value="{StaticResource Surface.Selected.Brush}" />
+                                                                <Setter TargetName="Root" Property="Background" Value="{DynamicResource Surface.Hover.Brush}" />
+                                                                <Setter TargetName="Rule" Property="Fill" Value="{DynamicResource Accent.Primary.Brush}" />
                                                             </DataTrigger>
                                                         </ControlTemplate.Triggers>
                                                     </ControlTemplate>

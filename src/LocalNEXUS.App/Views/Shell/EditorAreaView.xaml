@@ -16,12 +16,12 @@
         strip is the shape the shell has, and the seam for the rest of it when it is wanted.
     -->
 
-    <DockPanel Background="{StaticResource Surface.Window.Brush}">
+    <DockPanel Background="{DynamicResource Surface.Window.Brush}">
 
         <!-- Tabs -->
         <Border DockPanel.Dock="Top"
-                Background="{StaticResource Surface.Chrome.Brush}"
-                BorderBrush="{StaticResource Surface.Border.Brush}"
+                Background="{DynamicResource Surface.Chrome.Brush}"
+                BorderBrush="{DynamicResource Surface.Border.Brush}"
                 BorderThickness="0,0,0,1">
             <StackPanel Orientation="Horizontal">
                 <ToggleButton Style="{StaticResource EditorTab}"
@@ -40,7 +40,7 @@
                                    FontSize="8"
                                    Margin="8,0,0,0"
                                    VerticalAlignment="Center"
-                                   Foreground="{StaticResource Text.Secondary.Brush}"
+                                   Foreground="{DynamicResource Text.Secondary.Brush}"
                                    ToolTip="Unsaved changes"
                                    Visibility="{Binding Document.IsDirty, Converter={StaticResource BooleanToVisibility}}" />
                     </StackPanel>
@@ -53,8 +53,8 @@
             request itself, so the transcript below always has its question above it.
         -->
         <Border DockPanel.Dock="Top"
-                Background="{StaticResource Surface.Window.Brush}"
-                BorderBrush="{StaticResource Surface.Border.Brush}"
+                Background="{DynamicResource Surface.Window.Brush}"
+                BorderBrush="{DynamicResource Surface.Border.Brush}"
                 BorderThickness="0,0,0,1"
                 Padding="16,7">
             <Grid>
@@ -63,7 +63,7 @@
                            Visibility="{Binding Feed.RequestText, Converter={StaticResource StringToVisibility}}" />
 
                 <TextBlock Text="Describe a request below, then press Run or Ctrl+Enter."
-                           Foreground="{StaticResource Text.Muted.Brush}"
+                           Foreground="{DynamicResource Text.Muted.Brush}"
                            Visibility="{Binding Feed.RequestText, Converter={StaticResource StringToVisibility}, ConverterParameter=Invert}" />
             </Grid>
         </Border>
@@ -83,7 +83,7 @@
                              RemoveConnectionCommand="{Binding RemoveConnectionCommand}"
                              GridCellSize="16"
                              DisplayConnectionsOnTop="False"
-                             Background="{StaticResource Surface.Window.Brush}">
+                             Background="{DynamicResource Surface.Window.Brush}">
             <nodify:NodifyEditor.ContextMenu>
                 <ContextMenu>
                     <MenuItem Header="Add node"

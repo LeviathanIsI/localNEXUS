@@ -6,7 +6,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
-             Background="{StaticResource Surface.Panel.Brush}">
+             Background="{DynamicResource Surface.Panel.Brush}">
 
     <!--
         One slot, reused everywhere. In the Workspace it holds the selected node; in the Network it
@@ -23,7 +23,7 @@
         <DockPanel Visibility="{Binding InspectorContent, Converter={StaticResource NullToVisibility}}">
 
             <Border DockPanel.Dock="Top"
-                    BorderBrush="{StaticResource Surface.Border.Brush}"
+                    BorderBrush="{DynamicResource Surface.Border.Brush}"
                     BorderThickness="0,0,0,1"
                     Padding="0,10,12,10">
                 <Grid>
@@ -69,7 +69,7 @@
 
                         <Rectangle Height="1"
                                    Margin="0,14,0,2"
-                                   Fill="{StaticResource Surface.Border.Brush}" />
+                                   Fill="{DynamicResource Surface.Border.Brush}" />
                     </StackPanel>
 
                     <ContentControl Content="{Binding InspectorContent}" />
@@ -82,7 +82,7 @@
                    TextWrapping="Wrap"
                    TextAlignment="Center"
                    Margin="24"
-                   Foreground="{StaticResource Text.Muted.Brush}"
+                   Foreground="{DynamicResource Text.Muted.Brush}"
                    Visibility="{Binding InspectorContent, Converter={StaticResource NullToVisibility}, ConverterParameter=Invert}">
             <TextBlock.Style>
                 <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">

@@ -13,7 +13,7 @@
     <!-- A square, quiet button that is only a glyph. Used for window controls and row actions. -->
     <Style x:Key="IconButton" TargetType="Button">
         <Setter Property="Background" Value="Transparent" />
-        <Setter Property="Foreground" Value="{StaticResource Text.Secondary.Brush}" />
+        <Setter Property="Foreground" Value="{DynamicResource Text.Secondary.Brush}" />
         <Setter Property="FontFamily" Value="{StaticResource Font.Icons}" />
         <Setter Property="FontSize" Value="12" />
         <Setter Property="Width" Value="28" />
@@ -27,8 +27,8 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Root" Property="Background" Value="{StaticResource Surface.Hover.Brush}" />
-                            <Setter Property="Foreground" Value="{StaticResource Text.Primary.Brush}" />
+                            <Setter TargetName="Root" Property="Background" Value="{DynamicResource Surface.Hover.Brush}" />
+                            <Setter Property="Foreground" Value="{DynamicResource Text.Primary.Brush}" />
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Opacity" Value="0.35" />
@@ -56,8 +56,8 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Root" Property="Background" Value="{StaticResource Status.Danger.Brush}" />
-                            <Setter Property="Foreground" Value="{StaticResource Text.Inverse.Brush}" />
+                            <Setter TargetName="Root" Property="Background" Value="{DynamicResource Status.Danger.Brush}" />
+                            <Setter Property="Foreground" Value="{DynamicResource Text.Inverse.Brush}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -70,7 +70,7 @@
         the one piece of chrome that says where you are without reading anything.
     -->
     <Style x:Key="ActivityBarButton" TargetType="RadioButton">
-        <Setter Property="Foreground" Value="{StaticResource Text.Muted.Brush}" />
+        <Setter Property="Foreground" Value="{DynamicResource Text.Muted.Brush}" />
         <Setter Property="FontFamily" Value="{StaticResource Font.Icons}" />
         <Setter Property="FontSize" Value="17" />
         <Setter Property="Cursor" Value="Hand" />
@@ -87,11 +87,11 @@
                     </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsChecked" Value="True">
-                            <Setter TargetName="Rule" Property="Fill" Value="{StaticResource Text.Primary.Brush}" />
-                            <Setter Property="Foreground" Value="{StaticResource Text.Primary.Brush}" />
+                            <Setter TargetName="Rule" Property="Fill" Value="{DynamicResource Text.Primary.Brush}" />
+                            <Setter Property="Foreground" Value="{DynamicResource Text.Primary.Brush}" />
                         </Trigger>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter Property="Foreground" Value="{StaticResource Text.Primary.Brush}" />
+                            <Setter Property="Foreground" Value="{DynamicResource Text.Primary.Brush}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -101,15 +101,15 @@
 
     <!-- Editor tabs. Flat, with an accent rule on top of the active one and a dirty dot. -->
     <Style x:Key="EditorTab" TargetType="ToggleButton">
-        <Setter Property="Foreground" Value="{StaticResource Text.Secondary.Brush}" />
+        <Setter Property="Foreground" Value="{DynamicResource Text.Secondary.Brush}" />
         <Setter Property="FontSize" Value="{StaticResource Font.Size.Normal}" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ToggleButton">
                     <Border x:Name="Root"
-                            Background="{StaticResource Surface.Panel.Brush}"
-                            BorderBrush="{StaticResource Surface.Border.Brush}"
+                            Background="{DynamicResource Surface.Panel.Brush}"
+                            BorderBrush="{DynamicResource Surface.Border.Brush}"
                             BorderThickness="0,0,1,0">
                         <Grid>
                             <Rectangle x:Name="Rule"
@@ -121,12 +121,12 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsChecked" Value="True">
-                            <Setter TargetName="Root" Property="Background" Value="{StaticResource Surface.Window.Brush}" />
-                            <Setter TargetName="Rule" Property="Fill" Value="{StaticResource Accent.Primary.Brush}" />
-                            <Setter Property="Foreground" Value="{StaticResource Text.Primary.Brush}" />
+                            <Setter TargetName="Root" Property="Background" Value="{DynamicResource Surface.Window.Brush}" />
+                            <Setter TargetName="Rule" Property="Fill" Value="{DynamicResource Accent.Primary.Brush}" />
+                            <Setter Property="Foreground" Value="{DynamicResource Text.Primary.Brush}" />
                         </Trigger>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter Property="Foreground" Value="{StaticResource Text.Primary.Brush}" />
+                            <Setter Property="Foreground" Value="{DynamicResource Text.Primary.Brush}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -136,7 +136,7 @@
 
     <!-- Bottom panel tabs. Underlined rather than filled, so the panel below reads as one surface. -->
     <Style x:Key="PanelTab" TargetType="ToggleButton">
-        <Setter Property="Foreground" Value="{StaticResource Text.Secondary.Brush}" />
+        <Setter Property="Foreground" Value="{DynamicResource Text.Secondary.Brush}" />
         <Setter Property="FontSize" Value="{StaticResource Font.Size.Normal}" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="Template">
@@ -150,11 +150,11 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsChecked" Value="True">
-                            <Setter Property="Foreground" Value="{StaticResource Text.Primary.Brush}" />
-                            <Setter TargetName="Underline" Property="Fill" Value="{StaticResource Accent.Primary.Brush}" />
+                            <Setter Property="Foreground" Value="{DynamicResource Text.Primary.Brush}" />
+                            <Setter TargetName="Underline" Property="Fill" Value="{DynamicResource Accent.Primary.Brush}" />
                         </Trigger>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter Property="Foreground" Value="{StaticResource Text.Primary.Brush}" />
+                            <Setter Property="Foreground" Value="{DynamicResource Text.Primary.Brush}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -164,7 +164,7 @@
 
     <!-- Side bar section headings. Small, spaced, and quiet. -->
     <Style x:Key="SideBarHeader" TargetType="TextBlock">
-        <Setter Property="Foreground" Value="{StaticResource Text.Muted.Brush}" />
+        <Setter Property="Foreground" Value="{DynamicResource Text.Muted.Brush}" />
         <Setter Property="FontSize" Value="{StaticResource Font.Size.Micro}" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Margin" Value="14,12,14,8" />
@@ -183,10 +183,10 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Root" Property="Background" Value="{StaticResource Surface.Hover.Brush}" />
+                            <Setter TargetName="Root" Property="Background" Value="{DynamicResource Surface.Hover.Brush}" />
                         </Trigger>
                         <Trigger Property="IsSelected" Value="True">
-                            <Setter TargetName="Root" Property="Background" Value="{StaticResource Surface.Selected.Brush}" />
+                            <Setter TargetName="Root" Property="Background" Value="{DynamicResource Surface.Selected.Brush}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -207,7 +207,7 @@
                 <ControlTemplate TargetType="ListBoxItem">
                     <Border x:Name="Root"
                             Background="Transparent"
-                            BorderBrush="{StaticResource Surface.Border.Brush}"
+                            BorderBrush="{DynamicResource Surface.Border.Brush}"
                             BorderThickness="0,0,0,1">
                         <Grid>
                             <Rectangle x:Name="Rule" Width="2" HorizontalAlignment="Left" Fill="Transparent" />
@@ -216,11 +216,11 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Root" Property="Background" Value="{StaticResource Surface.Hover.Brush}" />
+                            <Setter TargetName="Root" Property="Background" Value="{DynamicResource Surface.Hover.Brush}" />
                         </Trigger>
                         <Trigger Property="IsSelected" Value="True">
-                            <Setter TargetName="Root" Property="Background" Value="{StaticResource Surface.Hover.Brush}" />
-                            <Setter TargetName="Rule" Property="Fill" Value="{StaticResource Accent.Primary.Brush}" />
+                            <Setter TargetName="Root" Property="Background" Value="{DynamicResource Surface.Hover.Brush}" />
+                            <Setter TargetName="Rule" Property="Fill" Value="{DynamicResource Accent.Primary.Brush}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -231,7 +231,7 @@
     <!-- Sortable column headings. -->
     <Style x:Key="ColumnHeader" TargetType="Button">
         <Setter Property="Background" Value="Transparent" />
-        <Setter Property="Foreground" Value="{StaticResource Text.Muted.Brush}" />
+        <Setter Property="Foreground" Value="{DynamicResource Text.Muted.Brush}" />
         <Setter Property="FontFamily" Value="{StaticResource Font.Mono}" />
         <Setter Property="FontSize" Value="{StaticResource Font.Size.Micro}" />
         <Setter Property="HorizontalContentAlignment" Value="Left" />
@@ -245,7 +245,7 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter Property="Foreground" Value="{StaticResource Text.Primary.Brush}" />
+                            <Setter Property="Foreground" Value="{DynamicResource Text.Primary.Brush}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -256,7 +256,7 @@
     <!-- A button that reads as a link, for the small actions inside a panel. -->
     <Style x:Key="LinkButton" TargetType="Button">
         <Setter Property="Background" Value="Transparent" />
-        <Setter Property="Foreground" Value="{StaticResource Accent.Primary.Brush}" />
+        <Setter Property="Foreground" Value="{DynamicResource Accent.Primary.Brush}" />
         <Setter Property="FontSize" Value="{StaticResource Font.Size.Small}" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="HorizontalAlignment" Value="Left" />
@@ -268,7 +268,7 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter Property="Foreground" Value="{StaticResource Text.Primary.Brush}" />
+                            <Setter Property="Foreground" Value="{DynamicResource Text.Primary.Brush}" />
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Opacity" Value="0.4" />
@@ -281,9 +281,9 @@
     </Style>
 
     <Style x:Key="DangerButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-        <Setter Property="Background" Value="{StaticResource Status.Danger.Brush}" />
-        <Setter Property="BorderBrush" Value="{StaticResource Status.Danger.Brush}" />
-        <Setter Property="Foreground" Value="{StaticResource Text.Inverse.Brush}" />
+        <Setter Property="Background" Value="{DynamicResource Status.Danger.Brush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Status.Danger.Brush}" />
+        <Setter Property="Foreground" Value="{DynamicResource Text.Inverse.Brush}" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Padding" Value="12,4" />
         <Setter Property="FontSize" Value="{StaticResource Font.Size.Small}" />
@@ -294,7 +294,7 @@
         because it turns something on in the world rather than ticking a preference.
     -->
     <Style x:Key="ToggleSwitch" TargetType="CheckBox">
-        <Setter Property="Foreground" Value="{StaticResource Text.Primary.Brush}" />
+        <Setter Property="Foreground" Value="{DynamicResource Text.Primary.Brush}" />
         <Setter Property="FontSize" Value="{StaticResource Font.Size.Normal}" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="Template">
@@ -305,24 +305,24 @@
                                 Width="34" Height="18"
                                 CornerRadius="9"
                                 VerticalAlignment="Center"
-                                Background="{StaticResource Surface.Track.Brush}"
-                                BorderBrush="{StaticResource Surface.Border.Brush}"
+                                Background="{DynamicResource Surface.Track.Brush}"
+                                BorderBrush="{DynamicResource Surface.Border.Brush}"
                                 BorderThickness="1">
                             <Ellipse x:Name="Knob"
                                      Width="12" Height="12"
                                      HorizontalAlignment="Left"
                                      Margin="3,0,0,0"
-                                     Fill="{StaticResource Text.Secondary.Brush}" />
+                                     Fill="{DynamicResource Text.Secondary.Brush}" />
                         </Border>
                         <ContentPresenter Margin="10,0,0,0" VerticalAlignment="Center" />
                     </StackPanel>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsChecked" Value="True">
-                            <Setter TargetName="Track" Property="Background" Value="{StaticResource Accent.Primary.Brush}" />
-                            <Setter TargetName="Track" Property="BorderBrush" Value="{StaticResource Accent.Primary.Brush}" />
+                            <Setter TargetName="Track" Property="Background" Value="{DynamicResource Accent.Primary.Brush}" />
+                            <Setter TargetName="Track" Property="BorderBrush" Value="{DynamicResource Accent.Primary.Brush}" />
                             <Setter TargetName="Knob" Property="HorizontalAlignment" Value="Right" />
                             <Setter TargetName="Knob" Property="Margin" Value="0,0,3,0" />
-                            <Setter TargetName="Knob" Property="Fill" Value="{StaticResource Text.Inverse.Brush}" />
+                            <Setter TargetName="Knob" Property="Fill" Value="{DynamicResource Text.Inverse.Brush}" />
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Opacity" Value="0.45" />
@@ -336,7 +336,7 @@
     <!-- A small outlined label, used for a node type and for a quantization. -->
     <Style x:Key="Tag" TargetType="Border">
         <Setter Property="Background" Value="Transparent" />
-        <Setter Property="BorderBrush" Value="{StaticResource Surface.Border.Brush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Surface.Border.Brush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="CornerRadius" Value="3" />
         <Setter Property="Padding" Value="5,1" />
@@ -344,14 +344,14 @@
     </Style>
 
     <Style x:Key="TagText" TargetType="TextBlock">
-        <Setter Property="Foreground" Value="{StaticResource Text.Secondary.Brush}" />
+        <Setter Property="Foreground" Value="{DynamicResource Text.Secondary.Brush}" />
         <Setter Property="FontFamily" Value="{StaticResource Font.Mono}" />
         <Setter Property="FontSize" Value="{StaticResource Font.Size.Micro}" />
     </Style>
 
     <!-- The count beside a panel tab or a filter row. -->
     <Style x:Key="CountText" TargetType="TextBlock">
-        <Setter Property="Foreground" Value="{StaticResource Text.Muted.Brush}" />
+        <Setter Property="Foreground" Value="{DynamicResource Text.Muted.Brush}" />
         <Setter Property="FontSize" Value="{StaticResource Font.Size.Micro}" />
         <Setter Property="VerticalAlignment" Value="Center" />
         <Setter Property="Margin" Value="6,0,0,0" />

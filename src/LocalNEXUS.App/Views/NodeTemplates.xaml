@@ -52,7 +52,7 @@
                           ConnectorTemplate="{StaticResource PinConnectorTemplate}"
                           Background="Transparent"
                           BorderBrush="{Binding PinType, Converter={StaticResource ResourceLookup}, ConverterParameter=Pin}"
-                          Foreground="{StaticResource Text.Secondary.Brush}"
+                          Foreground="{DynamicResource Text.Secondary.Brush}"
                           FontSize="{StaticResource Font.Size.Small}"
                           ToolTip="{Binding}" />
     </DataTemplate>
@@ -64,7 +64,7 @@
                            ConnectorTemplate="{StaticResource PinConnectorTemplate}"
                            Background="Transparent"
                            BorderBrush="{Binding PinType, Converter={StaticResource ResourceLookup}, ConverterParameter=Pin}"
-                           Foreground="{StaticResource Text.Secondary.Brush}"
+                           Foreground="{DynamicResource Text.Secondary.Brush}"
                            FontSize="{StaticResource Font.Size.Small}"
                            ToolTip="{Binding}" />
     </DataTemplate>
@@ -79,12 +79,12 @@
                      Output="{Binding Node.Outputs}"
                      InputConnectorTemplate="{StaticResource InputConnectorTemplate}"
                      OutputConnectorTemplate="{StaticResource OutputConnectorTemplate}"
-                     HeaderBrush="{StaticResource Surface.Card.Brush}"
-                     ContentBrush="{StaticResource Surface.Card.Brush}"
-                     Background="{StaticResource Surface.Card.Brush}"
+                     HeaderBrush="{DynamicResource Surface.Card.Brush}"
+                     ContentBrush="{DynamicResource Surface.Card.Brush}"
+                     Background="{DynamicResource Surface.Card.Brush}"
                      BorderBrush="{Binding DisplayState, Converter={StaticResource ResourceLookup}, ConverterParameter=NodeDisplayState}"
                      BorderThickness="1.5"
-                     Foreground="{StaticResource Text.Primary.Brush}"
+                     Foreground="{DynamicResource Text.Primary.Brush}"
                      MinWidth="200">
 
             <nodify:Node.Header>
@@ -114,7 +114,7 @@
                     <TextBlock DockPanel.Dock="Right"
                                Style="{StaticResource MonoText}"
                                Margin="10,0,0,0"
-                               Foreground="{StaticResource Status.Info.Brush}"
+                               Foreground="{DynamicResource Status.Info.Brush}"
                                Text="{Binding ElapsedText}"
                                Visibility="{Binding IsRunning, Converter={StaticResource BooleanToVisibility}}" />
 
@@ -149,8 +149,8 @@
     <Style x:Key="NodeContainerStyle" TargetType="nodify:ItemContainer">
         <Setter Property="Location" Value="{Binding Node.Location, Mode=TwoWay}" />
         <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
-        <Setter Property="SelectedBrush" Value="{StaticResource Accent.Primary.Brush}" />
-        <Setter Property="HighlightBrush" Value="{StaticResource Accent.Primary.Brush}" />
+        <Setter Property="SelectedBrush" Value="{DynamicResource Accent.Primary.Brush}" />
+        <Setter Property="HighlightBrush" Value="{DynamicResource Accent.Primary.Brush}" />
     </Style>
 
     <DataTemplate x:Key="ConnectionTemplate">
@@ -158,7 +158,7 @@
                            Target="{Binding Target.Anchor}"
                            Stroke="{Binding PinType, Converter={StaticResource ResourceLookup}, ConverterParameter=Pin}"
                            StrokeThickness="2"
-                           Foreground="{StaticResource Text.Secondary.Brush}"
+                           Foreground="{DynamicResource Text.Secondary.Brush}"
                            FontSize="{StaticResource Font.Size.Small}"
                            ArrowEnds="End"
                            ArrowSize="7,7" />
@@ -179,7 +179,7 @@
                                   EnableSnapping="True"
                                   StrokeThickness="2"
                                   Stroke="{Binding IsValid, Converter={StaticResource ResourceLookup}, ConverterParameter=Wire}"
-                                  Foreground="{StaticResource Text.Primary.Brush}"
+                                  Foreground="{DynamicResource Text.Primary.Brush}"
                                   FontSize="{StaticResource Font.Size.Small}"
                                   Content="{Binding Text}" />
     </DataTemplate>

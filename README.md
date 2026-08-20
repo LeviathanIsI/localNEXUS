@@ -14,6 +14,12 @@ than a fixed pipeline, so the features on the roadmap drop in without rework.
 
 ## What the slice does
 
+- **An IDE shell.** Activity bar, side bar, tabbed editor area, one right hand inspector,
+  tabbed bottom panel and a status bar. The side bar doubles as the live run outline, so a
+  run can be followed without hunting the canvas.
+- **Five themes, switched without a restart.** VS Code Dark+, Deep slate, Warm charcoal,
+  Near black and a Light theme whose state colours were chosen for a light background
+  rather than inverted from a dark one. The choice is remembered.
 - **Node canvas.** Add, drag, wire and delete nodes. Built on
   [Nodify](https://miroiu.github.io/nodify).
 - **Six node types.** Input, Plan, Model, Transform, Compile check, Output.
@@ -21,7 +27,10 @@ than a fixed pipeline, so the features on the roadmap drop in without rework.
   amber). Invalid drops are refused while you drag, and the wire tells you why.
 - **A general graph executor.** Nodes are ordered by their connections using Kahn's
   algorithm, cycles are rejected with a clear message, and every node reports its state
-  (`Pending`, `Running`, `Completed`, `Faulted`) on the canvas as it goes.
+  (`Pending`, `Running`, `Completed`, `Faulted`) on the canvas as it goes, with a fault
+  staying on the node that faulted: the nodes before it keep their green, and a node the
+  run never reached reads as a plain grey Skipped rather than inheriting a failure that is
+  not its own.
 - **One request path for every provider.** A local GGUF served by a llama.cpp server, a
   safetensors model served by a Python sidecar, and a hosted model on OpenRouter are the
   same code path over the OpenAI compatible chat completions API.
@@ -358,6 +367,39 @@ perfectly and silently break a scene, so the writer refuses them rather than war
 When a new MonoBehaviour is written, the feed says it must be attached to a GameObject to run.
 Nothing here attaches it.
 
+## The window
+
+An activity bar down the left switches between the Workspace and the Network and holds the
+settings gear. The side bar next to it is the explorer, and during a run it is the run
+outline: the same nodes the canvas draws, in graph order, each with its state dot and its
+elapsed time. The editor area holds the graph and the request being executed. One inspector
+on the right serves both sections, always answering the same question: what can I do about
+the thing I just clicked. The bottom panel has Problems, Activity and Output, the chat box
+sits under it, and the status bar carries the run, the mesh node, the Python runtime and the
+open project.
+
+Panels resize with splitters, and the side bar, the inspector and the bottom panel each
+collapse. Nodes are added from the Edit menu or by right clicking the canvas.
+
+### Themes
+
+Settings, Appearance. Themes apply as they are picked and are remembered for the next
+session. A theme is a dictionary of about thirty colours and nothing else; which colour each
+brush takes is a table in `SemanticBrushes`, so a new state is one line rather than five
+edits across five palettes. No literal colour appears anywhere else in the source.
+
+The Appearance section shows the states in the theme being previewed, because the rule the
+whole application follows is that healthy, working and failed have to stay distinct: a mesh
+node still discovering peers and a Python environment mid download are both blue, never red,
+and a node that has not run yet is a quiet grey rather than a warning.
+
+### Settings and per node settings
+
+Settings holds what belongs to this install: the theme, the folders scanned for models, the
+cloud key, the Python runtime and the mesh, and the values a newly added node starts from.
+Anything that belongs to a graph stays on the node and is saved with the graph, which is why
+changing a default here can never reach back into a graph that already exists.
+
 ## Checking that generated code compiles
 
 Drop a **Compile check** node between the model and the Output node:
@@ -481,7 +523,11 @@ src/LocalNEXUS.App/
     Files/         UnityProjectService, FileWriter, ProjectWriteBatch, UnityScriptRules
     Dialogs/       IDialogService and its Windows implementation
   ViewModels/      MainViewModel, ActivityFeedViewModel, NetworkViewModel, and friends
-  Views/           XAML only: window, canvas templates, network tab, settings panels
+    Theming/       AppTheme, ThemeDefinition, ThemeService, SemanticBrushes, ThemePalette
+  Views/           XAML only. Theme.xaml and ShellStyles.xaml are the controls, Themes/ is
+                   the five palettes, Shell/ is the activity bar, side bars, editor area,
+                   bottom panel, inspector and status bar
+  Assets/Fonts/    JetBrains Mono, bundled as a compiled resource, with its OFL licence
   Infrastructure/  ActivityFeed, converters, behaviours
 vendor/llama/      llama.cpp binaries, fetched not committed
 vendor/mesh/       Mesh LLM binaries, fetched not committed

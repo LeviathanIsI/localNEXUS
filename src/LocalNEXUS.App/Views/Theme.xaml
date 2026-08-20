@@ -49,9 +49,14 @@
     <FontFamily x:Key="Font.Mono">pack://application:,,,/Assets/Fonts/#JetBrains Mono, Cascadia Mono, Consolas, Courier New</FontFamily>
 
     <!-- Base text -->
+    <!--
+        The base text style deliberately does not set a font family. The window sets the sans face
+        and every text block inherits it, and an implicit style setter would beat that inheritance:
+        a button whose style asks for the icon face would still render its glyph in the sans face,
+        which is how an icon becomes an empty box.
+    -->
     <Style TargetType="TextBlock">
-        <Setter Property="Foreground" Value="{StaticResource Text.Primary.Brush}" />
-        <Setter Property="FontFamily" Value="{StaticResource Font.Sans}" />
+        <Setter Property="Foreground" Value="{DynamicResource Text.Primary.Brush}" />
         <Setter Property="FontSize" Value="{StaticResource Font.Size.Normal}" />
         <Setter Property="TextOptions.TextFormattingMode" Value="Ideal" />
     </Style>
@@ -63,24 +68,24 @@
     </Style>
 
     <Style x:Key="MutedText" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
-        <Setter Property="Foreground" Value="{StaticResource Text.Muted.Brush}" />
+        <Setter Property="Foreground" Value="{DynamicResource Text.Muted.Brush}" />
         <Setter Property="FontSize" Value="{StaticResource Font.Size.Small}" />
     </Style>
 
     <Style x:Key="FieldLabel" TargetType="TextBlock">
-        <Setter Property="Foreground" Value="{StaticResource Text.Secondary.Brush}" />
+        <Setter Property="Foreground" Value="{DynamicResource Text.Secondary.Brush}" />
         <Setter Property="FontSize" Value="{StaticResource Font.Size.Small}" />
         <Setter Property="Margin" Value="0,10,0,4" />
     </Style>
 
     <Style x:Key="SectionHeader" TargetType="TextBlock">
-        <Setter Property="Foreground" Value="{StaticResource Text.Primary.Brush}" />
+        <Setter Property="Foreground" Value="{DynamicResource Text.Primary.Brush}" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Margin" Value="0,0,0,2" />
     </Style>
 
     <Style x:Key="HintText" TargetType="TextBlock">
-        <Setter Property="Foreground" Value="{StaticResource Text.Secondary.Brush}" />
+        <Setter Property="Foreground" Value="{DynamicResource Text.Secondary.Brush}" />
         <Setter Property="FontSize" Value="{StaticResource Font.Size.Small}" />
         <Setter Property="TextWrapping" Value="Wrap" />
         <Setter Property="Margin" Value="0,4,0,0" />
@@ -88,11 +93,11 @@
 
     <!-- Text entry -->
     <Style TargetType="TextBox">
-        <Setter Property="Background" Value="{StaticResource Surface.Input.Brush}" />
-        <Setter Property="Foreground" Value="{StaticResource Text.Primary.Brush}" />
-        <Setter Property="CaretBrush" Value="{StaticResource Text.Primary.Brush}" />
-        <Setter Property="SelectionBrush" Value="{StaticResource Accent.Primary.Brush}" />
-        <Setter Property="BorderBrush" Value="{StaticResource Surface.Border.Brush}" />
+        <Setter Property="Background" Value="{DynamicResource Surface.Input.Brush}" />
+        <Setter Property="Foreground" Value="{DynamicResource Text.Primary.Brush}" />
+        <Setter Property="CaretBrush" Value="{DynamicResource Text.Primary.Brush}" />
+        <Setter Property="SelectionBrush" Value="{DynamicResource Accent.Primary.Brush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Surface.Border.Brush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="Padding" Value="6,4" />
         <Setter Property="FontSize" Value="{StaticResource Font.Size.Normal}" />
@@ -111,7 +116,7 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsKeyboardFocusWithin" Value="True">
-                            <Setter TargetName="Root" Property="BorderBrush" Value="{StaticResource Accent.Primary.Brush}" />
+                            <Setter TargetName="Root" Property="BorderBrush" Value="{DynamicResource Accent.Primary.Brush}" />
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Opacity" Value="0.5" />
@@ -132,9 +137,9 @@
 
     <!-- Buttons -->
     <Style TargetType="Button">
-        <Setter Property="Background" Value="{StaticResource Surface.Card.Brush}" />
-        <Setter Property="Foreground" Value="{StaticResource Text.Primary.Brush}" />
-        <Setter Property="BorderBrush" Value="{StaticResource Surface.Border.Brush}" />
+        <Setter Property="Background" Value="{DynamicResource Surface.Card.Brush}" />
+        <Setter Property="Foreground" Value="{DynamicResource Text.Primary.Brush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Surface.Border.Brush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="Padding" Value="12,6" />
         <Setter Property="FontSize" Value="{StaticResource Font.Size.Normal}" />
@@ -153,10 +158,10 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Root" Property="BorderBrush" Value="{StaticResource Accent.Primary.Brush}" />
+                            <Setter TargetName="Root" Property="BorderBrush" Value="{DynamicResource Accent.Primary.Brush}" />
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="Root" Property="Background" Value="{StaticResource Surface.Input.Brush}" />
+                            <Setter TargetName="Root" Property="Background" Value="{DynamicResource Surface.Input.Brush}" />
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Opacity" Value="0.4" />
@@ -169,9 +174,9 @@
     </Style>
 
     <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-        <Setter Property="Background" Value="{StaticResource Accent.Primary.Brush}" />
-        <Setter Property="BorderBrush" Value="{StaticResource Accent.Primary.Brush}" />
-        <Setter Property="Foreground" Value="{StaticResource Text.Inverse.Brush}" />
+        <Setter Property="Background" Value="{DynamicResource Accent.Primary.Brush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Accent.Primary.Brush}" />
+        <Setter Property="Foreground" Value="{DynamicResource Text.Inverse.Brush}" />
         <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
 
@@ -182,7 +187,7 @@
 
     <!-- Check boxes and radio buttons -->
     <Style TargetType="CheckBox">
-        <Setter Property="Foreground" Value="{StaticResource Text.Primary.Brush}" />
+        <Setter Property="Foreground" Value="{DynamicResource Text.Primary.Brush}" />
         <Setter Property="FontSize" Value="{StaticResource Font.Size.Normal}" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="Template">
@@ -193,12 +198,12 @@
                                 Width="15" Height="15"
                                 CornerRadius="3"
                                 VerticalAlignment="Center"
-                                Background="{StaticResource Surface.Input.Brush}"
-                                BorderBrush="{StaticResource Surface.Border.Brush}"
+                                Background="{DynamicResource Surface.Input.Brush}"
+                                BorderBrush="{DynamicResource Surface.Border.Brush}"
                                 BorderThickness="1">
                             <Path x:Name="Tick"
                                   Data="M 2,6 L 5.5,10 L 12,2.5"
-                                  Stroke="{StaticResource Accent.Primary.Brush}"
+                                  Stroke="{DynamicResource Accent.Primary.Brush}"
                                   StrokeThickness="2"
                                   Visibility="Collapsed"
                                   Stretch="None" />
@@ -208,10 +213,10 @@
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsChecked" Value="True">
                             <Setter TargetName="Tick" Property="Visibility" Value="Visible" />
-                            <Setter TargetName="Box" Property="BorderBrush" Value="{StaticResource Accent.Primary.Brush}" />
+                            <Setter TargetName="Box" Property="BorderBrush" Value="{DynamicResource Accent.Primary.Brush}" />
                         </Trigger>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Box" Property="BorderBrush" Value="{StaticResource Accent.Primary.Brush}" />
+                            <Setter TargetName="Box" Property="BorderBrush" Value="{DynamicResource Accent.Primary.Brush}" />
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Opacity" Value="0.45" />
@@ -223,7 +228,7 @@
     </Style>
 
     <Style TargetType="RadioButton">
-        <Setter Property="Foreground" Value="{StaticResource Text.Primary.Brush}" />
+        <Setter Property="Foreground" Value="{DynamicResource Text.Primary.Brush}" />
         <Setter Property="FontSize" Value="{StaticResource Font.Size.Normal}" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="Margin" Value="0,0,14,0" />
@@ -235,12 +240,12 @@
                                 Width="15" Height="15"
                                 CornerRadius="8"
                                 VerticalAlignment="Center"
-                                Background="{StaticResource Surface.Input.Brush}"
-                                BorderBrush="{StaticResource Surface.Border.Brush}"
+                                Background="{DynamicResource Surface.Input.Brush}"
+                                BorderBrush="{DynamicResource Surface.Border.Brush}"
                                 BorderThickness="1">
                             <Ellipse x:Name="Dot"
                                      Width="7" Height="7"
-                                     Fill="{StaticResource Accent.Primary.Brush}"
+                                     Fill="{DynamicResource Accent.Primary.Brush}"
                                      Visibility="Collapsed" />
                         </Border>
                         <ContentPresenter Margin="7,0,0,0" VerticalAlignment="Center" />
@@ -248,10 +253,10 @@
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsChecked" Value="True">
                             <Setter TargetName="Dot" Property="Visibility" Value="Visible" />
-                            <Setter TargetName="Ring" Property="BorderBrush" Value="{StaticResource Accent.Primary.Brush}" />
+                            <Setter TargetName="Ring" Property="BorderBrush" Value="{DynamicResource Accent.Primary.Brush}" />
                         </Trigger>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Ring" Property="BorderBrush" Value="{StaticResource Accent.Primary.Brush}" />
+                            <Setter TargetName="Ring" Property="BorderBrush" Value="{DynamicResource Accent.Primary.Brush}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -266,8 +271,8 @@
             <Setter.Value>
                 <ControlTemplate TargetType="ToggleButton">
                     <Border x:Name="Root"
-                            Background="{StaticResource Surface.Input.Brush}"
-                            BorderBrush="{StaticResource Surface.Border.Brush}"
+                            Background="{DynamicResource Surface.Input.Brush}"
+                            BorderBrush="{DynamicResource Surface.Border.Brush}"
                             BorderThickness="1"
                             CornerRadius="4">
                         <Path x:Name="Arrow"
@@ -275,11 +280,11 @@
                               VerticalAlignment="Center"
                               Margin="0,0,9,0"
                               Data="M 0,0 L 8,0 L 4,5 Z"
-                              Fill="{StaticResource Text.Secondary.Brush}" />
+                              Fill="{DynamicResource Text.Secondary.Brush}" />
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Root" Property="BorderBrush" Value="{StaticResource Accent.Primary.Brush}" />
+                            <Setter TargetName="Root" Property="BorderBrush" Value="{DynamicResource Accent.Primary.Brush}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -288,7 +293,7 @@
     </Style>
 
     <Style TargetType="ComboBoxItem">
-        <Setter Property="Foreground" Value="{StaticResource Text.Primary.Brush}" />
+        <Setter Property="Foreground" Value="{DynamicResource Text.Primary.Brush}" />
         <Setter Property="Padding" Value="8,5" />
         <Setter Property="FontSize" Value="{StaticResource Font.Size.Normal}" />
         <Setter Property="Template">
@@ -299,11 +304,11 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Root" Property="Background" Value="{StaticResource Surface.Card.Brush}" />
+                            <Setter TargetName="Root" Property="Background" Value="{DynamicResource Surface.Card.Brush}" />
                         </Trigger>
                         <Trigger Property="IsSelected" Value="True">
-                            <Setter TargetName="Root" Property="Background" Value="{StaticResource Accent.Primary.Brush}" />
-                            <Setter Property="Foreground" Value="{StaticResource Text.Inverse.Brush}" />
+                            <Setter TargetName="Root" Property="Background" Value="{DynamicResource Accent.Primary.Brush}" />
+                            <Setter Property="Foreground" Value="{DynamicResource Text.Inverse.Brush}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -312,7 +317,7 @@
     </Style>
 
     <Style TargetType="ComboBox">
-        <Setter Property="Foreground" Value="{StaticResource Text.Primary.Brush}" />
+        <Setter Property="Foreground" Value="{DynamicResource Text.Primary.Brush}" />
         <Setter Property="FontSize" Value="{StaticResource Font.Size.Normal}" />
         <Setter Property="Padding" Value="8,5" />
         <Setter Property="MinHeight" Value="26" />
@@ -334,7 +339,7 @@
                         <TextBlock x:Name="Placeholder"
                                    Margin="{TemplateBinding Padding}"
                                    VerticalAlignment="Center"
-                                   Foreground="{StaticResource Text.Secondary.Brush}"
+                                   Foreground="{DynamicResource Text.Secondary.Brush}"
                                    Text="nothing to choose"
                                    Visibility="Collapsed"
                                    IsHitTestVisible="False" />
@@ -344,8 +349,8 @@
                                Focusable="False"
                                PopupAnimation="Fade"
                                IsOpen="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}}">
-                            <Border Background="{StaticResource Surface.Panel.Brush}"
-                                    BorderBrush="{StaticResource Surface.Border.Brush}"
+                            <Border Background="{DynamicResource Surface.Panel.Brush}"
+                                    BorderBrush="{DynamicResource Surface.Border.Brush}"
                                     BorderThickness="1"
                                     CornerRadius="4"
                                     MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
@@ -372,20 +377,20 @@
     <!-- Menus. The system template paints a white popup with system colours, so every role
          gets a dark template of its own. -->
     <Style TargetType="Menu">
-        <Setter Property="Background" Value="{StaticResource Surface.Panel.Brush}" />
-        <Setter Property="Foreground" Value="{StaticResource Text.Primary.Brush}" />
+        <Setter Property="Background" Value="{DynamicResource Surface.Panel.Brush}" />
+        <Setter Property="Foreground" Value="{DynamicResource Text.Primary.Brush}" />
         <Setter Property="FontSize" Value="{StaticResource Font.Size.Normal}" />
         <Setter Property="Padding" Value="4,2" />
     </Style>
 
     <Style TargetType="Separator">
-        <Setter Property="Background" Value="{StaticResource Surface.Border.Brush}" />
+        <Setter Property="Background" Value="{DynamicResource Surface.Border.Brush}" />
         <Setter Property="Height" Value="1" />
         <Setter Property="Margin" Value="0,3" />
     </Style>
 
     <Style x:Key="{x:Static MenuItem.SeparatorStyleKey}" TargetType="Separator">
-        <Setter Property="Background" Value="{StaticResource Surface.Border.Brush}" />
+        <Setter Property="Background" Value="{DynamicResource Surface.Border.Brush}" />
         <Setter Property="Height" Value="1" />
         <Setter Property="Margin" Value="8,4" />
         <Setter Property="Template">
@@ -410,8 +415,8 @@
                        AllowsTransparency="True"
                        Focusable="False"
                        PopupAnimation="Fade">
-                    <Border Background="{StaticResource Surface.Card.Brush}"
-                            BorderBrush="{StaticResource Surface.Border.Brush}"
+                    <Border Background="{DynamicResource Surface.Card.Brush}"
+                            BorderBrush="{DynamicResource Surface.Border.Brush}"
                             BorderThickness="1"
                             CornerRadius="6"
                             Padding="4"
@@ -423,10 +428,10 @@
         </Border>
         <ControlTemplate.Triggers>
             <Trigger Property="IsHighlighted" Value="True">
-                <Setter TargetName="Root" Property="Background" Value="{StaticResource Surface.Card.Brush}" />
+                <Setter TargetName="Root" Property="Background" Value="{DynamicResource Surface.Card.Brush}" />
             </Trigger>
             <Trigger Property="IsSubmenuOpen" Value="True">
-                <Setter TargetName="Root" Property="Background" Value="{StaticResource Surface.Card.Brush}" />
+                <Setter TargetName="Root" Property="Background" Value="{DynamicResource Surface.Card.Brush}" />
             </Trigger>
             <Trigger Property="IsEnabled" Value="False">
                 <Setter Property="Opacity" Value="0.4" />
@@ -442,7 +447,7 @@
         </Border>
         <ControlTemplate.Triggers>
             <Trigger Property="IsHighlighted" Value="True">
-                <Setter TargetName="Root" Property="Background" Value="{StaticResource Surface.Card.Brush}" />
+                <Setter TargetName="Root" Property="Background" Value="{DynamicResource Surface.Card.Brush}" />
             </Trigger>
             <Trigger Property="IsEnabled" Value="False">
                 <Setter Property="Opacity" Value="0.4" />
@@ -466,12 +471,12 @@
                            Margin="28,0,4,0"
                            VerticalAlignment="Center"
                            FontSize="{StaticResource Font.Size.Small}"
-                           Foreground="{StaticResource Text.Secondary.Brush}" />
+                           Foreground="{DynamicResource Text.Secondary.Brush}" />
             </Grid>
         </Border>
         <ControlTemplate.Triggers>
             <Trigger Property="IsHighlighted" Value="True">
-                <Setter TargetName="Root" Property="Background" Value="{StaticResource Surface.Input.Brush}" />
+                <Setter TargetName="Root" Property="Background" Value="{DynamicResource Surface.Input.Brush}" />
             </Trigger>
             <Trigger Property="IsEnabled" Value="False">
                 <Setter Property="Opacity" Value="0.4" />
@@ -492,7 +497,7 @@
                                   VerticalAlignment="Center" />
                 <Path Grid.Column="1"
                       Data="M 0 0 L 4 4 L 0 8 Z"
-                      Fill="{StaticResource Text.Secondary.Brush}"
+                      Fill="{DynamicResource Text.Secondary.Brush}"
                       Margin="28,0,4,0"
                       VerticalAlignment="Center" />
                 <Popup x:Name="PART_Popup"
@@ -502,8 +507,8 @@
                        AllowsTransparency="True"
                        Focusable="False"
                        PopupAnimation="Fade">
-                    <Border Background="{StaticResource Surface.Card.Brush}"
-                            BorderBrush="{StaticResource Surface.Border.Brush}"
+                    <Border Background="{DynamicResource Surface.Card.Brush}"
+                            BorderBrush="{DynamicResource Surface.Border.Brush}"
                             BorderThickness="1"
                             CornerRadius="6"
                             Padding="4"
@@ -515,7 +520,7 @@
         </Border>
         <ControlTemplate.Triggers>
             <Trigger Property="IsHighlighted" Value="True">
-                <Setter TargetName="Root" Property="Background" Value="{StaticResource Surface.Input.Brush}" />
+                <Setter TargetName="Root" Property="Background" Value="{DynamicResource Surface.Input.Brush}" />
             </Trigger>
             <Trigger Property="IsEnabled" Value="False">
                 <Setter Property="Opacity" Value="0.4" />
@@ -524,7 +529,7 @@
     </ControlTemplate>
 
     <Style TargetType="MenuItem">
-        <Setter Property="Foreground" Value="{StaticResource Text.Primary.Brush}" />
+        <Setter Property="Foreground" Value="{DynamicResource Text.Primary.Brush}" />
         <Setter Property="FontSize" Value="{StaticResource Font.Size.Normal}" />
         <Setter Property="Template" Value="{StaticResource MenuItem.SubmenuItemTemplate}" />
         <Style.Triggers>
@@ -542,7 +547,7 @@
 
     <!-- Top level tabs. A flat strip with an accent underline on the active tab. -->
     <Style TargetType="TabControl">
-        <Setter Property="Background" Value="{StaticResource Surface.Window.Brush}" />
+        <Setter Property="Background" Value="{DynamicResource Surface.Window.Brush}" />
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="Padding" Value="0" />
         <Setter Property="Template">
@@ -550,8 +555,8 @@
                 <ControlTemplate TargetType="TabControl">
                     <DockPanel>
                         <Border DockPanel.Dock="Top"
-                                Background="{StaticResource Surface.Panel.Brush}"
-                                BorderBrush="{StaticResource Surface.Border.Brush}"
+                                Background="{DynamicResource Surface.Panel.Brush}"
+                                BorderBrush="{DynamicResource Surface.Border.Brush}"
                                 BorderThickness="0,0,0,1">
                             <TabPanel IsItemsHost="True" Margin="8,0,8,0" />
                         </Border>
@@ -563,7 +568,7 @@
     </Style>
 
     <Style TargetType="TabItem">
-        <Setter Property="Foreground" Value="{StaticResource Text.Secondary.Brush}" />
+        <Setter Property="Foreground" Value="{DynamicResource Text.Secondary.Brush}" />
         <Setter Property="FontSize" Value="{StaticResource Font.Size.Large}" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="Template">
@@ -582,11 +587,11 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsSelected" Value="True">
-                            <Setter Property="Foreground" Value="{StaticResource Text.Primary.Brush}" />
-                            <Setter TargetName="Underline" Property="Fill" Value="{StaticResource Accent.Primary.Brush}" />
+                            <Setter Property="Foreground" Value="{DynamicResource Text.Primary.Brush}" />
+                            <Setter TargetName="Underline" Property="Fill" Value="{DynamicResource Accent.Primary.Brush}" />
                         </Trigger>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter Property="Foreground" Value="{StaticResource Text.Primary.Brush}" />
+                            <Setter Property="Foreground" Value="{DynamicResource Text.Primary.Brush}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -610,8 +615,8 @@
             <Setter.Value>
                 <ControlTemplate TargetType="ListBoxItem">
                     <Border x:Name="Root"
-                            Background="{StaticResource Surface.Card.Brush}"
-                            BorderBrush="{StaticResource Surface.Border.Brush}"
+                            Background="{DynamicResource Surface.Card.Brush}"
+                            BorderBrush="{DynamicResource Surface.Border.Brush}"
                             BorderThickness="1"
                             CornerRadius="8"
                             Margin="0,0,0,10"
@@ -620,11 +625,11 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Root" Property="BorderBrush" Value="{StaticResource Accent.Neutral.Brush}" />
+                            <Setter TargetName="Root" Property="BorderBrush" Value="{DynamicResource Accent.Neutral.Brush}" />
                         </Trigger>
                         <Trigger Property="IsSelected" Value="True">
-                            <Setter TargetName="Root" Property="BorderBrush" Value="{StaticResource Accent.Primary.Brush}" />
-                            <Setter TargetName="Root" Property="Background" Value="{StaticResource Surface.Input.Brush}" />
+                            <Setter TargetName="Root" Property="BorderBrush" Value="{DynamicResource Accent.Primary.Brush}" />
+                            <Setter TargetName="Root" Property="Background" Value="{DynamicResource Surface.Input.Brush}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -634,8 +639,8 @@
 
     <!-- Panels -->
     <Style x:Key="Card" TargetType="Border">
-        <Setter Property="Background" Value="{StaticResource Surface.Card.Brush}" />
-        <Setter Property="BorderBrush" Value="{StaticResource Surface.Border.Brush}" />
+        <Setter Property="Background" Value="{DynamicResource Surface.Card.Brush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Surface.Border.Brush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="CornerRadius" Value="6" />
         <Setter Property="Padding" Value="12" />
@@ -653,7 +658,7 @@
             <Setter.Value>
                 <ControlTemplate TargetType="Thumb">
                     <Border x:Name="Root"
-                            Background="{StaticResource Accent.Neutral.Brush}"
+                            Background="{DynamicResource Accent.Neutral.Brush}"
                             CornerRadius="4"
                             Margin="2"
                             Opacity="0.45" />
@@ -720,15 +725,15 @@
 
     <!-- Tool tips. The system template is a white box with a black border in every theme. -->
     <Style TargetType="ToolTip">
-        <Setter Property="Foreground" Value="{StaticResource Text.Primary.Brush}" />
+        <Setter Property="Foreground" Value="{DynamicResource Text.Primary.Brush}" />
         <Setter Property="FontFamily" Value="{StaticResource Font.Sans}" />
         <Setter Property="FontSize" Value="{StaticResource Font.Size.Small}" />
         <Setter Property="MaxWidth" Value="380" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ToolTip">
-                    <Border Background="{StaticResource Surface.Card.Brush}"
-                            BorderBrush="{StaticResource Surface.Border.Brush}"
+                    <Border Background="{DynamicResource Surface.Card.Brush}"
+                            BorderBrush="{DynamicResource Surface.Border.Brush}"
                             BorderThickness="1"
                             CornerRadius="4"
                             Padding="9,6">
@@ -741,12 +746,12 @@
 
     <!-- Right click menus, which reuse the submenu item template the menu bar already defines. -->
     <Style TargetType="ContextMenu">
-        <Setter Property="Foreground" Value="{StaticResource Text.Primary.Brush}" />
+        <Setter Property="Foreground" Value="{DynamicResource Text.Primary.Brush}" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ContextMenu">
-                    <Border Background="{StaticResource Surface.Card.Brush}"
-                            BorderBrush="{StaticResource Surface.Border.Brush}"
+                    <Border Background="{DynamicResource Surface.Card.Brush}"
+                            BorderBrush="{DynamicResource Surface.Border.Brush}"
                             BorderThickness="1"
                             CornerRadius="6"
                             Padding="4">
@@ -763,8 +768,8 @@
     -->
     <Style TargetType="ProgressBar">
         <Setter Property="Height" Value="3" />
-        <Setter Property="Foreground" Value="{StaticResource Accent.Primary.Brush}" />
-        <Setter Property="Background" Value="{StaticResource Surface.Track.Brush}" />
+        <Setter Property="Foreground" Value="{DynamicResource Accent.Primary.Brush}" />
+        <Setter Property="Background" Value="{DynamicResource Surface.Track.Brush}" />
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="Template">
             <Setter.Value>
@@ -795,11 +800,11 @@
             <Setter.Value>
                 <ControlTemplate TargetType="GridSplitter">
                     <Grid Background="Transparent">
-                        <Rectangle x:Name="Line" Fill="{StaticResource Surface.Border.Brush}" />
+                        <Rectangle x:Name="Line" Fill="{DynamicResource Surface.Border.Brush}" />
                     </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Line" Property="Fill" Value="{StaticResource Accent.Primary.Brush}" />
+                            <Setter TargetName="Line" Property="Fill" Value="{DynamicResource Accent.Primary.Brush}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>

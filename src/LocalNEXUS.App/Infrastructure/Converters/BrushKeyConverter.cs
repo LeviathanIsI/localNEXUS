@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Data;
+using LocalNEXUS.App.Services.Theming;
 
 namespace LocalNEXUS.App.Infrastructure.Converters;
 
@@ -21,14 +22,13 @@ public sealed class BrushKeyConverter : IValueConverter
 
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
-        if (value is not string key || key.Length == 0)
-        {
-            return Application.Current?.TryFindResource(FallbackKey) ?? DependencyProperty.UnsetValue;
-        }
+        var key = value as string;
 
-        return Application.Current?.TryFindResource(key)
-               ?? Application.Current?.TryFindResource(FallbackKey)
-               ?? DependencyProperty.UnsetValue;
+        // From the live palette rather than the resources, for the same reason its sibling does:
+        // the brush handed back has to be one that can still change colour when the theme does.
+        return (string.IsNullOrEmpty(key) ? null : ThemePalette.Get(key))
+               ?? ThemePalette.Get(FallbackKey)
+               ?? (object?)DependencyProperty.UnsetValue;
     }
 
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)

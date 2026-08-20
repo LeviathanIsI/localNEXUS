@@ -38,17 +38,52 @@ public sealed partial class TransformNode : NodeBase, ICodeRepairSource
     public const string DefaultScriptExpression =
         "Regex.Replace(input.Trim(), @\"(?s)^```[A-Za-z0-9#+_-]*\\s*\\r?\\n(.*?)\\r?\\n?```$\", \"$1\").Trim()";
 
-    private static readonly ScriptOptions ScriptCompilationOptions = ScriptOptions.Default
-        .WithImports(
+    /// <summary>
+    /// Options for the script compiler, built on first use rather than in a static constructor.
+    /// </summary>
+    /// <remarks>
+    /// Roslyn builds a reference from an assembly by reading the file it was loaded from, and in a
+    /// single file publish there is no such file: the assemblies are inside the executable and
+    /// report no location, so asking for them throws. Doing that in a static constructor made the
+    /// whole type unusable, and because a binding to any property of a node runs its type
+    /// initializer, adding a Transform node took the published application down with it.
+    ///
+    /// So it is built lazily and the failure is caught. Anything that still works keeps working:
+    /// template mode does not compile anything, and a script node reports plainly that it could
+    /// not build a compiler rather than crashing the window.
+    /// </remarks>
+    private static readonly Lazy<ScriptOptions?> ScriptCompilationOptions = new(() =>
+    {
+        var options = ScriptOptions.Default.WithImports(
             "System",
             "System.Collections.Generic",
             "System.Linq",
             "System.Text",
-            "System.Text.RegularExpressions")
-        .WithReferences(
-            typeof(object).Assembly,
-            typeof(Enumerable).Assembly,
-            typeof(Regex).Assembly);
+            "System.Text.RegularExpressions");
+
+        try
+        {
+            return options.WithReferences(
+                typeof(object).Assembly,
+                typeof(Enumerable).Assembly,
+                typeof(Regex).Assembly);
+        }
+        catch (NotSupportedException)
+        {
+            return null;
+        }
+    });
+
+    /// <summary>
+    /// True when a script transform can be compiled in this build.
+    /// </summary>
+    /// <remarks>
+    /// Asked at startup and reported, because this is a capability that fails quietly: the default
+    /// transform is the one that strips a markdown fence off a model reply, the repair loop depends
+    /// on it, and a build where it cannot compile should say so rather than wait to be found out
+    /// mid run.
+    /// </remarks>
+    public static bool CanCompileScripts => ScriptCompilationOptions.Value is not null;
 
     /// <summary>Which transform is applied.</summary>
     [ObservableProperty]
@@ -266,9 +301,17 @@ public sealed partial class TransformNode : NodeBase, ICodeRepairSource
             return _compiled;
         }
 
+        if (ScriptCompilationOptions.Value is not { } options)
+        {
+            throw new InvalidOperationException(
+                $"{Title} cannot compile a script in this build: the script compiler needs the runtime assemblies as files, "
+                + "and a single file executable keeps them inside itself. Use Find and replace instead, or run from a build "
+                + "that is not published as a single file.");
+        }
+
         try
         {
-            var script = CSharpScript.Create<object>(ScriptExpression, ScriptCompilationOptions, typeof(TransformScriptGlobals));
+            var script = CSharpScript.Create<object>(ScriptExpression, options, typeof(TransformScriptGlobals));
             _compiled = script.CreateDelegate();
             _compiledFor = ScriptExpression;
             return _compiled;
