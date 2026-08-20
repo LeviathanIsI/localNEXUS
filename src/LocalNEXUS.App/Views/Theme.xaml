@@ -48,6 +48,17 @@
     <SolidColorBrush x:Key="SourceState.Serving.Brush" Color="#FF4ADE80" />
     <SolidColorBrush x:Key="SourceState.Unreachable.Brush" Color="#FFF87171" />
 
+    <!--
+        The Python runtime on the local model panel. Unknown and Missing are grey rather than
+        red: neither has failed at anything, and an environment that has not been built yet on a
+        machine that only runs GGUF models is a perfectly ordinary state to sit in forever.
+    -->
+    <SolidColorBrush x:Key="PythonEnvironmentState.Unknown.Brush" Color="#FF6B7686" />
+    <SolidColorBrush x:Key="PythonEnvironmentState.Missing.Brush" Color="#FF6B7686" />
+    <SolidColorBrush x:Key="PythonEnvironmentState.Provisioning.Brush" Color="#FF4EA1FF" />
+    <SolidColorBrush x:Key="PythonEnvironmentState.Ready.Brush" Color="#FF4ADE80" />
+    <SolidColorBrush x:Key="PythonEnvironmentState.Failed.Brush" Color="#FFF87171" />
+
     <!-- This install's own mesh node, on the This machine card. -->
     <SolidColorBrush x:Key="MeshNodeState.Stopped.Brush" Color="#FF6B7686" />
     <SolidColorBrush x:Key="MeshNodeState.Starting.Brush" Color="#FF4EA1FF" />

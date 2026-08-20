@@ -77,6 +77,8 @@ vendor/llama/*
 !vendor/llama/README.md
 vendor/mesh/*
 !vendor/mesh/README.md
+vendor/uv/*
+!vendor/uv/README.md
 
 # ---------------------------------------------------------------------------
 # Model weights. Never commit these, anywhere, at any size.

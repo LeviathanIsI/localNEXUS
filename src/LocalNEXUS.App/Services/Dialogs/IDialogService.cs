@@ -23,4 +23,7 @@ public interface IDialogService
 
     /// <summary>Opens a folder in Explorer. Does nothing when the folder is missing.</summary>
     void OpenFolderInExplorer(string folder);
+
+    /// <summary>Opens a file in whatever the system uses to edit it. Does nothing when it is missing.</summary>
+    void OpenFileInEditor(string file);
 }

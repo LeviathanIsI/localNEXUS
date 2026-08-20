@@ -55,6 +55,7 @@ public sealed partial class MainViewModel : ObservableObject
         ActivityFeed feed,
         ActivityFeedViewModel feedViewModel,
         ModelCatalogViewModel catalog,
+        PythonEnvironmentViewModel pythonEnvironment,
         NetworkViewModel network,
         UnityProjectService unityProject,
         AppConfig config)
@@ -68,6 +69,7 @@ public sealed partial class MainViewModel : ObservableObject
 
         Feed = feedViewModel;
         Catalog = catalog;
+        PythonEnvironment = pythonEnvironment;
         Network = network;
         UnityProject = unityProject;
         PendingConnection = new PendingConnectionViewModel(graph, message => _feed.Error("Connection refused", message));
@@ -87,6 +89,9 @@ public sealed partial class MainViewModel : ObservableObject
 
     /// <summary>Catalog commands used by the model node settings panel.</summary>
     public ModelCatalogViewModel Catalog { get; }
+
+    /// <summary>State of the Python runtime, shown in the same panel as the model list.</summary>
+    public PythonEnvironmentViewModel PythonEnvironment { get; }
 
     /// <summary>The Network tab: available models, coverage, sources and contribution.</summary>
     public NetworkViewModel Network { get; }

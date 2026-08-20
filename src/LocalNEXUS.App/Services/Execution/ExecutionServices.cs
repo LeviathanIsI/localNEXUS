@@ -14,14 +14,14 @@ public sealed class ExecutionServices
 {
     public ExecutionServices(
         IModelClient modelClient,
-        LlamaServerManager llamaServers,
+        RuntimeResolver runtimes,
         MeshManager mesh,
         UnityProjectService unityProject,
         FileWriter fileWriter,
         IActivityFeed feed)
     {
         ModelClient = modelClient;
-        LlamaServers = llamaServers;
+        Runtimes = runtimes;
         Mesh = mesh;
         UnityProject = unityProject;
         FileWriter = fileWriter;
@@ -31,8 +31,11 @@ public sealed class ExecutionServices
     /// <summary>Sends chat requests to local and cloud endpoints alike.</summary>
     public IModelClient ModelClient { get; }
 
-    /// <summary>Starts and reuses llama-server processes for models served on this machine alone.</summary>
-    public LlamaServerManager LlamaServers { get; }
+    /// <summary>
+    /// Serves models this machine runs on its own, on whichever local runtime the model's format
+    /// calls for. Which one that is never reaches the node asking for it.
+    /// </summary>
+    public RuntimeResolver Runtimes { get; }
 
     /// <summary>This install's mesh node: what the network can serve, and where to send it.</summary>
     public MeshManager Mesh { get; }

@@ -19,6 +19,9 @@ public static class AppPaths
     /// </summary>
     public const string MeshExecutableName = "mesh-llm.exe";
 
+    /// <summary>Name of the bundled uv executable, which builds the Python runtime environment.</summary>
+    public const string UvExecutableName = "uv.exe";
+
     /// <summary>Root of the per user data folder.</summary>
     public static string Root { get; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -44,6 +47,35 @@ public static class AppPaths
     /// recognise anything a crash left behind.
     /// </summary>
     public static string ChildProcessFile { get; } = Path.Combine(Runtime, "children.json");
+
+    /// <summary>
+    /// Root of the supervised Python runtime: its interpreter, its environment and its download
+    /// cache. Under the user data folder rather than the install directory, so an install can be
+    /// replaced or run from a read only location without taking the environment with it.
+    /// </summary>
+    public static string PythonRoot { get; } = Path.Combine(Runtime, "python");
+
+    /// <summary>The virtual environment the safetensors runtime is served from.</summary>
+    public static string PythonVenv { get; } = Path.Combine(PythonRoot, ".venv");
+
+    /// <summary>The interpreter inside that environment. This is the only Python the app runs.</summary>
+    public static string PythonExecutable { get; } = Path.Combine(PythonVenv, "Scripts", "python.exe");
+
+    /// <summary>Where uv keeps the standalone interpreters it downloads.</summary>
+    public static string PythonInterpreters { get; } = Path.Combine(PythonRoot, "interpreters");
+
+    /// <summary>Where uv keeps downloaded wheels, so a repair does not download them again.</summary>
+    public static string PythonCache { get; } = Path.Combine(PythonRoot, "cache");
+
+    /// <summary>What the environment was last provisioned from, so a finished install can be recognised.</summary>
+    public static string PythonStateFile { get; } = Path.Combine(PythonRoot, "environment.json");
+
+    /// <summary>
+    /// The user editable list of extra folders scanned for models, in either format. A plain
+    /// text file rather than a buried setting, because adding a drive full of models should be
+    /// one line in one file.
+    /// </summary>
+    public static string ModelPathsFile { get; } = Path.Combine(Root, "model-paths.txt");
 
     /// <summary>Creates the data folders on first run. Safe to call repeatedly.</summary>
     public static void EnsureCreated()
@@ -121,6 +153,46 @@ public static class AppPaths
 
     /// <summary>Every directory searched for the llama.cpp executables, in priority order.</summary>
     public static IEnumerable<string> EnumerateLlamaSearchDirectories() => EnumerateVendorDirectories("llama");
+
+    /// <summary>Locates the bundled uv executable, or null when it was not shipped with this build.</summary>
+    public static string? FindUvExecutable()
+    {
+        foreach (var candidate in EnumerateUvSearchDirectories())
+        {
+            var executable = Path.Combine(candidate, UvExecutableName);
+            if (File.Exists(executable))
+            {
+                return executable;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>Every directory searched for uv, in priority order.</summary>
+    public static IEnumerable<string> EnumerateUvSearchDirectories() => EnumerateVendorDirectories("uv");
+
+    /// <summary>
+    /// Locates one of the committed dependency lockfiles. These are resolved once and committed
+    /// rather than resolved on the user's machine, so two installs of the same build get the
+    /// same packages whatever the index happens to be serving that day.
+    /// </summary>
+    public static string? FindPythonLockfile(string fileName)
+    {
+        foreach (var candidate in EnumeratePythonSearchDirectories())
+        {
+            var lockfile = Path.Combine(candidate, fileName);
+            if (File.Exists(lockfile))
+            {
+                return lockfile;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>Every directory searched for the Python lockfiles, in priority order.</summary>
+    public static IEnumerable<string> EnumeratePythonSearchDirectories() => EnumerateVendorDirectories("python");
 
     /// <summary>
     /// Every place a bundled vendor folder may live, in priority order. Resolution has to give

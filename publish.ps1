@@ -53,4 +53,25 @@ else {
     Write-Warning "vendor\mesh has no mesh-llm.exe. The published app will run and local inference works, but the Network tab needs a Mesh LLM build placed in dist\vendor\mesh. See vendor\mesh\README.md."
 }
 
+$uvSource = Join-Path $root 'vendor\uv'
+$uvTarget = Join-Path $dist 'vendor\uv'
+
+if (Test-Path (Join-Path $uvSource 'uv.exe')) {
+    New-Item -ItemType Directory -Force $uvTarget | Out-Null
+    Copy-Item (Join-Path $uvSource 'uv.exe') $uvTarget -Force
+    Write-Host "Copied uv into dist\vendor\uv"
+}
+else {
+    Write-Warning "vendor\uv has no uv.exe. The published app will run and GGUF models work, but the Python runtime that serves safetensors models cannot be set up. See vendor\uv\README.md."
+}
+
+# The dependency lockfiles are committed rather than fetched per machine, so unlike the engine
+# binaries this copy is never conditional.
+$pythonSource = Join-Path $root 'vendor\python'
+$pythonTarget = Join-Path $dist 'vendor\python'
+
+New-Item -ItemType Directory -Force $pythonTarget | Out-Null
+Copy-Item (Join-Path $pythonSource '*.txt') $pythonTarget -Force
+Write-Host "Copied the Python lockfiles into dist\vendor\python"
+
 Write-Host "Done. Run $(Join-Path $dist 'LocalNEXUS.exe')"

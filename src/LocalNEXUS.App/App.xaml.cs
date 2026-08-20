@@ -11,6 +11,7 @@ using LocalNEXUS.App.Services.Files;
 using LocalNEXUS.App.Services.Inference;
 using LocalNEXUS.App.Services.Persistence;
 using LocalNEXUS.App.Services.Processes;
+using LocalNEXUS.App.Services.Python;
 using LocalNEXUS.App.ViewModels;
 using LocalNEXUS.App.Views;
 
@@ -24,8 +25,10 @@ public partial class App : Application
 {
     private ChildProcessGroup? _children;
     private LlamaServerManager? _llamaServers;
+    private PythonRuntimeManager? _pythonRuntime;
     private OpenAiCompatibleClient? _modelClient;
     private MeshManager? _mesh;
+    private CancellationTokenSource? _provisioning;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -56,6 +59,9 @@ public partial class App : Application
 
         var config = AppConfig.LoadOrCreate();
 
+        // Written on first run so there is something to edit rather than something to invent.
+        ModelPathsFile.EnsureCreated();
+
         var catalog = new ModelCatalog(config);
         catalog.Refresh();
 
@@ -82,12 +88,22 @@ public partial class App : Application
         // child process, and the Network tab shows the node coming up on its own.
         _ = mesh.RestoreAsync();
 
+        // The Python runtime has an environment to build before it can serve anything, so the
+        // provisioner comes first and the runtime is handed the same instance the panel watches.
+        var pythonEnvironment = new PythonProvisioner(children, feed, Dispatcher);
+
         _llamaServers = new LlamaServerManager(children);
+        _pythonRuntime = new PythonRuntimeManager(children, pythonEnvironment);
+
+        // Order is the order runtimes are asked, and each answers for exactly one format, so
+        // adding a third changes this line and nothing else.
+        var runtimes = new RuntimeResolver(_llamaServers, _pythonRuntime);
+
         _modelClient = new OpenAiCompatibleClient();
 
         var services = new ExecutionServices(
             _modelClient,
-            _llamaServers,
+            runtimes,
             mesh,
             unityProject,
             new FileWriter(),
@@ -96,6 +112,7 @@ public partial class App : Application
 
         var feedViewModel = new ActivityFeedViewModel(executor, graph, feed, Dispatcher);
         var catalogViewModel = new ModelCatalogViewModel(catalog, dialogs);
+        var pythonViewModel = new PythonEnvironmentViewModel(pythonEnvironment, dialogs);
         var networkViewModel = new NetworkViewModel(mesh, catalog, config, feed);
 
         var mainViewModel = new MainViewModel(
@@ -106,6 +123,7 @@ public partial class App : Application
             feed,
             feedViewModel,
             catalogViewModel,
+            pythonViewModel,
             networkViewModel,
             unityProject,
             config);
@@ -115,6 +133,12 @@ public partial class App : Application
         var window = new MainWindow { DataContext = mainViewModel };
         MainWindow = window;
         window.Show();
+
+        // Deliberately not awaited. Building the Python environment is a download measured in
+        // gigabytes, and the window has to be usable while it runs: GGUF models work throughout,
+        // and the feed and the model panel show how far it has got.
+        _provisioning = new CancellationTokenSource();
+        _ = ProvisionPythonAsync(pythonEnvironment, _provisioning.Token);
     }
 
     protected override void OnExit(ExitEventArgs e)
@@ -131,10 +155,32 @@ public partial class App : Application
     {
         // Order matters: the managers stop their own work first, then the group confirms that
         // every process they started is actually gone and closes the job that guarantees it.
+        _provisioning?.Cancel();
         _mesh?.Dispose();
         _llamaServers?.Dispose();
+        _pythonRuntime?.Dispose();
         _modelClient?.Dispose();
         _children?.Dispose();
+    }
+
+    /// <summary>
+    /// Builds the Python environment in the background on every launch. A run that finds it
+    /// already built verifies it and returns, so the cost after the first launch is one import.
+    /// </summary>
+    private static async Task ProvisionPythonAsync(PythonProvisioner provisioner, CancellationToken ct)
+    {
+        try
+        {
+            await provisioner.EnsureAsync(ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // The application is closing. The child process group stops whatever uv had running.
+        }
+        catch (Exception ex)
+        {
+            CrashLog.Write("PythonProvisioning", ex);
+        }
     }
 
     private static void RestoreLastProject(AppConfig config, UnityProjectService unityProject, ActivityFeed feed)
@@ -178,8 +224,8 @@ public partial class App : Application
         feed.Info(
             "Model catalog",
             catalog.Models.Count == 0
-                ? $"No GGUF files found. Drop one into {AppPaths.Models} or add a folder from a model node."
-                : $"{catalog.Models.Count} GGUF file(s) available.");
+                ? $"No models found. Drop one into {AppPaths.Models}, add a folder from a model node, or list a folder in {AppPaths.ModelPathsFile}."
+                : $"{catalog.Models.Count} model(s) available.");
     }
 
     /// <summary>

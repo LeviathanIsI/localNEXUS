@@ -45,7 +45,7 @@ public sealed partial class ModelNode : NodeBase
     [NotifyPropertyChangedFor(nameof(ModelDisplayName))]
     private ModelProvider _provider = ModelProvider.Local;
 
-    /// <summary>The GGUF selected from the catalog, when the provider is local.</summary>
+    /// <summary>The model selected from the catalog, when the provider is local.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ModelDisplayName))]
     [NotifyPropertyChangedFor(nameof(ModelSourceText))]
@@ -53,8 +53,8 @@ public sealed partial class ModelNode : NodeBase
     private LocalModelInfo? _selectedLocalModel;
 
     /// <summary>
-    /// A GGUF chosen by browsing, which this node runs instead of its catalogue selection. Null
-    /// when the node uses the dropdown.
+    /// A model chosen by browsing, which this node runs instead of its catalogue selection. Null
+    /// when the node uses the dropdown. A GGUF file or a safetensors folder, indifferently.
     /// </summary>
     /// <remarks>
     /// Per node on purpose. The alternative on offer, adding the folder to the catalogue, is a
@@ -167,7 +167,7 @@ public sealed partial class ModelNode : NodeBase
     /// <summary>True when the OpenRouter provider is selected.</summary>
     public bool IsOpenRouter => Provider == ModelProvider.OpenRouter;
 
-    /// <summary>Where this node's local GGUF comes from: the catalogue, or a file of its own.</summary>
+    /// <summary>Where this node's local model comes from: the catalogue, or one of its own.</summary>
     public LocalModelSource ModelSource
     {
         get
@@ -177,7 +177,11 @@ public sealed partial class ModelNode : NodeBase
                 return LocalModelSource.Catalog;
             }
 
-            return File.Exists(ModelFilePath) ? LocalModelSource.File : LocalModelSource.MissingFile;
+            // A safetensors model is a folder and a GGUF is a file, so presence is asked about
+            // the path rather than about a file, and the node stays free of formats either way.
+            return File.Exists(ModelFilePath) || Directory.Exists(ModelFilePath)
+                ? LocalModelSource.File
+                : LocalModelSource.MissingFile;
         }
     }
 
@@ -187,7 +191,7 @@ public sealed partial class ModelNode : NodeBase
     /// <summary>True when the chosen file is no longer on disk, which the panel says out loud.</summary>
     public bool IsModelFileMissing => ModelSource == LocalModelSource.MissingFile;
 
-    /// <summary>The GGUF this node will actually run, whichever way it was chosen.</summary>
+    /// <summary>The model this node will actually run, whichever way it was chosen.</summary>
     public string? EffectiveLocalModelPath => HasModelFile ? ModelFilePath : SelectedLocalModel?.Path;
 
     /// <summary>
@@ -201,10 +205,10 @@ public sealed partial class ModelNode : NodeBase
     /// </remarks>
     public string ModelSourceText => ModelSource switch
     {
-        LocalModelSource.File => "This node runs the file below, not the catalogue selection above.",
-        LocalModelSource.MissingFile => "This node points at a file that is no longer there.",
+        LocalModelSource.File => "This node runs the model below, not the catalogue selection above.",
+        LocalModelSource.MissingFile => "This node points at a model that is no longer there.",
         _ => SelectedLocalModel is null
-            ? "No model selected. Choose one above, or browse for a file anywhere on disk."
+            ? "No model selected. Choose one above, or browse for one anywhere on disk."
             : "This node runs the catalogue selection above."
     };
 
@@ -310,19 +314,16 @@ public sealed partial class ModelNode : NodeBase
     }
 
     /// <summary>
-    /// Picks a GGUF anywhere on disk for this node alone. The catalogue is left untouched, which
-    /// is the point: nothing about another node's choices changes.
+    /// Picks a model file anywhere on disk for this node alone. The catalogue is left untouched,
+    /// which is the point: nothing about another node's choices changes.
     /// </summary>
     [RelayCommand]
     private void BrowseForModelFile()
     {
-        var current = EffectiveLocalModelPath;
-        var startIn = string.IsNullOrWhiteSpace(current) ? AppPaths.Models : Path.GetDirectoryName(current);
-
         var picked = _dialogs.PickOpenFile(
-            "Choose a GGUF model file for this node",
-            "GGUF models (*.gguf)|*.gguf|All files (*.*)|*.*",
-            startIn);
+            "Choose a model file for this node",
+            "Model files (*.gguf;*.safetensors)|*.gguf;*.safetensors|All files (*.*)|*.*",
+            StartingFolder());
 
         if (!string.IsNullOrWhiteSpace(picked))
         {
@@ -330,9 +331,37 @@ public sealed partial class ModelNode : NodeBase
         }
     }
 
-    /// <summary>Drops the file override so the node goes back to its catalogue selection.</summary>
+    /// <summary>
+    /// Picks a model folder for this node alone, which is the shape a safetensors model has: a
+    /// config beside its weight files rather than a single file.
+    /// </summary>
+    [RelayCommand]
+    private void BrowseForModelFolder()
+    {
+        var picked = _dialogs.PickFolder("Choose a model folder for this node", StartingFolder());
+
+        if (!string.IsNullOrWhiteSpace(picked))
+        {
+            ModelFilePath = Path.GetFullPath(picked);
+        }
+    }
+
+    /// <summary>Drops the override so the node goes back to its catalogue selection.</summary>
     [RelayCommand(CanExecute = nameof(HasModelFile))]
     private void ClearModelFile() => ModelFilePath = null;
+
+    /// <summary>Where a browse starts: beside whatever this node runs now, or the models folder.</summary>
+    private string? StartingFolder()
+    {
+        var current = EffectiveLocalModelPath;
+
+        if (string.IsNullOrWhiteSpace(current))
+        {
+            return AppPaths.Models;
+        }
+
+        return Directory.Exists(current) ? current : Path.GetDirectoryName(current);
+    }
 
     /// <summary>The base URL filled in when a provider is selected.</summary>
     public static string DefaultBaseUrlFor(ModelProvider provider) => provider switch
@@ -416,15 +445,15 @@ public sealed partial class ModelNode : NodeBase
         if (ModelSource == LocalModelSource.MissingFile)
         {
             throw new InvalidOperationException(
-                $"{Title} points at a model file that is no longer there: {ModelFilePath}. "
-                + "Browse for it again, or clear the file to go back to the catalogue selection.");
+                $"{Title} points at a model that is no longer there: {ModelFilePath}. "
+                + "Browse for it again, or clear it to go back to the catalogue selection.");
         }
 
         var modelPath = EffectiveLocalModelPath;
         if (string.IsNullOrWhiteSpace(modelPath))
         {
             throw new InvalidOperationException(
-                $"{Title} has no local model selected. Drop a GGUF file into the models folder, add a folder, or browse for a file from the settings panel.");
+                $"{Title} has no local model selected. Drop a model into the models folder, add a folder, or browse for one from the settings panel.");
         }
 
         // The original escape hatch, unchanged: an explicit base URL on a local node means the
@@ -440,13 +469,15 @@ public sealed partial class ModelNode : NodeBase
             StatusMessage = message;
         });
 
-        var launchOptions = new LlamaLaunchOptions { ContextSize = ContextSize, GpuLayers = GpuLayers };
+        var launchOptions = new ModelRuntimeOptions { ContextSize = ContextSize, GpuLayers = GpuLayers };
 
-        var managedBaseUrl = await ctx.Services.LlamaServers
-            .EnsureServerAsync(modelPath, launchOptions, status, ct)
+        // Which runtime serves this is worked out from what the path actually holds, and the
+        // node never learns the answer. Local means whatever local runtime can serve this.
+        var served = await ctx.Services.Runtimes
+            .ServeAsync(modelPath, launchOptions, status, ct)
             .ConfigureAwait(false);
 
-        return new ModelEndpoint(managedBaseUrl, Path.GetFileNameWithoutExtension(modelPath));
+        return new ModelEndpoint(served.BaseUrl, served.ModelId);
     }
 
     /// <summary>

@@ -1,0 +1,10 @@
+# What the safetensors runtime needs, compiled into a pinned lockfile per hardware variant.
+# The application installs from the lockfile and never resolves live.
+#
+# transformers[serving] brings FastAPI and Uvicorn, which is the OpenAI compatible server
+# itself. requests is listed explicitly because the transformers CLI imports it at module
+# scope and the serving extra does not pull it in, so the command line fails to load without it.
+transformers[serving]==5.15.1
+requests
+accelerate
+torch

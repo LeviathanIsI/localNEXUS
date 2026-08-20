@@ -22,9 +22,13 @@ than a fixed pipeline, so the features on the roadmap drop in without rework.
 - **A general graph executor.** Nodes are ordered by their connections using Kahn's
   algorithm, cycles are rejected with a clear message, and every node reports its state
   (`Pending`, `Running`, `Completed`, `Faulted`) on the canvas as it goes.
-- **One request path for both providers.** A local GGUF served by a llama.cpp server
-  that LocalNEXUS starts silently, and a hosted model on OpenRouter, are the same code
-  path over the OpenAI compatible chat completions API.
+- **One request path for every provider.** A local GGUF served by a llama.cpp server, a
+  safetensors model served by a Python sidecar, and a hosted model on OpenRouter are the
+  same code path over the OpenAI compatible chat completions API.
+- **Two local model formats, one list.** GGUF files and safetensors model folders appear
+  together in the model dropdown, and what each one is is decided by reading it rather
+  than by trusting its file extension. Format is shown as a label; nobody is asked to
+  pick an engine.
 - **Live streaming.** Tokens land in the activity feed as they arrive, followed by token
   counts, throughput and elapsed time.
 - **File writing.** The Output node writes into the Unity project you opened, optionally
@@ -50,6 +54,7 @@ than a fixed pipeline, so the features on the roadmap drop in without rework.
 | MVVM             | [CommunityToolkit.Mvvm](https://www.nuget.org/packages/CommunityToolkit.Mvvm) |
 | Scripting        | Roslyn (`Microsoft.CodeAnalysis.CSharp.Scripting`)                            |
 | Local inference  | bundled llama.cpp `llama-server`, spawned as a silent child process           |
+| Safetensors      | `transformers serve` in a supervised Python child process, built by bundled `uv` |
 | Distributed      | bundled [Mesh LLM](https://github.com/Mesh-LLM/mesh-llm) node, spawned as a silent child process |
 | Hosted inference | OpenRouter                                                                    |
 | Serialization    | `System.Text.Json`                                                            |
@@ -104,7 +109,9 @@ person you give it to needs no .NET install: `dist\LocalNEXUS.exe` runs on its o
 Whatever llama.cpp build sits in `vendor\llama\` is copied to `dist\vendor\llama\`
 automatically so local and distributed inference work from the published folder too. If
 `dist\vendor\llama\` is missing on the target machine, drop a llama.cpp build there;
-the app looks next to its own exe first.
+the app looks next to its own exe first. The `uv` build in `vendor\uv\` and the Python
+lockfiles in `vendor\python\` are copied the same way, which is what lets the published
+exe build its own Python environment on a machine with no Python on it.
 
 `dist\` is a build artifact and stays out of git.
 
@@ -112,24 +119,43 @@ On first run LocalNEXUS creates its data folder:
 
 ```
 %LOCALAPPDATA%\LocalNEXUS\
-  models\        GGUF files are discovered here
-  graphs\        saved graphs
-  logs\          llama-server output and crash reports
-  config.json    last opened Unity project, extra model folders
+  models\           models are discovered here, in either format
+  graphs\           saved graphs
+  logs\             engine output and crash reports
+  runtime\python\   the Python interpreter, environment and wheel cache
+  config.json       last opened Unity project, extra model folders
+  model-paths.txt   extra folders to scan, one per line, editable by hand
 ```
 
 Nothing is written inside the repository, so a clone stays clean.
 
 ## Adding local models
 
-Either drop a `.gguf` file into `%LOCALAPPDATA%\LocalNEXUS\models\` (subfolders are
-scanned, so one folder per model is fine), or select a Model node and use **Add folder**
-in the settings panel to register a folder you already keep models in. **Rescan** picks
-up files added while the application is open.
+A local model is one of two things:
+
+- a **GGUF file**, served by llama.cpp, or
+- a **safetensors model folder**, meaning a folder holding a `config.json` beside one or
+  more `.safetensors` files, served by the Python runtime.
+
+Both appear in the same dropdown with their format shown beside them. Which is which is
+worked out by reading the file, not from its name: a GGUF renamed to `model.bin` is still
+found, and a text file named `model.gguf` is not mistaken for one. A `.safetensors` file
+on its own, with no config beside it, is reported as a component of a model rather than
+run and failed.
+
+Either drop a model into `%LOCALAPPDATA%\LocalNEXUS\models\` (subfolders are scanned, so
+one folder per model is fine), or select a Model node and use **Add folder** in the
+settings panel to register a folder you already keep models in. **Rescan** picks up
+anything added while the application is open.
+
+For a folder you would rather keep in a file than click through, **Edit model folders**
+opens `%LOCALAPPDATA%\LocalNEXUS\model-paths.txt`: one folder per line, `#` for comments,
+environment variables expanded. It is scanned for both formats alongside everything else.
 
 For a model that simply lives somewhere else, **Browse for a file** on a Model node points
-that one node at a `.gguf` anywhere on disk without registering its folder for the whole
-application. The panel then says the node runs that file rather than the dropdown selection,
+that one node at a model file anywhere on disk without registering its folder for the whole
+application, and **Browse for a folder** does the same for a safetensors model, which is a
+folder rather than a file. The panel then says the node runs that file rather than the dropdown selection,
 and shows the path. **Use the catalogue** drops it and returns the node to the dropdown, which
 keeps its selection underneath the whole time. Two nodes in one graph can run two models from
 two different drives this way. The choice is saved with the graph; if the file has gone by the
@@ -137,10 +163,36 @@ time the graph is opened again, the panel says so in red and the run refuses wit
 named rather than quietly running something else.
 
 Pick a model from the dropdown on any Model node. Leave **Base URL** empty and
-LocalNEXUS starts a `llama-server` process for that file on a free loopback port, waits
-for its health endpoint, and reuses it for every later request. The process runs with no
-console window and is killed when the application exits. Its output goes to
+LocalNEXUS starts a server for that model on a free loopback port, waits for its health
+endpoint, and reuses it for every later request. A GGUF gets a `llama-server` process; a
+safetensors folder gets a Python one. Either way the process runs with no console window
+and is killed when the application exits, and its output goes to
 `%LOCALAPPDATA%\LocalNEXUS\logs\`.
+
+## The Python runtime
+
+Safetensors models are served by `transformers serve`, which exposes the same OpenAI
+compatible API everything else here speaks. It runs in an environment LocalNEXUS builds
+and owns, never a Python already on the machine and never anything loaded into the
+application process.
+
+The environment is built in the background on first launch, using the `uv` bundled in
+`vendor\uv` and a standalone CPython that uv downloads. It lands in
+`%LOCALAPPDATA%\LocalNEXUS\runtime\python\`, never inside the install folder. GGUF models
+work throughout, and the **Python runtime** section of a Model node settings panel shows
+the stage, live output, and which build of torch this machine was given.
+
+That last choice matters, because it is most of the download. `nvidia-smi` is asked for
+the driver version: 580 or newer gets the CUDA build of torch, roughly 1.8 GB, and
+anything else gets the processor build, roughly 110 MB. The reason it chose is written to
+the activity feed. The finished environment is about 2.9 GB on a CUDA machine.
+
+Packages are pinned by the lockfiles in `vendor\python`, which are committed and are not
+resolved on your machine. The environment is verified by importing what it needs rather
+than by trusting an install command's exit code, and an interrupted install leaves no
+record behind, so the next launch finishes the job from the cached downloads. **Repair**
+builds whatever is missing, **Set up again** deletes the environment and rebuilds it, and
+neither downloads anything twice.
 
 Servers are started with all layers offloaded to the GPU (`-ngl 999`) and an 8192 token
 context.
@@ -291,17 +343,24 @@ src/LocalNEXUS.App/
   Nodes/           InputNode, ModelNode, TransformNode, OutputNode, NodeFactory
   Services/
     Execution/     GraphExecutor, RunContext, RunState, topological sort
-    Inference/     IModelClient, OpenAiCompatibleClient, LlamaServerManager,
-                   LlamaLaunchOptions
+    Inference/     IModelClient, OpenAiCompatibleClient, and the local runtimes behind
+                   IModelRuntime: LlamaServerManager, PythonRuntimeManager,
+                   RuntimeResolver, ModelFormatDetector, ModelDescriptor
+    Python/        the supervised Python environment: PythonProvisioner,
+                   AcceleratorProbe, PythonEnvironmentState
     Distributed/   the mesh and what it reports: MeshManager, MeshStatusReader,
                    InferenceSource, ModelSection, CoveragePlan, NetworkServedModel
-    Persistence/   AppPaths, AppConfig, ModelCatalog, GraphSerializer
+    Processes/     ChildProcessGroup, JobObject, and the registry of what we started
+    Persistence/   AppPaths, AppConfig, ModelCatalog, ModelPathsFile, GraphSerializer
     Files/         UnityProjectService, FileWriter
     Dialogs/       IDialogService and its Windows implementation
   ViewModels/      MainViewModel, ActivityFeedViewModel, NetworkViewModel, and friends
   Views/           XAML only: window, canvas templates, network tab, settings panels
   Infrastructure/  ActivityFeed, converters, behaviours
 vendor/llama/      llama.cpp binaries, fetched not committed
+vendor/mesh/       Mesh LLM binaries, fetched not committed
+vendor/uv/         uv, fetched not committed
+vendor/python/     the Python dependency lockfiles, committed
 publish.ps1        self contained single file publish into dist/
 ```
 

@@ -1,16 +1,22 @@
 using System.Collections.ObjectModel;
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
+using LocalNEXUS.App.Services.Inference;
 
 namespace LocalNEXUS.App.Services.Persistence;
 
 /// <summary>
-/// Discovers the GGUF files available for local inference and exposes them to model nodes.
+/// Discovers the models available for local inference and exposes them to model nodes.
 /// </summary>
 /// <remarks>
-/// The default folder under the user data directory is always scanned, plus any extra folders
-/// the user has added. A machine with no models is a normal state, not an error: the dropdown
-/// is simply empty and the model node reports the problem when it is run.
+/// The default folder under the user data directory is always scanned, plus any folder the user
+/// added through the panel and any folder listed in the model paths file. A machine with no
+/// models is a normal state, not an error: the dropdown is simply empty and the model node
+/// reports the problem when it is run.
+///
+/// Both formats appear in one list. No filter gates it and nobody is asked to choose an engine,
+/// because the format of a model is a fact about the file rather than a decision the user has to
+/// make. What each entry is, GGUF or safetensors, is decided by looking inside it.
 /// </remarks>
 public sealed partial class ModelCatalog : ObservableObject
 {
@@ -20,18 +26,25 @@ public sealed partial class ModelCatalog : ObservableObject
     [ObservableProperty]
     private bool _isScanning;
 
+    /// <summary>Models found by the last scan that cannot be served, and why.</summary>
+    [ObservableProperty]
+    private int _unservableCount;
+
     public ModelCatalog(AppConfig config)
     {
         _config = config;
         Models = new ObservableCollection<LocalModelInfo>();
     }
 
-    /// <summary>Every GGUF file found by the last scan, sorted by name.</summary>
+    /// <summary>Every servable model found by the last scan, sorted by name.</summary>
     public ObservableCollection<LocalModelInfo> Models { get; }
 
     /// <summary>The folders currently being scanned, in the order they are searched.</summary>
     public IEnumerable<string> SearchFolders
-        => new[] { AppPaths.Models }.Concat(_config.ExtraModelFolders).Distinct(StringComparer.OrdinalIgnoreCase);
+        => new[] { AppPaths.Models }
+            .Concat(_config.ExtraModelFolders)
+            .Concat(ModelPathsFile.Read())
+            .Distinct(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Rescans every search folder and replaces the contents of <see cref="Models"/>.</summary>
     public void Refresh()
@@ -41,14 +54,24 @@ public sealed partial class ModelCatalog : ObservableObject
         {
             var found = new List<LocalModelInfo>();
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var unservable = 0;
 
             foreach (var folder in SearchFolders)
             {
-                foreach (var file in EnumerateGgufFiles(folder))
+                foreach (var descriptor in EnumerateModels(folder))
                 {
-                    if (seen.Add(Path.GetFullPath(file)))
+                    if (!seen.Add(descriptor.Path))
                     {
-                        found.Add(new LocalModelInfo(file));
+                        continue;
+                    }
+
+                    if (descriptor.IsServable)
+                    {
+                        found.Add(new LocalModelInfo(descriptor));
+                    }
+                    else
+                    {
+                        unservable++;
                     }
                 }
             }
@@ -58,6 +81,8 @@ public sealed partial class ModelCatalog : ObservableObject
             {
                 Models.Add(model);
             }
+
+            UnservableCount = unservable;
         }
         finally
         {
@@ -88,7 +113,7 @@ public sealed partial class ModelCatalog : ObservableObject
         return true;
     }
 
-    /// <summary>Finds the catalog entry for a path, or null when the file is no longer present.</summary>
+    /// <summary>Finds the catalog entry for a path, or null when it is no longer present.</summary>
     public LocalModelInfo? FindByPath(string? path)
     {
         if (string.IsNullOrWhiteSpace(path))
@@ -99,26 +124,55 @@ public sealed partial class ModelCatalog : ObservableObject
         return Models.FirstOrDefault(m => string.Equals(m.Path, path, StringComparison.OrdinalIgnoreCase));
     }
 
-    private static IEnumerable<string> EnumerateGgufFiles(string folder)
+    /// <summary>
+    /// Everything under a search folder that describes itself as a model.
+    /// </summary>
+    /// <remarks>
+    /// A safetensors model is a folder, so folders are examined as candidates in their own right
+    /// and their weight files are not then offered separately. Files are examined by content, so
+    /// a GGUF is found whatever it happens to be called.
+    /// </remarks>
+    private static IEnumerable<ModelDescriptor> EnumerateModels(string root)
     {
-        if (!Directory.Exists(folder))
+        if (!Directory.Exists(root))
         {
-            return Array.Empty<string>();
+            yield break;
         }
 
-        try
+        foreach (var directory in ModelFormatDetector.EnumerateCandidateDirectories(root))
         {
-            // Models are commonly stored one folder per model, so the scan recurses.
-            return Directory.EnumerateFiles(folder, "*.gguf", new EnumerationOptions
+            var folderDescriptor = ModelFormatDetector.Describe(directory);
+
+            if (folderDescriptor.Format is ModelFormat.Safetensors or ModelFormat.SafetensorsComponent)
             {
-                RecurseSubdirectories = true,
-                IgnoreInaccessible = true,
-                MaxRecursionDepth = 4
-            });
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return Array.Empty<string>();
+                yield return folderDescriptor;
+
+                // The weights inside a model folder belong to that folder, so they are not also
+                // offered as entries of their own.
+                continue;
+            }
+
+            string[] files;
+            try
+            {
+                files = Directory.GetFiles(directory);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                continue;
+            }
+
+            foreach (var file in files)
+            {
+                var descriptor = ModelFormatDetector.Describe(file);
+
+                // Only what detection recognises is reported. Every other file in a models
+                // folder, a readme or a tokenizer, is not a failed model and is not mentioned.
+                if (descriptor.Format != ModelFormat.Unknown)
+                {
+                    yield return descriptor;
+                }
+            }
         }
     }
 }

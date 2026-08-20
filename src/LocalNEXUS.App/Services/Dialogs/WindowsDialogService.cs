@@ -74,6 +74,21 @@ public sealed class WindowsDialogService : IDialogService
         });
     }
 
+    /// <inheritdoc />
+    public void OpenFileInEditor(string file)
+    {
+        if (!File.Exists(file))
+        {
+            return;
+        }
+
+        using var process = Process.Start(new ProcessStartInfo
+        {
+            FileName = file,
+            UseShellExecute = true
+        });
+    }
+
     private static void ApplyInitialDirectory(Action<string> assign, string? initialDirectory)
     {
         if (!string.IsNullOrWhiteSpace(initialDirectory) && Directory.Exists(initialDirectory))

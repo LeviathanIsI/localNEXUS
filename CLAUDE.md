@@ -26,7 +26,7 @@ The counterbalance, equally important: build seams and interfaces for the vision
 - Windows 11 desktop, WPF, .NET 8, C#
 - Node canvas: Nodify (MVVM). Wiki: https://miroiu.github.io/nodify
 - MVVM: CommunityToolkit.Mvvm
-- Local inference: bundled llama.cpp (`llama-server`), spawned as a silent child process, called over the OpenAI-compatible HTTP API
+- Local inference: bundled llama.cpp (`llama-server`) for GGUF, and `transformers serve` in a bundled-`uv`-built Python environment for safetensors, both spawned as silent child processes and called over the OpenAI-compatible HTTP API
 - Distributed inference: bundled Mesh LLM (`mesh-llm`), spawned as a silent child process, called over the same OpenAI-compatible HTTP API
 - Cloud inference: OpenRouter, same OpenAI-compatible API
 - Serialization: System.Text.Json
@@ -84,6 +84,12 @@ Mesh LLM (Apache-2.0) replaced it in v0.5. It pools GPUs behind one OpenAI-compa
 
 **llama.cpp is still the local engine.** A model that fits on one machine is served by `llama-server` exactly as before. The mesh is for what one machine cannot do alone. Never route a purely local run through the mesh to make the code look uniform.
 
+**Local runtimes are chosen by format, behind one interface.** `IModelRuntime` answers three questions: can you serve this, bring it up and say where, and stop. `LlamaServerManager` serves GGUF and `PythonRuntimeManager` serves safetensors; `RuntimeResolver` picks between them from a `ModelDescriptor`. A model node asks for a path and gets an endpoint back, so "local" means "whatever local runtime can serve this" and adding a third runtime is one entry in the resolver. Because every runtime exposes the same OpenAI-compatible API, `IModelClient`, `OpenAiCompatibleClient`, `ModelEndpoint` and `ChatCompletionResult` are untouched by any of it. If a change to one of those looks necessary, the design has gone wrong somewhere else.
+
+**Format is detected by content, never by extension.** `ModelFormatDetector` is the only place that answers what a path holds: GGUF by its magic bytes, a safetensors model by a folder holding `config.json` beside `.safetensors` weights. A lone `.safetensors` file and a folder of weights with no config are their own reported state, not a model to attempt. Anything unrecognised is reported as unrecognised rather than guessed at.
+
+**The Python environment is isolated and owned.** It is built by the bundled `uv` from a committed lockfile into `%LOCALAPPDATA%\LocalNEXUS\runtime\python\`, never the install directory, never a Python already on the machine, and never loaded in-process. Provisioning runs in the background on first launch for every install, because a two gigabyte download that starts in the middle of real work is a worse failure than one that starts while the app is being opened. It is verified by importing the packages, not by an exit code, and the state record is written only after that passes so an interrupted install resumes rather than being trusted.
+
 **Child processes belong to this application, and the operating system enforces it.** Every engine process started here goes into its own Windows job object, so everything it goes on to start joins the same job and cannot leave it, and the kernel kills the whole job when the application's handle to it closes. That covers the paths where no code of ours runs at all, which a tree kill at exit cannot. A process handle is never treated as proof of anything: the mesh executable is a launcher that re-executes itself and then exits, so the process we started is often legitimately gone while the node it left behind is still running and is nobody's child. Termination is asked for, forced, verified against the job's own process list, and retried.
 
 Two rules follow and are not negotiable. The application never terminates an engine process it did not start, which is why a process id alone is never an identity: a record must match on id, start time and binary, and its owning session must be gone. And engine processes a previous session left behind are terminated at startup rather than adopted and reused, because a leftover node was launched with settings this session cannot read back out of it, while restarting one costs nothing that matters since the engine keeps its identity in its own key file.
@@ -95,6 +101,8 @@ Two rules follow and are not negotiable. The application never terminates an eng
 **Private by default.** The node hosts or joins a private mesh over LAN-scoped discovery, which keeps the engine off public relays entirely. Publishing to the public mesh is a separate, explicit opt-in and is the only setting that causes any contact beyond the local network.
 
 **Coverage is a real computed concept.** Sections, who covers each, redundancy count, weakest link. A run is gated on complete coverage: a gap in any section means no valid pipeline. Compute and expose this properly even when there are only two machines and it always passes.
+
+**Model discovery does not filter by format.** Both formats are one list, format is a label rather than a choice, and nobody is asked which engine they want. Extra search folders are first-class: `model-paths.txt` beside the config, one folder per line, scanned for both formats.
 
 **Deliberately deferred.** Do not design these until asked, they need real-world shape first: the trust scoring algorithm and the contribution/barter economics. Peer discovery is no longer on this list because the engine provides it; do not build a second one.
 

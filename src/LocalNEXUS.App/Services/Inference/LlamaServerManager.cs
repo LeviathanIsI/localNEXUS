@@ -21,8 +21,12 @@ namespace LocalNEXUS.App.Services.Inference;
 ///
 /// Every server started here is handed to the child process group, which owns stopping it and
 /// guarantees none of them outlives the application.
+///
+/// It is one implementation of <see cref="IModelRuntime"/> among the local runtimes rather than
+/// something callers reach for directly. That is the only change from the version that served
+/// every local model: what it does with a GGUF is unchanged.
 /// </remarks>
-public sealed class LlamaServerManager : IDisposable
+public sealed class LlamaServerManager : IModelRuntime, IDisposable
 {
     private static readonly TimeSpan HealthPollInterval = TimeSpan.FromMilliseconds(400);
     private static readonly TimeSpan StartupTimeout = TimeSpan.FromMinutes(10);
@@ -36,6 +40,27 @@ public sealed class LlamaServerManager : IDisposable
     private bool _disposed;
 
     public LlamaServerManager(ChildProcessGroup children) => _children = children;
+
+    /// <inheritdoc />
+    public string Name => "llama.cpp";
+
+    /// <inheritdoc />
+    public bool CanServe(ModelDescriptor model) => model.Format == ModelFormat.Gguf;
+
+    /// <inheritdoc />
+    public async Task<RuntimeEndpoint> EnsureServingAsync(
+        ModelDescriptor model,
+        ModelRuntimeOptions options,
+        IProgress<string>? status,
+        CancellationToken ct)
+    {
+        var baseUrl = await EnsureServerAsync(model.Path, options.ToLlamaLaunchOptions(), status, ct)
+            .ConfigureAwait(false);
+
+        // llama-server serves whatever it was loaded with whatever name it is asked for, so the
+        // file name is used, exactly as it was before there was more than one runtime.
+        return new RuntimeEndpoint(baseUrl, Path.GetFileNameWithoutExtension(model.Path));
+    }
 
     /// <summary>
     /// Returns the base URL of a running server for the given model and options, starting one
