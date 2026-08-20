@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Sockets;
 using LocalNEXUS.App.Services.Persistence;
+using LocalNEXUS.App.Services.Processes;
 
 namespace LocalNEXUS.App.Services.Inference;
 
@@ -17,6 +18,9 @@ namespace LocalNEXUS.App.Services.Inference;
 /// application exits. Startup is serialised per key rather than globally, so two different
 /// models can load at the same time while two requests for the same model still share one
 /// server.
+///
+/// Every server started here is handed to the child process group, which owns stopping it and
+/// guarantees none of them outlives the application.
 /// </remarks>
 public sealed class LlamaServerManager : IDisposable
 {
@@ -27,8 +31,11 @@ public sealed class LlamaServerManager : IDisposable
     private readonly Dictionary<string, LlamaServerInstance> _servers = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, SemaphoreSlim> _gates = new(StringComparer.OrdinalIgnoreCase);
     private readonly HttpClient _health = new() { Timeout = TimeSpan.FromSeconds(5) };
+    private readonly ChildProcessGroup _children;
 
     private bool _disposed;
+
+    public LlamaServerManager(ChildProcessGroup children) => _children = children;
 
     /// <summary>
     /// Returns the base URL of a running server for the given model and options, starting one
@@ -87,7 +94,7 @@ public sealed class LlamaServerManager : IDisposable
                 }
             }
 
-            var instance = StartServer(fullPath, options);
+            var instance = StartServer(fullPath, options, _children);
             lock (_sync)
             {
                 _servers[key] = instance;
@@ -167,7 +174,7 @@ public sealed class LlamaServerManager : IDisposable
         }
     }
 
-    private static LlamaServerInstance StartServer(string ggufPath, LlamaLaunchOptions options)
+    private static LlamaServerInstance StartServer(string ggufPath, LlamaLaunchOptions options, ChildProcessGroup children)
     {
         var executable = AppPaths.FindLlamaServerExecutable()
             ?? throw new ModelClientException(BuildMissingExecutableMessage());
@@ -179,6 +186,10 @@ public sealed class LlamaServerManager : IDisposable
             WorkingDirectory = Path.GetDirectoryName(executable) ?? AppContext.BaseDirectory,
             UseShellExecute = false,
             CreateNoWindow = true,
+
+            // Redirected so that closing it is a request the server could act on. This build of
+            // llama.cpp does not, which is why the group forces the issue afterwards.
+            RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true
         };
@@ -205,8 +216,10 @@ public sealed class LlamaServerManager : IDisposable
             throw new ModelClientException($"Could not start llama-server: {ex.Message}", ex);
         }
 
+        children.Track(process, "llama-server");
+
         var logPath = AppPaths.CreateLogFilePath($"llama-{Path.GetFileNameWithoutExtension(ggufPath)}");
-        var instance = new LlamaServerInstance(process, ggufPath, port, logPath);
+        var instance = new LlamaServerInstance(process, ggufPath, port, logPath, children);
         instance.BeginCapturingOutput();
         return instance;
     }

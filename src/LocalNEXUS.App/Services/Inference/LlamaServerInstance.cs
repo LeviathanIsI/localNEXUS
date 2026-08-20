@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO;
+using LocalNEXUS.App.Services.Processes;
 
 namespace LocalNEXUS.App.Services.Inference;
 
@@ -10,6 +11,10 @@ namespace LocalNEXUS.App.Services.Inference;
 /// The process writes nothing to a console. Its standard output and error are pumped into a log
 /// file under the user data folder, which is also where the manager looks when a server dies
 /// during startup and the failure has to be explained to the user.
+///
+/// Stopping it is not this class's job. The child process group owns that, because a single tree
+/// kill can race a child that starts another one and reports the failure as an aggregate that
+/// callers were not catching. Disposing an instance asks the group to terminate it and confirm.
 /// </remarks>
 public sealed class LlamaServerInstance : IDisposable
 {
@@ -18,15 +23,18 @@ public sealed class LlamaServerInstance : IDisposable
     private readonly Queue<string> _recentOutput = new();
     private readonly object _sync = new();
 
+    private readonly ChildProcessGroup _children;
+
     private StreamWriter? _log;
     private bool _disposed;
 
-    public LlamaServerInstance(Process process, string ggufPath, int port, string logPath)
+    public LlamaServerInstance(Process process, string ggufPath, int port, string logPath, ChildProcessGroup children)
     {
         Process = process;
         GgufPath = ggufPath;
         Port = port;
         LogPath = logPath;
+        _children = children;
     }
 
     /// <summary>The running child process.</summary>
@@ -100,18 +108,7 @@ public sealed class LlamaServerInstance : IDisposable
         Process.OutputDataReceived -= OnOutputDataReceived;
         Process.ErrorDataReceived -= OnOutputDataReceived;
 
-        try
-        {
-            if (!Process.HasExited)
-            {
-                Process.Kill(entireProcessTree: true);
-                Process.WaitForExit(5000);
-            }
-        }
-        catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException or SystemException)
-        {
-            // The process is already gone, which is the outcome we wanted.
-        }
+        _children.Terminate(Process);
 
         Process.Dispose();
         _log?.Dispose();

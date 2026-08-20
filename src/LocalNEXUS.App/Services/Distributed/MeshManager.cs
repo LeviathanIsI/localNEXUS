@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using LocalNEXUS.App.Infrastructure;
 using LocalNEXUS.App.Services.Inference;
 using LocalNEXUS.App.Services.Persistence;
+using LocalNEXUS.App.Services.Processes;
 
 namespace LocalNEXUS.App.Services.Distributed;
 
@@ -20,10 +21,12 @@ namespace LocalNEXUS.App.Services.Distributed;
 /// as layer stages across several. Discovery, placement, transport and liveness are all the
 /// engine's; this class starts the process, reads what the engine reports, and renders it.
 ///
-/// The node is stopped by killing its process tree. The engine's own stop command tracks
-/// instances through a runtime directory that a process started this way is not registered in,
-/// so it reports nothing running and leaves the child alive; that was verified against the
-/// bundled build rather than assumed.
+/// Stopping the node belongs to the child process group rather than to this class. The engine's
+/// own stop command cannot do it: it tracks instances through a runtime directory that a process
+/// started this way is not registered in, so it reports nothing running and leaves the child
+/// alive, and it takes no target, so it could not be aimed at our process even if it did work.
+/// The engine also re-executes itself while starting, which is what made a single tree kill here
+/// occasionally miss. Both facts were established against the bundled build rather than assumed.
 /// </remarks>
 public sealed partial class MeshManager : ObservableObject, IDisposable
 {
@@ -33,6 +36,7 @@ public sealed partial class MeshManager : ObservableObject, IDisposable
     private readonly AppConfig _config;
     private readonly IActivityFeed _feed;
     private readonly Dispatcher _dispatcher;
+    private readonly ChildProcessGroup _children;
     private readonly MeshStatusReader _reader = new();
     private readonly SemaphoreSlim _gate = new(1, 1);
 
@@ -81,11 +85,12 @@ public sealed partial class MeshManager : ObservableObject, IDisposable
     [ObservableProperty]
     private InferenceSource? _thisMachine;
 
-    public MeshManager(AppConfig config, IActivityFeed feed, Dispatcher dispatcher)
+    public MeshManager(AppConfig config, IActivityFeed feed, Dispatcher dispatcher, ChildProcessGroup children)
     {
         _config = config;
         _feed = feed;
         _dispatcher = dispatcher;
+        _children = children;
 
         Models.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasModels));
         Sources.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasSources));
@@ -270,17 +275,11 @@ public sealed partial class MeshManager : ObservableObject, IDisposable
 
         _shutdown?.Cancel();
 
-        // On exit the child is killed outright: nothing we start may outlive the window.
-        try
+        // On exit the node is stopped and confirmed stopped: nothing we start may outlive the
+        // window, and the group is what verifies that rather than assuming it.
+        if (_process is { } process)
         {
-            if (_process is { HasExited: false })
-            {
-                _process.Kill(entireProcessTree: true);
-            }
-        }
-        catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException or System.ComponentModel.Win32Exception)
-        {
-            // The process is already gone, which is the outcome we wanted.
+            _children.Terminate(process);
         }
 
         _process?.Dispose();
@@ -313,6 +312,10 @@ public sealed partial class MeshManager : ObservableObject, IDisposable
             WorkingDirectory = Path.GetDirectoryName(executable) ?? AppContext.BaseDirectory,
             UseShellExecute = false,
             CreateNoWindow = true,
+
+            // Redirected so that closing it is a request the node could act on. This build does
+            // not act on it, which was tested, so the group forces the issue afterwards.
+            RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true
         };
@@ -334,6 +337,8 @@ public sealed partial class MeshManager : ObservableObject, IDisposable
         }
 
         _process = process;
+        _children.Track(process, "mesh-llm");
+
         _log = new StreamWriter(AppPaths.CreateLogFilePath("mesh"), append: true) { AutoFlush = true };
 
         process.OutputDataReceived += OnOutput;
@@ -379,18 +384,7 @@ public sealed partial class MeshManager : ObservableObject, IDisposable
 
         if (_process is { } process)
         {
-            try
-            {
-                if (!process.HasExited)
-                {
-                    process.Kill(entireProcessTree: true);
-                    await process.WaitForExitAsync().ConfigureAwait(false);
-                }
-            }
-            catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException or System.ComponentModel.Win32Exception)
-            {
-                // Already gone.
-            }
+            await Task.Run(() => _children.Terminate(process)).ConfigureAwait(false);
 
             process.Dispose();
             _process = null;

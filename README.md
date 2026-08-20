@@ -201,6 +201,11 @@ across several is the mesh's decision, made at run time and echoed to the activi
 Nothing about sources is configured by hand any more. Membership, placement, liveness and
 recovery all belong to the engine; the Network tab renders what it reports.
 
+Nothing LocalNEXUS starts outlives it. Engine processes are held by the operating system on the
+application's behalf and are stopped when it closes, whether it closes normally or is killed
+outright, and anything a previous session left behind is cleaned up at the next launch. An engine
+you started yourself is never touched.
+
 Four things worth knowing about the layer underneath, all established by testing the bundled
 build rather than by reading its documentation:
 

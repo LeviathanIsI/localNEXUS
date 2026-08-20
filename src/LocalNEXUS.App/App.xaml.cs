@@ -10,6 +10,7 @@ using LocalNEXUS.App.Services.Execution;
 using LocalNEXUS.App.Services.Files;
 using LocalNEXUS.App.Services.Inference;
 using LocalNEXUS.App.Services.Persistence;
+using LocalNEXUS.App.Services.Processes;
 using LocalNEXUS.App.ViewModels;
 using LocalNEXUS.App.Views;
 
@@ -21,6 +22,7 @@ namespace LocalNEXUS.App;
 /// </summary>
 public partial class App : Application
 {
+    private ChildProcessGroup? _children;
     private LlamaServerManager? _llamaServers;
     private OpenAiCompatibleClient? _modelClient;
     private MeshManager? _mesh;
@@ -29,7 +31,12 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
+        // Every way this process can end, not just the tidy one. An engine process holds GPU
+        // memory, so one left behind by a crash quietly degrades every run after it.
         DispatcherUnhandledException += OnDispatcherUnhandledException;
+        AppDomain.CurrentDomain.UnhandledException += OnDomainUnhandledException;
+        AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
+        TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
 
         try
         {
@@ -59,7 +66,13 @@ public partial class App : Application
         var unityProject = new UnityProjectService();
         RestoreLastProject(config, unityProject, feed);
 
-        var mesh = new MeshManager(config, feed, Dispatcher);
+        // Owns every engine process this session starts. Built before anything can start one,
+        // and given the chance to deal with anything a previous session failed to clean up.
+        var children = new ChildProcessGroup();
+        _children = children;
+        ReportAbandonedProcesses(children, feed);
+
+        var mesh = new MeshManager(config, feed, Dispatcher, children);
         _mesh = mesh;
 
         var factory = new NodeFactory(catalog, mesh);
@@ -69,7 +82,7 @@ public partial class App : Application
         // child process, and the Network tab shows the node coming up on its own.
         _ = mesh.RestoreAsync();
 
-        _llamaServers = new LlamaServerManager();
+        _llamaServers = new LlamaServerManager(children);
         _modelClient = new OpenAiCompatibleClient();
 
         var services = new ExecutionServices(
@@ -106,12 +119,22 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
-        // Child processes and background loops are ours to clean up. Nothing must outlive the window.
+        Cleanup();
+        base.OnExit(e);
+    }
+
+    /// <summary>
+    /// Releases everything this session owns. Called from every exit path, and safe to call more
+    /// than once because more than one of those paths can run.
+    /// </summary>
+    private void Cleanup()
+    {
+        // Order matters: the managers stop their own work first, then the group confirms that
+        // every process they started is actually gone and closes the job that guarantees it.
         _mesh?.Dispose();
         _llamaServers?.Dispose();
         _modelClient?.Dispose();
-
-        base.OnExit(e);
+        _children?.Dispose();
     }
 
     private static void RestoreLastProject(AppConfig config, UnityProjectService unityProject, ActivityFeed feed)
@@ -159,11 +182,61 @@ public partial class App : Application
                 : $"{catalog.Models.Count} GGUF file(s) available.");
     }
 
+    /// <summary>
+    /// Reports engine processes a previous session left behind. They have already been stopped by
+    /// the time this runs; saying so is what tells the user why the machine had memory in use.
+    /// </summary>
+    private static void ReportAbandonedProcesses(ChildProcessGroup children, ActivityFeed feed)
+    {
+        var stopped = children.TerminateAbandoned();
+
+        if (stopped > 0)
+        {
+            feed.Info(
+                "Cleaned up after a previous session",
+                $"{stopped} engine process(es) were still running from a session that did not close properly. They were stopped so this one starts from a clean machine.");
+        }
+
+        if (!children.HasKernelBackstop)
+        {
+            feed.Info(
+                "Process cleanup is degraded",
+                "Windows refused a job object, so engine processes are stopped explicitly but would survive this application being killed outright.");
+        }
+    }
+
     private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
         Report("Dispatcher", e.Exception);
         e.Handled = true;
     }
+
+    /// <summary>
+    /// A fault on a background thread ends the process whatever this handler does, so the only
+    /// useful work here is recording it and stopping the children before it goes.
+    /// </summary>
+    private void OnDomainUnhandledException(object sender, UnhandledExceptionEventArgs e)
+    {
+        if (e.ExceptionObject is Exception exception)
+        {
+            CrashLog.Write("Unhandled", exception);
+        }
+
+        Cleanup();
+    }
+
+    /// <summary>
+    /// A faulted task nobody awaited. It is observed here so it cannot bring the process down on
+    /// its own, and recorded so the fault is not simply lost.
+    /// </summary>
+    private void OnUnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
+    {
+        CrashLog.Write("UnobservedTask", e.Exception);
+        e.SetObserved();
+    }
+
+    /// <summary>The last point at which this process can still run code. Reached on paths that skip OnExit.</summary>
+    private void OnProcessExit(object? sender, EventArgs e) => Cleanup();
 
     private static void Report(string context, Exception exception)
     {

@@ -33,8 +33,17 @@ public static class AppPaths
     /// <summary>Folder that application and llama-server logs are written to.</summary>
     public static string Logs { get; } = Path.Combine(Root, "logs");
 
+    /// <summary>Folder holding state about the current run rather than the user's own data.</summary>
+    public static string Runtime { get; } = Path.Combine(Root, "runtime");
+
     /// <summary>Path of the persisted application configuration.</summary>
     public static string ConfigFile { get; } = Path.Combine(Root, "config.json");
+
+    /// <summary>
+    /// Where the engine processes this application starts are recorded, so a later session can
+    /// recognise anything a crash left behind.
+    /// </summary>
+    public static string ChildProcessFile { get; } = Path.Combine(Runtime, "children.json");
 
     /// <summary>Creates the data folders on first run. Safe to call repeatedly.</summary>
     public static void EnsureCreated()
@@ -43,6 +52,7 @@ public static class AppPaths
         Directory.CreateDirectory(Models);
         Directory.CreateDirectory(Graphs);
         Directory.CreateDirectory(Logs);
+        Directory.CreateDirectory(Runtime);
     }
 
     /// <summary>Returns a timestamped log file path inside <see cref="Logs"/>.</summary>
