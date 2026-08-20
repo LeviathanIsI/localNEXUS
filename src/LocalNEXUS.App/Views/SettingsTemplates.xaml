@@ -13,6 +13,10 @@
         <settings:InputNodeSettingsView />
     </DataTemplate>
 
+    <DataTemplate DataType="{x:Type nodes:PlanNode}">
+        <settings:PlanNodeSettingsView />
+    </DataTemplate>
+
     <DataTemplate DataType="{x:Type nodes:ModelNode}">
         <settings:ModelNodeSettingsView />
     </DataTemplate>

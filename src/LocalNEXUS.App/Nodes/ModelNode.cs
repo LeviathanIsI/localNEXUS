@@ -6,9 +6,12 @@ using LocalNEXUS.App.Infrastructure;
 using LocalNEXUS.App.Models;
 using LocalNEXUS.App.Services.Dialogs;
 using LocalNEXUS.App.Services.Distributed;
+using LocalNEXUS.App.Services.Editing;
 using LocalNEXUS.App.Services.Execution;
 using LocalNEXUS.App.Services.Inference;
 using LocalNEXUS.App.Services.Persistence;
+using LocalNEXUS.App.Services.Planning;
+using LocalNEXUS.App.Services.ProjectIndex;
 
 namespace LocalNEXUS.App.Nodes;
 
@@ -22,11 +25,16 @@ namespace LocalNEXUS.App.Nodes;
 /// inference physically happens, one machine or several, is decided during resolution and the
 /// graph does not care.
 ///
-/// It is also a repair source: something downstream that finds a problem with the code this node
-/// produced can hand the problem back and ask for another attempt. The node knows nothing about
-/// what kind of problem or who is asking.
+/// It is also a repair source and an answering model: something downstream that finds a problem
+/// with the code this node produced can hand the problem back and ask for another attempt, and
+/// something upstream that needs a model can borrow this one under its own instructions. The node
+/// knows nothing about what kind of problem or who is asking.
+///
+/// When what arrives on its input is a list of files to write rather than a single instruction,
+/// it runs once per file and emits a list. That is the whole of fan out: a wire carries one item
+/// or many identically, so a graph that writes five files is the same graph that writes one.
 /// </remarks>
-public sealed partial class ModelNode : NodeBase, ICodeRepairSource
+public sealed partial class ModelNode : NodeBase, ICodeRepairSource, IPlanningModel
 {
     /// <summary>Base URL used for every OpenRouter request.</summary>
     public const string OpenRouterBaseUrl = "https://openrouter.ai/api/v1";
@@ -127,6 +135,13 @@ public sealed partial class ModelNode : NodeBase, ICodeRepairSource
     /// <summary>Bearer token. Sent to OpenRouter, and to a self hosted server when set.</summary>
     [ObservableProperty]
     private string _apiKey = string.Empty;
+
+    /// <summary>
+    /// How this node is asked to express a change to an existing file. Per node because the right
+    /// answer depends on the model behind it.
+    /// </summary>
+    [ObservableProperty]
+    private EditFormat _editFormat = EditFormat.Automatic;
 
     private readonly IDialogService _dialogs;
 
@@ -229,6 +244,13 @@ public sealed partial class ModelNode : NodeBase, ICodeRepairSource
     /// <inheritdoc />
     public override async Task<NodeResult> ExecuteAsync(NodeExecutionContext ctx, CancellationToken ct)
     {
+        // A list of files to write is not a prompt, it is a plan, and this node runs once per
+        // entry in it. Nothing about the graph says so; the value on the wire does.
+        if (ctx.GetValue(Prompt) is IReadOnlyList<CodeTask> tasks)
+        {
+            return await WriteFilesAsync(ctx, tasks, ct).ConfigureAwait(false);
+        }
+
         var userContent = ctx.GetText(Prompt);
         if (string.IsNullOrWhiteSpace(userContent))
         {
@@ -260,10 +282,167 @@ public sealed partial class ModelNode : NodeBase, ICodeRepairSource
         }
     }
 
+    /// <summary>
+    /// Writes every file of a plan, in order, showing each one what the earlier ones defined.
+    /// </summary>
+    /// <remarks>
+    /// In order and not in parallel on purpose. The third file of a plan usually calls into the
+    /// first, and a model that has not been shown what the first actually declared will guess at
+    /// the name and be wrong. Running them concurrently would be faster and would produce a set
+    /// of files that do not fit together.
+    /// </remarks>
+    private async Task<NodeResult> WriteFilesAsync(
+        NodeExecutionContext ctx,
+        IReadOnlyList<CodeTask> tasks,
+        CancellationToken ct)
+    {
+        var produced = new List<GeneratedFile>();
+        var signatures = new List<string>();
+
+        ctx.Feed.Info($"{Title}: writing {tasks.Count} file(s)", string.Join(Environment.NewLine, tasks.Select(t => t.ToString())));
+
+        foreach (var task in tasks)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            var wholeFile = CodeEditApplier.WantsWholeFile(
+                EditFormat,
+                task.Operation == FileOperation.Create,
+                task.ExistingContent?.Length ?? 0);
+
+            var entry = ctx.Feed.Add(
+                ActivityKind.ModelStream,
+                $"{Title}  ({task.Order} of {tasks.Count}: {task.RelativePath}, {(wholeFile ? "whole file" : "diff")})",
+                null,
+                Id);
+
+            StatusMessage = $"{task.Order} of {tasks.Count}: {task.FileName}";
+
+            string reply;
+            try
+            {
+                var endpoint = await ResolveEndpointAsync(ctx, entry, ct).ConfigureAwait(false);
+                var emitted = FitSignatures(signatures);
+                var message = PlanPrompt.BuildCoderMessage(task, emitted, wholeFile);
+
+                reply = await StreamTextAsync(ctx, entry, endpoint, message, ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                entry.Flush();
+                entry.Detail = "cancelled";
+                throw;
+            }
+            catch (Exception)
+            {
+                entry.Flush();
+                entry.Detail = "failed";
+                throw;
+            }
+
+            var content = CodeEditApplier.Apply(reply, task.ExistingContent);
+            var declared = DeclaredTypes(content, task.RelativePath, ct);
+
+            produced.Add(new GeneratedFile(task, content, declared));
+
+            foreach (var type in declared)
+            {
+                signatures.Add(ProjectDigest.DescribeType(type));
+            }
+        }
+
+        StatusMessage = $"{produced.Count} file(s) written";
+        return NodeResult.FromPin(Completion, produced);
+    }
+
+    /// <summary>
+    /// What a generated file declares, read back out of it so the next file in the plan can be
+    /// shown the real signatures rather than what the plan hoped they would be.
+    /// </summary>
+    private static IReadOnlyList<IndexedType> DeclaredTypes(string content, string relativePath, CancellationToken ct)
+    {
+        var temporary = Path.GetTempFileName();
+
+        try
+        {
+            File.WriteAllText(temporary, content);
+            return SourceFileParser.Parse(temporary, relativePath, ct)?.Types ?? Array.Empty<IndexedType>();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return Array.Empty<IndexedType>();
+        }
+        finally
+        {
+            try
+            {
+                File.Delete(temporary);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // A stray temporary file is not worth failing a run over.
+            }
+        }
+    }
+
+    /// <summary>
+    /// The signatures written so far, newest last and trimmed to the budget. Newest last because
+    /// the file about to be written is most likely to use what was written just before it.
+    /// </summary>
+    private static string FitSignatures(IReadOnlyList<string> signatures)
+        => signatures.Count == 0
+            ? string.Empty
+            : ContextBudget.Fit(string.Join(Environment.NewLine + Environment.NewLine, signatures), 4000, "earlier signatures");
+
+    /// <inheritdoc />
+    public bool CanAnswer(out string reason) => HasUsableModel(out reason);
+
+    /// <inheritdoc />
+    public async Task<string> AnswerAsync(
+        string systemPrompt,
+        string message,
+        NodeExecutionContext ctx,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(ctx);
+
+        var entry = ctx.Feed.Add(ActivityKind.ModelStream, $"{Title}  (planning, {ModelDisplayName})", null, Id);
+
+        try
+        {
+            var endpoint = await ResolveEndpointAsync(ctx, entry, ct).ConfigureAwait(false);
+            var onToken = new DelegateProgress<string>(entry.Append);
+
+            // The caller's system prompt, not this node's: the node is configured to write code
+            // and is being borrowed to do something else.
+            var result = await ctx.Services.ModelClient
+                .StreamChatAsync(endpoint, systemPrompt, message, Temperature, MaxTokens, onToken, ct)
+                .ConfigureAwait(false);
+
+            entry.Flush();
+            entry.Detail = result.Summary;
+
+            return result.Text;
+        }
+        catch (OperationCanceledException)
+        {
+            entry.Flush();
+            entry.Detail = "cancelled";
+            throw;
+        }
+        catch (Exception)
+        {
+            entry.Flush();
+            entry.Detail = "failed";
+            throw;
+        }
+    }
+
     /// <inheritdoc />
     public override JsonObject SaveSettings() => new()
     {
         ["provider"] = Provider.ToString(),
+        ["editFormat"] = EditFormat.ToString(),
         ["localModelPath"] = SelectedLocalModel?.Path,
         ["localModelFilePath"] = ModelFilePath,
         ["networkModel"] = SelectedNetworkModel?.ModelKey ?? _unresolvedNetworkModelKey,
@@ -315,6 +494,10 @@ public sealed partial class ModelNode : NodeBase, ICodeRepairSource
         GpuLayers = settings["gpuLayers"]?.GetValue<int>() ?? LlamaLaunchOptions.DefaultGpuLayers;
         BaseUrl = settings["baseUrl"]?.GetValue<string>() ?? DefaultBaseUrlFor(Provider);
         ApiKey = settings["apiKey"]?.GetValue<string>() ?? string.Empty;
+
+        EditFormat = Enum.TryParse<EditFormat>(settings["editFormat"]?.GetValue<string>(), out var editFormat)
+            ? editFormat
+            : EditFormat.Automatic;
     }
 
     /// <summary>
@@ -416,7 +599,13 @@ public sealed partial class ModelNode : NodeBase, ICodeRepairSource
     }
 
     /// <inheritdoc />
-    public bool CanRepair(NodeExecutionContext ctx, out string reason)
+    public bool CanRepair(NodeExecutionContext ctx, out string reason) => HasUsableModel(out reason);
+
+    /// <summary>
+    /// Whether this node has enough set on it to send a request at all. Cheap, and checked before
+    /// a loop spends several calls discovering the same thing.
+    /// </summary>
+    private bool HasUsableModel(out string reason)
     {
         reason = string.Empty;
 

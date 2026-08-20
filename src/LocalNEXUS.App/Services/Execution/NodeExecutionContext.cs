@@ -71,6 +71,71 @@ public sealed class NodeExecutionContext
     }
 
     /// <summary>
+    /// The nodes an output pin feeds, in no particular order.
+    /// </summary>
+    /// <remarks>
+    /// The mirror of <see cref="GetSourceNode"/>. A node that needs a capability none of its
+    /// inputs has can look along its own output wire for one, which is how a planner borrows the
+    /// model that is going to do the writing. These nodes have not run yet, and do not need to
+    /// have: what is being borrowed is their configuration, not their result.
+    /// </remarks>
+    public IReadOnlyList<NodeBase> GetTargetNodes(Pin outputPin)
+    {
+        ArgumentNullException.ThrowIfNull(outputPin);
+
+        return _run.Graph.Connections
+            .Where(c => c.Source == outputPin)
+            .Select(c => c.Target.Owner)
+            .Distinct()
+            .ToList();
+    }
+
+    /// <summary>
+    /// The first node reachable from this one that offers a capability, following output wires.
+    /// </summary>
+    /// <remarks>
+    /// Breadth first and depth limited, so a planner two nodes upstream of the coder still finds
+    /// it and a graph wired in a loop cannot walk forever. Cycles are rejected before a run
+    /// starts, so the visited set is belt and braces rather than a real defence.
+    /// </remarks>
+    public T? FindDownstream<T>(int maxDepth = 4)
+        where T : class
+    {
+        var visited = new HashSet<NodeBase> { Node };
+        var frontier = new List<NodeBase> { Node };
+
+        for (var depth = 0; depth < maxDepth && frontier.Count > 0; depth++)
+        {
+            var next = new List<NodeBase>();
+
+            foreach (var node in frontier)
+            {
+                foreach (var pin in node.Outputs)
+                {
+                    foreach (var target in GetTargetNodes(pin))
+                    {
+                        if (!visited.Add(target))
+                        {
+                            continue;
+                        }
+
+                        if (target is T match)
+                        {
+                            return match;
+                        }
+
+                        next.Add(target);
+                    }
+                }
+            }
+
+            frontier = next;
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// A context belonging to another node of the same run, so that node can read its own inputs.
     /// </summary>
     /// <remarks>

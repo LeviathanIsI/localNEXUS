@@ -4,6 +4,7 @@ using LocalNEXUS.App.Infrastructure;
 using LocalNEXUS.App.Models;
 using LocalNEXUS.App.Services.Compilation;
 using LocalNEXUS.App.Services.Execution;
+using LocalNEXUS.App.Services.Planning;
 
 namespace LocalNEXUS.App.Nodes;
 
@@ -23,6 +24,11 @@ namespace LocalNEXUS.App.Nodes;
 /// A cycle in the graph would be the other way to express this, and it is not available: the
 /// executor rejects cycles, and it is right to, because the retry cap belongs in a setting rather
 /// than in how many times somebody drew a loop.
+///
+/// When a whole plan arrives rather than one file, every file is checked against every other file
+/// of the same plan as one compilation. That is the answer to the obvious problem with checking a
+/// file at a time: the third file of a plan legitimately calls into the first, and neither Unity
+/// nor the project's compiled assemblies have ever seen either of them.
 /// </remarks>
 public sealed partial class CompileCheckNode : NodeBase
 {
@@ -99,6 +105,11 @@ public sealed partial class CompileCheckNode : NodeBase
     /// <inheritdoc />
     public override async Task<NodeResult> ExecuteAsync(NodeExecutionContext ctx, CancellationToken ct)
     {
+        if (ctx.GetValue(Code) is IReadOnlyList<GeneratedFile> files)
+        {
+            return await CheckPlanAsync(ctx, files, ct).ConfigureAwait(false);
+        }
+
         var source = ctx.GetText(Code);
 
         if (string.IsNullOrWhiteSpace(source))
@@ -144,6 +155,195 @@ public sealed partial class CompileCheckNode : NodeBase
         }
 
         return Fail(ctx, fileName, repaired, ct);
+    }
+
+    /// <summary>
+    /// Checks every file of a plan, each against the ones before it, repairing as it goes.
+    /// </summary>
+    /// <remarks>
+    /// The accumulated set is what makes this work. File one is compiled alone, file two with
+    /// file one, and so on, so a call into a sibling generated moments earlier resolves. The
+    /// diagnostics still carry the file they came from, and only the file being checked is ever
+    /// offered for repair: a file that already passed is not rewritten because a later one broke.
+    /// </remarks>
+    private async Task<NodeResult> CheckPlanAsync(
+        NodeExecutionContext ctx,
+        IReadOnlyList<GeneratedFile> files,
+        CancellationToken ct)
+    {
+        if (files.Count == 0)
+        {
+            throw new InvalidOperationException($"{Title} received an empty plan to check.");
+        }
+
+        Outcome = CompileOutcome.Checking;
+        LastDiagnostics = string.Empty;
+
+        var settled = new List<GeneratedFile>();
+        var repairs = 0;
+
+        foreach (var file in files)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            var checkedFile = await CheckOneAsync(ctx, settled, file, files.Count, ct).ConfigureAwait(false);
+
+            if (checkedFile.Repairs > 0)
+            {
+                repairs += checkedFile.Repairs;
+            }
+
+            settled.Add(checkedFile.File);
+        }
+
+        Outcome = repairs > 0 ? CompileOutcome.Repaired : CompileOutcome.Compiled;
+        StatusMessage = repairs > 0
+            ? $"{settled.Count} file(s) compiled after {repairs} repair attempt(s)"
+            : $"{settled.Count} file(s) compiled";
+
+        return NodeResult.FromPin(Checked, settled);
+    }
+
+    /// <summary>One file of a plan, checked against everything settled before it.</summary>
+    private readonly record struct CheckedFile(GeneratedFile File, int Repairs);
+
+    private async Task<CheckedFile> CheckOneAsync(
+        NodeExecutionContext ctx,
+        IReadOnlyList<GeneratedFile> settled,
+        GeneratedFile file,
+        int total,
+        CancellationToken ct)
+    {
+        var label = $"{file.Task.Order} of {total}: {file.RelativePath}";
+        var projectPath = ctx.Services.UnityProject.ProjectPath;
+
+        CompileResult result;
+        try
+        {
+            result = await ctx.Services.Compiler
+                .CompileAsync(BuildSet(settled, file, file.Content), projectPath, ct)
+                .ConfigureAwait(false);
+        }
+        catch (CompilerUnavailableException ex)
+        {
+            Outcome = CompileOutcome.Unavailable;
+            ReferenceSummary = ex.Message;
+            ctx.Feed.Info($"{Title}: {label} was not checked", ex.Message);
+
+            return new CheckedFile(file, 0);
+        }
+
+        ReferenceSummary = result.ReferenceSummary;
+        ReportAttempt(ctx, attempt: 0, label, result);
+
+        if (result.Succeeded)
+        {
+            return new CheckedFile(file, 0);
+        }
+
+        var current = file.Content;
+        var attempts = 0;
+
+        var upstream = ctx.GetSourceNode(Code);
+        var repairSource = upstream as ICodeRepairSource;
+        var upstreamContext = upstream is null ? null : ctx.ForNode(upstream);
+
+        var whyNot = repairSource is null
+            ? $"The code arrived from {upstream?.Title ?? "nothing"}, which cannot be asked for another attempt."
+            : string.Empty;
+
+        var canRepair = repairSource is not null
+                        && upstreamContext is not null
+                        && repairSource.CanRepair(upstreamContext, out whyNot);
+
+        if (!canRepair)
+        {
+            ctx.Feed.Info($"{Title}: {label} cannot be repaired", whyNot);
+        }
+        else if (repairSource is not null && upstreamContext is not null && upstream is not null)
+        {
+            for (var attempt = 1; attempt <= RetryLimit; attempt++)
+            {
+                ct.ThrowIfCancellationRequested();
+
+                var request = new CodeRepairRequest(
+                    attempt,
+                    RetryLimit,
+                    file.Task.FileName,
+                    current,
+                    result.Diagnostics
+                        .Where(d => d.File.EndsWith(file.Task.FileName, StringComparison.OrdinalIgnoreCase) || d.Line == 0)
+                        .OrderByDescending(d => d.Severity)
+                        .ThenBy(d => d.Line)
+                        .Take(DiagnosticsSentToCoder)
+                        .ToList());
+
+                ctx.Feed.Add(
+                    ActivityKind.NodeStarted,
+                    $"{Title}: {label}, repair attempt {attempt} of {RetryLimit}",
+                    $"Asking {upstream!.Title} to fix {request.ErrorCount} error(s)",
+                    Id);
+
+                StatusMessage = $"{label}: repair attempt {attempt} of {RetryLimit}";
+
+                var revised = await repairSource.ReviseAsync(request, upstreamContext, ct).ConfigureAwait(false);
+                attempts = attempt;
+
+                if (string.IsNullOrWhiteSpace(revised))
+                {
+                    ctx.Feed.Info($"{Title}: repair attempt {attempt} produced nothing", "The previous content stands.");
+                    continue;
+                }
+
+                current = Services.Editing.CodeEditApplier.Apply(revised, file.Content);
+
+                result = await ctx.Services.Compiler
+                    .CompileAsync(BuildSet(settled, file, current), projectPath, ct)
+                    .ConfigureAwait(false);
+
+                ReportAttempt(ctx, attempt, label, result);
+
+                if (result.Succeeded)
+                {
+                    return new CheckedFile(file with { Content = current }, attempts);
+                }
+            }
+        }
+
+        Outcome = CompileOutcome.Failed;
+
+        var listing = result.FormatDiagnostics(DiagnosticsShown);
+        StatusMessage = $"{result.Errors.Count} error(s) remain in {file.RelativePath}";
+
+        if (FailureBehaviour == CompileFailureBehaviour.FaultTheRun)
+        {
+            throw new InvalidOperationException(
+                $"{Title}: {file.RelativePath} does not compile and "
+                + $"{(attempts == 0 ? "no repair was attempted" : $"{attempts} repair attempt(s) did not fix it")}. "
+                + $"Nothing has been written.{Environment.NewLine}{listing}");
+        }
+
+        ctx.Feed.Info(
+            $"{Title}: continuing with {file.RelativePath}, which does not compile",
+            $"{result.Errors.Count} error(s) remain. This node is set to continue rather than fault the run.");
+
+        return new CheckedFile(file with { Content = current }, attempts);
+    }
+
+    /// <summary>
+    /// The compilation unit for one file of a plan: everything settled before it, plus itself.
+    /// </summary>
+    private static IReadOnlyList<CompileSource> BuildSet(
+        IReadOnlyList<GeneratedFile> settled,
+        GeneratedFile file,
+        string content)
+    {
+        var sources = settled
+            .Select(f => new CompileSource(f.Task.FileName, f.Content))
+            .ToList();
+
+        sources.Add(new CompileSource(file.Task.FileName, content));
+        return sources;
     }
 
     /// <inheritdoc />

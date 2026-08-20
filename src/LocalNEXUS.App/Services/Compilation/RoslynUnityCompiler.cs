@@ -44,7 +44,16 @@ public sealed class RoslynUnityCompiler : ICodeCompiler
 
     /// <inheritdoc />
     public Task<CompileResult> CompileAsync(string source, string fileName, string? projectPath, CancellationToken ct)
+        => CompileAsync(new[] { new CompileSource(fileName, source) }, projectPath, ct);
+
+    /// <inheritdoc />
+    public Task<CompileResult> CompileAsync(
+        IReadOnlyList<CompileSource> sources,
+        string? projectPath,
+        CancellationToken ct)
     {
+        ArgumentNullException.ThrowIfNull(sources);
+
         var referenceSet = _references.Resolve(projectPath);
 
         if (!referenceSet.CanCompile)
@@ -54,7 +63,7 @@ public sealed class RoslynUnityCompiler : ICodeCompiler
 
         // Roslyn is synchronous and CPU bound. Running it on the pool keeps a long compile off
         // the thread the caller is on, which during a run is the one streaming to the feed.
-        return Task.Run(() => Compile(source, fileName, referenceSet, ct), ct);
+        return Task.Run(() => Compile(sources, referenceSet, ct), ct);
     }
 
     /// <summary>
@@ -87,22 +96,25 @@ public sealed class RoslynUnityCompiler : ICodeCompiler
     }
 
     private static CompileResult Compile(
-        string source,
-        string fileName,
+        IReadOnlyList<CompileSource> sources,
         CompileReferenceSet referenceSet,
         CancellationToken ct)
     {
         var stopwatch = Stopwatch.StartNew();
 
-        var tree = CSharpSyntaxTree.ParseText(
-            SourceText.From(source),
-            new CSharpParseOptions(UnityLanguageVersion),
-            path: fileName,
-            cancellationToken: ct);
+        var trees = sources
+            .Select(s => CSharpSyntaxTree.ParseText(
+                SourceText.From(s.Source),
+                new CSharpParseOptions(UnityLanguageVersion),
+                path: s.FileName,
+                cancellationToken: ct))
+            .ToList();
+
+        var fileName = sources.Count > 0 ? sources[^1].FileName : "Generated.cs";
 
         var compilation = CSharpCompilation.Create(
             "LocalNEXUS.CompileCheck",
-            new[] { tree },
+            trees,
             referenceSet.References,
             new CSharpCompilationOptions(
                 OutputKind.DynamicallyLinkedLibrary,

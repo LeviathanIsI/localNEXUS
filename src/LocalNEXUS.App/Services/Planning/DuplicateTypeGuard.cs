@@ -31,7 +31,7 @@ public static class DuplicateTypeGuard
     /// <param name="targetPath">Where the plan wants to put it, relative to the project root.</param>
     /// <param name="alreadyPlanned">Types earlier steps of this same plan will create.</param>
     public static Verdict Check(
-        ProjectIndex.ProjectIndex index,
+        ProjectIndexService index,
         string typeName,
         string targetPath,
         IReadOnlyCollection<string> alreadyPlanned)
@@ -71,7 +71,7 @@ public static class DuplicateTypeGuard
 
         // Rewriting the file the type already lives in is an edit, not a duplicate, and the plan
         // is allowed to say so.
-        if (file is not null && string.Equals(ProjectIndex.ProjectIndex.Normalise(targetPath), file.RelativePath, StringComparison.OrdinalIgnoreCase))
+        if (file is not null && string.Equals(ProjectIndexService.Normalise(targetPath), file.RelativePath, StringComparison.OrdinalIgnoreCase))
         {
             return new Verdict(true, file.RelativePath, $"{typeName} already lives here, so this is an edit rather than a new type.");
         }
@@ -89,7 +89,7 @@ public static class DuplicateTypeGuard
     /// dependency is judged after that one.
     /// </summary>
     public static (IReadOnlyList<CodeTask> Allowed, IReadOnlyList<string> Blocked) Filter(
-        ProjectIndex.ProjectIndex index,
+        ProjectIndexService index,
         IReadOnlyList<CodeTask> tasks)
     {
         var allowed = new List<CodeTask>();

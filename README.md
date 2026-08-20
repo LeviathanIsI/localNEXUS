@@ -16,7 +16,7 @@ than a fixed pipeline, so the features on the roadmap drop in without rework.
 
 - **Node canvas.** Add, drag, wire and delete nodes. Built on
   [Nodify](https://miroiu.github.io/nodify).
-- **Five node types.** Input, Model, Transform, Compile check, Output.
+- **Six node types.** Input, Plan, Model, Transform, Compile check, Output.
 - **Typed pins.** Pins are colour coded by what they carry (`Text` is blue, `Code` is
   amber). Invalid drops are refused while you drag, and the wire tells you why.
 - **A general graph executor.** Nodes are ordered by their connections using Kahn's
@@ -31,6 +31,13 @@ than a fixed pipeline, so the features on the roadmap drop in without rework.
   pick an engine.
 - **Live streaming.** Tokens land in the activity feed as they arrive, followed by token
   counts, throughput and elapsed time.
+- **Project awareness.** The Plan node reads what the open Unity project already contains, ranks
+  its files against the request, and decides per file whether to use it, edit it, or write
+  something new that references it. Creating a type the project already has is refused.
+- **Multi-file generation.** One request produces as many files as it needs, in dependency order,
+  each one shown what the earlier ones actually declared.
+- **Editing existing files.** Changes come back as a line-tagged diff and are applied tolerantly,
+  batched one write per file, and nothing is written unless the whole plan succeeds.
 - **Compile checking and repair.** The Compile check node compiles generated C# against the
   open Unity project before anything is written, and when it does not compile it hands the
   errors back to the model that wrote it and asks for another attempt, up to a retry cap.
@@ -287,6 +294,70 @@ build rather than by reading its documentation:
   again within the test window. Treat recovery-after-replacement as unproven rather than
   guaranteed.
 
+## Working against an existing project
+
+Wire the Plan node between the request and the model:
+
+```
+Input -> Plan -> Model -> Compile check -> Output
+```
+
+The Plan node reads the project, works out which files the request is about, and emits an ordered
+list of files to write. Everything downstream then runs once per file: the model writes them in
+order, the compile check checks each against the ones before it, and the writer applies them
+together or not at all.
+
+### What it reads, and how much
+
+The project is indexed by parsing every `Assets/**/*.cs`, in parallel, recording what each file
+declares and which type names it mentions. The result is cached per file by write time and
+length, so editing one script re-reads one script. Indexing runs when a project is opened and its
+timing appears in the activity feed.
+
+Ranking is by name and member matches against the request, spread through the reference graph by
+personalized PageRank, so a file the request never names but everything relevant depends on still
+surfaces. Only the files that survive ranking are read from disk at all.
+
+The context budget is a setting on the node and is written to the feed at the start of every run:
+by default about 4,000 characters of project map, 16,000 of candidate detail and 4,000 of
+signatures produced earlier in the same run, which is roughly 6,000 tokens and fits an 8K window
+with room for the reply. Whatever does not fit is dropped in rank order with a note saying so.
+
+### Use, edit, or create
+
+For each candidate the planner must say `USE_AS_IS`, `EDIT`, `CREATE_NEW_REFERENCING <Type>` or
+`IGNORE`, and every decision appears in the feed. A plan that asks to create a type the project
+already declares is refused by the index, not by the model's judgement, and the refusal names the
+existing type and its file so the work becomes an edit or a reference instead.
+
+### Editing
+
+A change to an existing file comes back as a line-tagged diff rather than the whole file: blocks
+introduced by `@@`, lines prefixed with a space to keep, a minus to remove and a plus to add. That
+is the format the research finds smaller models handle best, and local models are the small ones.
+Set **Edits** on a Model node to override it per node.
+
+The applier is deliberately forgiving, because the failure that actually happens is a reproduced
+line with different whitespace rather than a wrong idea. It looks for each block exactly, then
+ignoring trailing whitespace, then ignoring indentation, and only then fails, naming the lines it
+could not find so the repair loop has something to act on. Every change to one file becomes one
+write.
+
+### Unity rules that are refusals
+
+Unity binds a script to scenes and prefabs by the GUID in its `.cs.meta` file, and resolves the
+type inside by namespace and class name. Several ordinary looking edits therefore compile
+perfectly and silently break a scene, so the writer refuses them rather than warning:
+
+- a MonoBehaviour whose file name does not match its class name
+- removing or renaming a type that scenes may reference, without a `[MovedFrom]` shim
+- moving a type into or out of a namespace, without the same
+- renaming or removing a serialized field, without `[FormerlySerializedAs]`
+- taking MonoBehaviour off a type that instances may be attached to
+
+When a new MonoBehaviour is written, the feed says it must be attached to a GameObject to run.
+Nothing here attaches it.
+
 ## Checking that generated code compiles
 
 Drop a **Compile check** node between the model and the Output node:
@@ -388,8 +459,8 @@ between nodes, so it never interrupts a model mid stream.
 ```
 src/LocalNEXUS.App/
   Models/          NodeBase, Pin, Connection, GraphModel, pin typing and validation
-  Nodes/           InputNode, ModelNode, TransformNode, CompileCheckNode, OutputNode,
-                   NodeFactory
+  Nodes/           InputNode, PlanNode, ModelNode, TransformNode, CompileCheckNode,
+                   OutputNode, NodeFactory
   Services/
     Execution/     GraphExecutor, RunContext, RunState, topological sort
     Inference/     IModelClient, OpenAiCompatibleClient, and the local runtimes behind
@@ -399,11 +470,15 @@ src/LocalNEXUS.App/
                    AcceleratorProbe, PythonEnvironmentState
     Compilation/   ICodeCompiler, RoslynUnityCompiler, UnityReferenceResolver,
                    UnityInstallLocator, CompileDiagnostic, CompileResult
+    ProjectIndex/  ProjectIndexService, SourceFileParser, RelevanceRanker,
+                   ProjectDigest, ContextBudget, ProjectIndexCache
+    Planning/      FilePlan, CodeTask, PlanParser, PlanPrompt, DuplicateTypeGuard
+    Editing/       EditFormat, LineTaggedDiff, CodeEditApplier
     Distributed/   the mesh and what it reports: MeshManager, MeshStatusReader,
                    InferenceSource, ModelSection, CoveragePlan, NetworkServedModel
     Processes/     ChildProcessGroup, JobObject, and the registry of what we started
     Persistence/   AppPaths, AppConfig, ModelCatalog, ModelPathsFile, GraphSerializer
-    Files/         UnityProjectService, FileWriter
+    Files/         UnityProjectService, FileWriter, ProjectWriteBatch, UnityScriptRules
     Dialogs/       IDialogService and its Windows implementation
   ViewModels/      MainViewModel, ActivityFeedViewModel, NetworkViewModel, and friends
   Views/           XAML only: window, canvas templates, network tab, settings panels

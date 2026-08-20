@@ -12,6 +12,7 @@ using LocalNEXUS.App.Services.Files;
 using LocalNEXUS.App.Services.Inference;
 using LocalNEXUS.App.Services.Persistence;
 using LocalNEXUS.App.Services.Processes;
+using LocalNEXUS.App.Services.ProjectIndex;
 using LocalNEXUS.App.Services.Python;
 using LocalNEXUS.App.ViewModels;
 using LocalNEXUS.App.Views;
@@ -30,6 +31,7 @@ public partial class App : Application
     private OpenAiCompatibleClient? _modelClient;
     private MeshManager? _mesh;
     private CancellationTokenSource? _provisioning;
+    private CancellationTokenSource? _indexing;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -106,11 +108,16 @@ public partial class App : Application
         // behind this and rebuilt only when the project's compiled assemblies change.
         var compiler = new RoslynUnityCompiler(new UnityReferenceResolver());
 
+        // What the open project already contains. Built on demand rather than at startup, so a
+        // session that never runs a graph never reads a project it was not asked about.
+        var projectIndex = new ProjectIndexService();
+
         var services = new ExecutionServices(
             _modelClient,
             runtimes,
             mesh,
             compiler,
+            projectIndex,
             unityProject,
             new FileWriter(),
             feed);
@@ -145,6 +152,24 @@ public partial class App : Application
         // and the feed and the model panel show how far it has got.
         _provisioning = new CancellationTokenSource();
         _ = ProvisionPythonAsync(pythonEnvironment, _provisioning.Token);
+
+        // The project index is read when a project is opened rather than when a graph is run, so
+        // that what the application knows about the project is visible before anything depends on
+        // it, and so the first run does not pay for it. Not awaited: reading a large project takes
+        // long enough to notice and the window has to be usable throughout.
+        _indexing = new CancellationTokenSource();
+        _ = IndexProjectAsync(projectIndex, unityProject.ProjectPath, feed, _indexing.Token);
+
+        unityProject.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName != nameof(UnityProjectService.ProjectPath))
+            {
+                return;
+            }
+
+            projectIndex.Forget();
+            _ = IndexProjectAsync(projectIndex, unityProject.ProjectPath, feed, _indexing.Token);
+        };
     }
 
     protected override void OnExit(ExitEventArgs e)
@@ -162,11 +187,49 @@ public partial class App : Application
         // Order matters: the managers stop their own work first, then the group confirms that
         // every process they started is actually gone and closes the job that guarantees it.
         _provisioning?.Cancel();
+        _indexing?.Cancel();
         _mesh?.Dispose();
         _llamaServers?.Dispose();
         _pythonRuntime?.Dispose();
         _modelClient?.Dispose();
         _children?.Dispose();
+    }
+
+    /// <summary>
+    /// Reads what the open Unity project contains, in the background.
+    /// </summary>
+    /// <remarks>
+    /// Reported to the feed with its timing, because how long this takes is the thing that decides
+    /// whether the approach is usable and it should not be a number only a developer can see.
+    /// </remarks>
+    private static async Task IndexProjectAsync(
+        ProjectIndexService index,
+        string? projectPath,
+        ActivityFeed feed,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(projectPath))
+        {
+            return;
+        }
+
+        try
+        {
+            await index.EnsureAsync(projectPath, null, ct).ConfigureAwait(false);
+
+            feed.Info(
+                "Project index",
+                $"{index.StatusText} {index.ReparsedCount} file(s) had to be read again; the rest came from the cache.");
+        }
+        catch (OperationCanceledException)
+        {
+            // The application is closing, or another project was opened.
+        }
+        catch (Exception ex)
+        {
+            CrashLog.Write("ProjectIndex", ex);
+            feed.Info("Project index unavailable", ex.Message);
+        }
     }
 
     /// <summary>

@@ -36,6 +36,7 @@ public sealed class NodeFactory
     public static IReadOnlyList<NodeDescriptor> Descriptors { get; } = new[]
     {
         new NodeDescriptor("Input", "Input", "Emits the request typed into the chat box."),
+        new NodeDescriptor("Plan", "Plan", "Reads the open Unity project and works out which files the request needs."),
         new NodeDescriptor("Model", "Model", "Sends its input to a local or hosted model and emits the reply."),
         new NodeDescriptor("Transform", "Transform", "Rewrites the value passing through it with a template or a C# expression."),
         new NodeDescriptor("Compile", "Compile check", "Compiles the code passing through it and asks the model that wrote it to fix what does not."),
@@ -47,6 +48,7 @@ public sealed class NodeFactory
     public NodeBase Create(string typeKey) => typeKey switch
     {
         "Input" => new InputNode(),
+        "Plan" => new PlanNode(),
         "Model" => new ModelNode(_catalog, _mesh, _dialogs),
         "Transform" => new TransformNode(),
         "Compile" => new CompileCheckNode(),

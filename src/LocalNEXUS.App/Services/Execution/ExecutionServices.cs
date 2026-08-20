@@ -3,6 +3,7 @@ using LocalNEXUS.App.Services.Compilation;
 using LocalNEXUS.App.Services.Distributed;
 using LocalNEXUS.App.Services.Files;
 using LocalNEXUS.App.Services.Inference;
+using LocalNEXUS.App.Services.ProjectIndex;
 
 namespace LocalNEXUS.App.Services.Execution;
 
@@ -18,6 +19,7 @@ public sealed class ExecutionServices
         RuntimeResolver runtimes,
         MeshManager mesh,
         ICodeCompiler compiler,
+        ProjectIndexService projectIndex,
         UnityProjectService unityProject,
         FileWriter fileWriter,
         IActivityFeed feed)
@@ -26,6 +28,7 @@ public sealed class ExecutionServices
         Runtimes = runtimes;
         Mesh = mesh;
         Compiler = compiler;
+        ProjectIndex = projectIndex;
         UnityProject = unityProject;
         FileWriter = fileWriter;
         Feed = feed;
@@ -45,6 +48,9 @@ public sealed class ExecutionServices
 
     /// <summary>Answers whether a piece of code compiles against the open Unity project.</summary>
     public ICodeCompiler Compiler { get; }
+
+    /// <summary>What the open Unity project already contains, so a run is not written blind.</summary>
+    public ProjectIndexService ProjectIndex { get; }
 
     /// <summary>The Unity project that output nodes write into.</summary>
     public UnityProjectService UnityProject { get; }

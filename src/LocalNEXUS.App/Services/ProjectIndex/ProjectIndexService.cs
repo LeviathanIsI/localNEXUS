@@ -19,7 +19,7 @@ namespace LocalNEXUS.App.Services.ProjectIndex;
 /// local model with a small context window is shown the handful that matter rather than the
 /// project.
 /// </remarks>
-public sealed partial class ProjectIndex : ObservableObject
+public sealed partial class ProjectIndexService : ObservableObject
 {
     private readonly ProjectIndexCache _cache = new();
     private readonly SemaphoreSlim _gate = new(1, 1);

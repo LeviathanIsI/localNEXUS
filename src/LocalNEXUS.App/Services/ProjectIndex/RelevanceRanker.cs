@@ -42,7 +42,7 @@ public static class RelevanceRanker
     /// <param name="index">The project index to rank over.</param>
     /// <param name="request">What the user asked for.</param>
     /// <param name="limit">How many candidates to return.</param>
-    public static IReadOnlyList<RankedFile> Rank(ProjectIndex index, string request, int limit)
+    public static IReadOnlyList<RankedFile> Rank(ProjectIndexService index, string request, int limit)
     {
         ArgumentNullException.ThrowIfNull(index);
 

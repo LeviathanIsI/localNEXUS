@@ -19,7 +19,7 @@ public static class ProjectDigest
     /// The whole project as a list of what it declares, ranked candidates first so that the part
     /// most likely to matter survives the budget.
     /// </summary>
-    public static string BuildMap(ProjectIndex index, IReadOnlyList<RankedFile> candidates, ContextBudget budget)
+    public static string BuildMap(ProjectIndexService index, IReadOnlyList<RankedFile> candidates, ContextBudget budget)
     {
         ArgumentNullException.ThrowIfNull(index);
         ArgumentNullException.ThrowIfNull(budget);

@@ -319,6 +319,25 @@
                  MinHeight="120"
                  MaxHeight="260" />
 
+        <TextBlock Style="{StaticResource SectionHeader}" Margin="0,20,0,0" Text="Edits" />
+
+        <StackPanel Margin="0,6,0,0">
+            <RadioButton Content="Automatic"
+                         GroupName="EditFormat"
+                         Margin="0,0,0,4"
+                         IsChecked="{Binding EditFormat, Converter={StaticResource EnumToBoolean}, ConverterParameter=Automatic}" />
+            <RadioButton Content="Always the whole file"
+                         GroupName="EditFormat"
+                         Margin="0,0,0,4"
+                         IsChecked="{Binding EditFormat, Converter={StaticResource EnumToBoolean}, ConverterParameter=WholeFile}" />
+            <RadioButton Content="Always a diff"
+                         GroupName="EditFormat"
+                         IsChecked="{Binding EditFormat, Converter={StaticResource EnumToBoolean}, ConverterParameter=LineTaggedDiff}" />
+        </StackPanel>
+
+        <TextBlock Style="{StaticResource HintText}"
+                   Text="How this node is asked to express a change to an existing file. Automatic sends the whole file for a new or short one and a line tagged diff for anything larger, which is the format smaller models handle best. The applier tolerates whitespace that does not match, and names the lines it could not find when it cannot." />
+
         <TextBlock Style="{StaticResource SectionHeader}" Margin="0,20,0,0" Text="Sampling" />
 
         <Grid Margin="0,6,0,0">
