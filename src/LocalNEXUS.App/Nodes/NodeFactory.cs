@@ -18,12 +18,14 @@ public sealed class NodeFactory
     private readonly ModelCatalog _catalog;
     private readonly MeshManager _mesh;
     private readonly IDialogService _dialogs;
+    private readonly AppConfig _config;
 
-    public NodeFactory(ModelCatalog catalog, MeshManager mesh, IDialogService dialogs)
+    public NodeFactory(ModelCatalog catalog, MeshManager mesh, IDialogService dialogs, AppConfig config)
     {
         _catalog = catalog;
         _mesh = mesh;
         _dialogs = dialogs;
+        _config = config;
     }
 
     /// <summary>A node type as offered by the palette.</summary>
@@ -39,19 +41,34 @@ public sealed class NodeFactory
         new NodeDescriptor("Plan", "Plan", "Reads the open Unity project and works out which files the request needs."),
         new NodeDescriptor("Model", "Model", "Sends its input to a local or hosted model and emits the reply."),
         new NodeDescriptor("Transform", "Transform", "Rewrites the value passing through it with a template or a C# expression."),
-        new NodeDescriptor("Compile", "Compile check", "Compiles the code passing through it and asks the model that wrote it to fix what does not."),
+        new NodeDescriptor("CompileCheck", "Compile check", "Compiles the code passing through it and asks the model that wrote it to fix what does not."),
         new NodeDescriptor("Output", "Output", "Writes its input to a file inside the opened Unity project.")
     };
 
-    /// <summary>Creates a node of the given type.</summary>
+    /// <summary>Creates a node of the given type, started from the application wide defaults.</summary>
+    /// <remarks>
+    /// The key a node is created from has to be the key it saves itself under, or a graph does not
+    /// survive being reopened. <c>Compile</c> is still accepted because the palette used to offer
+    /// that key while the node saved itself as <c>CompileCheck</c>, and a graph written by that
+    /// build is worth still being able to open.
+    /// </remarks>
     /// <exception cref="NotSupportedException">The type key is not one this build knows about.</exception>
     public NodeBase Create(string typeKey) => typeKey switch
     {
         "Input" => new InputNode(),
-        "Plan" => new PlanNode(),
-        "Model" => new ModelNode(_catalog, _mesh, _dialogs),
+        "Plan" => new PlanNode
+        {
+            MapCharacters = _config.DefaultMapCharacters,
+            CandidateCharacters = _config.DefaultCandidateCharacters,
+            EmittedCharacters = _config.DefaultEmittedCharacters,
+            CandidateLimit = _config.DefaultCandidateLimit
+        },
+        "Model" => new ModelNode(_catalog, _mesh, _dialogs)
+        {
+            ApiKey = _config.CloudApiKey ?? string.Empty
+        },
         "Transform" => new TransformNode(),
-        "Compile" => new CompileCheckNode(),
+        "CompileCheck" or "Compile" => new CompileCheckNode { RetryLimit = _config.DefaultRetryLimit },
         "Output" => new OutputNode(),
         _ => throw new NotSupportedException($"Unknown node type '{typeKey}'.")
     };

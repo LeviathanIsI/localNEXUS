@@ -6,163 +6,119 @@
              d:DataContext="{d:DesignInstance Type=vm:ActivityFeedViewModel}"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d"
-             Background="{StaticResource Surface.Panel.Brush}">
+             mc:Ignorable="d">
+
+    <!--
+        The run transcript. The request box and the run controls used to sit above this; they now
+        live in the shell, because the chat box belongs to the window rather than to one tab of the
+        bottom panel and typing the next request should not mean going and finding the right tab.
+    -->
 
     <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-        </Grid.RowDefinitions>
+        <ScrollViewer behaviors:AutoScrollBehavior.IsEnabled="True"
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled"
+                      Padding="16,8">
+            <ItemsControl ItemsSource="{Binding Events}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Grid Margin="0,0,0,7">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
 
-        <!-- Request box and run controls -->
-        <Grid Grid.Row="0" Margin="12,10,12,8">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="10" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Row="0" Grid.Column="0"
+                                       Style="{StaticResource MonoText}"
+                                       Text="{Binding TimeText}"
+                                       Foreground="{StaticResource Text.Muted.Brush}"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,10,0" />
 
-            <TextBox Grid.Column="0"
-                     Text="{Binding RequestText, UpdateSourceTrigger=PropertyChanged}"
-                     AcceptsReturn="True"
-                     TextWrapping="Wrap"
-                     VerticalScrollBarVisibility="Auto"
-                     MinHeight="52"
-                     MaxHeight="120"
-                     Padding="8,6" />
+                            <Ellipse Grid.Row="0" Grid.Column="1"
+                                     Style="{StaticResource StateDot}"
+                                     Margin="0,0,10,0"
+                                     Fill="{Binding Kind, Converter={StaticResource ResourceLookup}, ConverterParameter=Activity}" />
 
-            <StackPanel Grid.Column="2" VerticalAlignment="Top">
-                <Button Style="{StaticResource PrimaryButton}"
-                        Content="Run"
-                        MinWidth="96"
-                        Command="{Binding RunCommand}" />
+                            <DockPanel Grid.Row="0" Grid.Column="2">
 
-                <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-                    <Button Style="{StaticResource SmallButton}"
-                            Content="{Binding PauseButtonText}"
-                            MinWidth="60"
-                            Margin="0,0,6,0"
-                            Command="{Binding TogglePauseCommand}" />
-                    <Button Style="{StaticResource SmallButton}"
-                            Content="Stop"
-                            MinWidth="52"
-                            Command="{Binding CancelCommand}" />
-                </StackPanel>
-            </StackPanel>
-        </Grid>
+                                <!-- How much a file changed, when the entry is about a file. -->
+                                <StackPanel DockPanel.Dock="Right"
+                                            Orientation="Horizontal"
+                                            Margin="10,0,0,0"
+                                            Visibility="{Binding HasDiffCounts, Converter={StaticResource BooleanToVisibility}}">
+                                    <TextBlock Style="{StaticResource MonoText}"
+                                               Foreground="{StaticResource Diff.Added.Brush}"
+                                               Text="{Binding AddedText}" />
+                                    <TextBlock Style="{StaticResource MonoText}"
+                                               Margin="6,0,0,0"
+                                               Foreground="{StaticResource Diff.Removed.Brush}"
+                                               Text="{Binding RemovedText}" />
+                                </StackPanel>
 
-        <!-- Transcript -->
-        <Border Grid.Row="1"
-                Margin="12,0,12,12"
-                Background="{StaticResource Surface.Window.Brush}"
-                BorderBrush="{StaticResource Surface.Border.Brush}"
-                BorderThickness="1"
-                CornerRadius="6">
-            <Grid>
-                <ScrollViewer behaviors:AutoScrollBehavior.IsEnabled="True"
-                              VerticalScrollBarVisibility="Auto"
-                              HorizontalScrollBarVisibility="Disabled"
-                              Padding="10,8">
-                    <ItemsControl ItemsSource="{Binding Events}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Grid Margin="0,0,0,9">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="*" />
-                                    </Grid.ColumnDefinitions>
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="Auto" />
-                                        <RowDefinition Height="Auto" />
-                                        <RowDefinition Height="Auto" />
-                                    </Grid.RowDefinitions>
+                                <TextBlock DockPanel.Dock="Right"
+                                           Style="{StaticResource MonoText}"
+                                           Text="{Binding Detail}"
+                                           Margin="10,0,0,0"
+                                           Foreground="{StaticResource Text.Muted.Brush}"
+                                           Visibility="{Binding HasDiffCounts, Converter={StaticResource BooleanToVisibility}, ConverterParameter=Invert}" />
 
-                                    <TextBlock Grid.Row="0" Grid.Column="0"
-                                               Text="{Binding TimeText}"
-                                               FontFamily="{StaticResource Font.Mono}"
-                                               FontSize="{StaticResource Font.Size.Small}"
-                                               Foreground="{StaticResource Text.Secondary.Brush}"
-                                               VerticalAlignment="Center"
-                                               Margin="0,0,8,0" />
+                                <TextBlock Text="{Binding Title}"
+                                           FontWeight="SemiBold"
+                                           TextTrimming="CharacterEllipsis" />
+                            </DockPanel>
 
-                                    <Ellipse Grid.Row="0" Grid.Column="1"
-                                             Width="8" Height="8"
-                                             VerticalAlignment="Center"
-                                             Margin="0,0,8,0"
-                                             Fill="{Binding Kind, Converter={StaticResource ResourceLookup}, ConverterParameter=Activity}" />
+                            <!-- Streamed model output lands here and grows in place. -->
+                            <TextBox Grid.Row="1" Grid.Column="2"
+                                     Margin="0,4,0,0"
+                                     Text="{Binding Text, Mode=OneWay}"
+                                     IsReadOnly="True"
+                                     BorderThickness="0"
+                                     Background="Transparent"
+                                     Foreground="{StaticResource Text.Secondary.Brush}"
+                                     FontFamily="{StaticResource Font.Mono}"
+                                     FontSize="{StaticResource Font.Size.Small}"
+                                     TextWrapping="Wrap"
+                                     Padding="0"
+                                     HorizontalScrollBarVisibility="Disabled"
+                                     Visibility="{Binding HasText, Converter={StaticResource BooleanToVisibility}}" />
 
-                                    <DockPanel Grid.Row="0" Grid.Column="2">
-                                        <TextBlock DockPanel.Dock="Right"
-                                                   Text="{Binding Detail}"
-                                                   Margin="10,0,0,0"
-                                                   FontSize="{StaticResource Font.Size.Small}"
-                                                   Foreground="{StaticResource Text.Secondary.Brush}"
-                                                   Visibility="{Binding Detail, Converter={StaticResource StringToVisibility}}" />
-                                        <TextBlock Text="{Binding Title}"
-                                                   FontWeight="SemiBold"
-                                                   TextTrimming="CharacterEllipsis" />
-                                    </DockPanel>
+                            <!-- Questions the run is blocked on. -->
+                            <StackPanel Grid.Row="2" Grid.Column="2"
+                                        Orientation="Horizontal"
+                                        Margin="0,8,0,0"
+                                        Visibility="{Binding IsAwaitingResponse, Converter={StaticResource BooleanToVisibility}}">
+                                <Button Style="{StaticResource PrimaryButton}"
+                                        Content="Confirm"
+                                        Margin="0,0,8,0"
+                                        Command="{Binding ConfirmCommand}" />
+                                <Button Style="{StaticResource SmallButton}"
+                                        Content="Cancel"
+                                        Command="{Binding CancelCommand}" />
+                            </StackPanel>
 
-                                    <!-- Streamed model output lands here and grows in place -->
-                                    <TextBox Grid.Row="1" Grid.Column="2"
-                                             Margin="0,4,0,0"
-                                             Text="{Binding Text, Mode=OneWay}"
-                                             IsReadOnly="True"
-                                             BorderThickness="0"
-                                             Background="Transparent"
-                                             Foreground="{StaticResource Text.Secondary.Brush}"
-                                             FontFamily="{StaticResource Font.Mono}"
-                                             FontSize="{StaticResource Font.Size.Small}"
-                                             TextWrapping="Wrap"
-                                             Padding="0"
-                                             HorizontalScrollBarVisibility="Disabled"
-                                             Visibility="{Binding HasText, Converter={StaticResource BooleanToVisibility}}" />
+                            <TextBlock Grid.Row="2" Grid.Column="2"
+                                       Style="{StaticResource MutedText}"
+                                       Margin="0,6,0,0"
+                                       Text="{Binding Resolution}"
+                                       Visibility="{Binding Resolution, Converter={StaticResource StringToVisibility}}" />
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
 
-                                    <!-- Questions the run is blocked on -->
-                                    <StackPanel Grid.Row="2" Grid.Column="2"
-                                                Orientation="Horizontal"
-                                                Margin="0,8,0,0"
-                                                Visibility="{Binding IsAwaitingResponse, Converter={StaticResource BooleanToVisibility}}">
-                                        <Button Style="{StaticResource PrimaryButton}"
-                                                Content="Confirm"
-                                                Margin="0,0,8,0"
-                                                Command="{Binding ConfirmCommand}" />
-                                        <Button Style="{StaticResource SmallButton}"
-                                                Content="Cancel"
-                                                Command="{Binding CancelCommand}" />
-                                    </StackPanel>
-
-                                    <TextBlock Grid.Row="2" Grid.Column="2"
-                                               Margin="0,6,0,0"
-                                               Text="{Binding Resolution}"
-                                               FontSize="{StaticResource Font.Size.Small}"
-                                               Foreground="{StaticResource Text.Secondary.Brush}"
-                                               Visibility="{Binding Resolution, Converter={StaticResource StringToVisibility}}" />
-                                </Grid>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </ScrollViewer>
-
-                <TextBlock Text="Wire up a graph, type a request above, then press Run."
-                           HorizontalAlignment="Center"
-                           VerticalAlignment="Center"
-                           IsHitTestVisible="False"
-                           Foreground="{StaticResource Text.Secondary.Brush}">
-                    <TextBlock.Style>
-                        <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
-                            <Setter Property="Visibility" Value="Collapsed" />
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding Events.Count}" Value="0">
-                                    <Setter Property="Visibility" Value="Visible" />
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </TextBlock.Style>
-                </TextBlock>
-            </Grid>
-        </Border>
+        <TextBlock Text="Wire up a graph, type a request below, then press Run."
+                   HorizontalAlignment="Center"
+                   VerticalAlignment="Center"
+                   IsHitTestVisible="False"
+                   Foreground="{StaticResource Text.Muted.Brush}"
+                   Visibility="{Binding Events.Count, Converter={StaticResource CountToVisibility}, ConverterParameter=Invert}" />
     </Grid>
 </UserControl>

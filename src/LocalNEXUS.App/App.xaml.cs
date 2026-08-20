@@ -14,6 +14,7 @@ using LocalNEXUS.App.Services.Persistence;
 using LocalNEXUS.App.Services.Processes;
 using LocalNEXUS.App.Services.ProjectIndex;
 using LocalNEXUS.App.Services.Python;
+using LocalNEXUS.App.Services.Theming;
 using LocalNEXUS.App.ViewModels;
 using LocalNEXUS.App.Views;
 
@@ -32,6 +33,7 @@ public partial class App : Application
     private MeshManager? _mesh;
     private CancellationTokenSource? _provisioning;
     private CancellationTokenSource? _indexing;
+    private ViewModels.NetworkViewModel? _network;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -62,6 +64,11 @@ public partial class App : Application
 
         var config = AppConfig.LoadOrCreate();
 
+        // The theme is applied before anything is constructed, so the window is painted in the
+        // right palette from its first frame rather than flashing the default one.
+        var themes = new ThemeService(config, Resources);
+        themes.ApplySaved();
+
         // Written on first run so there is something to edit rather than something to invent.
         ModelPathsFile.EnsureCreated();
 
@@ -84,7 +91,7 @@ public partial class App : Application
         var mesh = new MeshManager(config, feed, Dispatcher, children);
         _mesh = mesh;
 
-        var factory = new NodeFactory(catalog, mesh, dialogs);
+        var factory = new NodeFactory(catalog, mesh, dialogs, config);
         var serializer = new GraphSerializer(factory);
 
         // Restoring the node is deliberately not awaited: composition must not block on a
@@ -126,7 +133,25 @@ public partial class App : Application
         var feedViewModel = new ActivityFeedViewModel(executor, graph, feed, Dispatcher);
         var catalogViewModel = new ModelCatalogViewModel(catalog, dialogs);
         var pythonViewModel = new PythonEnvironmentViewModel(pythonEnvironment, dialogs);
-        var networkViewModel = new NetworkViewModel(mesh, catalog, config, feed);
+        var networkViewModel = new NetworkViewModel(mesh, catalog, config, feed, dialogs);
+        _network = networkViewModel;
+
+        // Reading the project again is the settings panel's business but the work belongs to the
+        // application, so the panel is handed the same call the startup path uses rather than a
+        // second one that could drift from it.
+        var indexing = new CancellationTokenSource();
+        _indexing = indexing;
+
+        var settingsViewModel = new AppSettingsViewModel(
+            config,
+            themes,
+            catalog,
+            catalogViewModel,
+            pythonViewModel,
+            networkViewModel,
+            projectIndex,
+            dialogs,
+            () => IndexProjectAsync(projectIndex, unityProject.ProjectPath, feed, indexing.Token));
 
         var mainViewModel = new MainViewModel(
             graph,
@@ -139,7 +164,11 @@ public partial class App : Application
             pythonViewModel,
             networkViewModel,
             unityProject,
-            config);
+            projectIndex,
+            themes,
+            settingsViewModel,
+            config,
+            Dispatcher);
 
         ReportEnvironment(feed, catalog);
 
@@ -157,8 +186,7 @@ public partial class App : Application
         // that what the application knows about the project is visible before anything depends on
         // it, and so the first run does not pay for it. Not awaited: reading a large project takes
         // long enough to notice and the window has to be usable throughout.
-        _indexing = new CancellationTokenSource();
-        _ = IndexProjectAsync(projectIndex, unityProject.ProjectPath, feed, _indexing.Token);
+        _ = IndexProjectAsync(projectIndex, unityProject.ProjectPath, feed, indexing.Token);
 
         unityProject.PropertyChanged += (_, e) =>
         {
@@ -168,7 +196,7 @@ public partial class App : Application
             }
 
             projectIndex.Forget();
-            _ = IndexProjectAsync(projectIndex, unityProject.ProjectPath, feed, _indexing.Token);
+            _ = IndexProjectAsync(projectIndex, unityProject.ProjectPath, feed, indexing.Token);
         };
     }
 
@@ -188,6 +216,8 @@ public partial class App : Application
         // every process they started is actually gone and closes the job that guarantees it.
         _provisioning?.Cancel();
         _indexing?.Cancel();
+        (MainWindow?.DataContext as MainViewModel)?.Dispose();
+        _network?.Dispose();
         _mesh?.Dispose();
         _llamaServers?.Dispose();
         _pythonRuntime?.Dispose();

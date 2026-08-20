@@ -4,131 +4,67 @@
                     xmlns:converters="clr-namespace:LocalNEXUS.App.Infrastructure.Converters">
 
     <!--
-        Palette. Converters resolve brushes by formatting a value into a key, for example
-        "Pin.{0}.Brush" plus a PinType of Code resolves Pin.Code.Brush. Adding a pin type, node
-        state or activity kind therefore means adding a brush here and nothing else.
+        Controls and type. Every colour in this file arrives as a brush from Brushes.xaml, which
+        gets its colours from whichever theme dictionary is merged, so nothing here names one.
+
+        Converters resolve brushes by formatting a value into a key: "Pin.{0}.Brush" plus a
+        PinType of Code resolves Pin.Code.Brush. Adding a pin type, node state or activity kind
+        therefore means adding a brush and nothing else.
     -->
-
-    <Color x:Key="Surface.WindowColor">#FF101219</Color>
-    <Color x:Key="Surface.PanelColor">#FF161A23</Color>
-    <Color x:Key="Surface.CardColor">#FF1E2330</Color>
-    <Color x:Key="Surface.InputColor">#FF11151E</Color>
-    <Color x:Key="Surface.BorderColor">#FF2C3444</Color>
-    <Color x:Key="Text.PrimaryColor">#FFE3E8F2</Color>
-    <Color x:Key="Text.SecondaryColor">#FF919CB4</Color>
-    <Color x:Key="Accent.PrimaryColor">#FF5B8DEF</Color>
-
-    <SolidColorBrush x:Key="Surface.Window.Brush" Color="{StaticResource Surface.WindowColor}" />
-    <SolidColorBrush x:Key="Surface.Panel.Brush" Color="{StaticResource Surface.PanelColor}" />
-    <SolidColorBrush x:Key="Surface.Card.Brush" Color="{StaticResource Surface.CardColor}" />
-    <SolidColorBrush x:Key="Surface.Input.Brush" Color="{StaticResource Surface.InputColor}" />
-    <SolidColorBrush x:Key="Surface.Border.Brush" Color="{StaticResource Surface.BorderColor}" />
-    <SolidColorBrush x:Key="Text.Primary.Brush" Color="{StaticResource Text.PrimaryColor}" />
-    <SolidColorBrush x:Key="Text.Secondary.Brush" Color="{StaticResource Text.SecondaryColor}" />
-    <SolidColorBrush x:Key="Accent.Primary.Brush" Color="{StaticResource Accent.PrimaryColor}" />
-    <SolidColorBrush x:Key="Accent.Neutral.Brush" Color="#FF6B7686" />
-
-    <!-- Pin types. Text is a soft blue, Code is amber. -->
-    <SolidColorBrush x:Key="Pin.Text.Brush" Color="#FF6FB1FF" />
-    <SolidColorBrush x:Key="Pin.Code.Brush" Color="#FFFFB454" />
-
-    <!--
-        Section coverage in the network tab's chain and model list. Starting is the same blue as
-        a running node rather than a shade of red, because a section that has not finished
-        loading has not failed at anything.
-    -->
-    <SolidColorBrush x:Key="SectionCoverage.Starting.Brush" Color="#FF4EA1FF" />
-    <SolidColorBrush x:Key="SectionCoverage.Healthy.Brush" Color="#FF4ADE80" />
-    <SolidColorBrush x:Key="SectionCoverage.Thin.Brush" Color="#FFFFB454" />
-    <SolidColorBrush x:Key="SectionCoverage.Uncovered.Brush" Color="#FFF87171" />
-
-    <!-- Source states in the peer panel. -->
-    <SolidColorBrush x:Key="SourceState.Unknown.Brush" Color="#FF6B7686" />
-    <SolidColorBrush x:Key="SourceState.Available.Brush" Color="#FF4ADE80" />
-    <SolidColorBrush x:Key="SourceState.Serving.Brush" Color="#FF4ADE80" />
-    <SolidColorBrush x:Key="SourceState.Unreachable.Brush" Color="#FFF87171" />
-
-    <!--
-        The Python runtime on the local model panel. Unknown and Missing are grey rather than
-        red: neither has failed at anything, and an environment that has not been built yet on a
-        machine that only runs GGUF models is a perfectly ordinary state to sit in forever.
-    -->
-    <SolidColorBrush x:Key="PythonEnvironmentState.Unknown.Brush" Color="#FF6B7686" />
-    <SolidColorBrush x:Key="PythonEnvironmentState.Missing.Brush" Color="#FF6B7686" />
-    <SolidColorBrush x:Key="PythonEnvironmentState.Provisioning.Brush" Color="#FF4EA1FF" />
-    <SolidColorBrush x:Key="PythonEnvironmentState.Ready.Brush" Color="#FF4ADE80" />
-    <SolidColorBrush x:Key="PythonEnvironmentState.Failed.Brush" Color="#FFF87171" />
-
-    <!--
-        How a compile check ended. Checking is the same blue as anything else in progress, and
-        Unavailable is grey rather than red, because a check that could not run has found nothing
-        wrong with the code and must not be read as though it had.
-    -->
-    <SolidColorBrush x:Key="CompileOutcome.NotRun.Brush" Color="#FF6B7686" />
-    <SolidColorBrush x:Key="CompileOutcome.Checking.Brush" Color="#FF4EA1FF" />
-    <SolidColorBrush x:Key="CompileOutcome.Compiled.Brush" Color="#FF4ADE80" />
-    <SolidColorBrush x:Key="CompileOutcome.Repaired.Brush" Color="#FFFFB454" />
-    <SolidColorBrush x:Key="CompileOutcome.Failed.Brush" Color="#FFF87171" />
-    <SolidColorBrush x:Key="CompileOutcome.Unavailable.Brush" Color="#FF6B7686" />
-
-    <!-- This install's own mesh node, on the This machine card. -->
-    <SolidColorBrush x:Key="MeshNodeState.Stopped.Brush" Color="#FF6B7686" />
-    <SolidColorBrush x:Key="MeshNodeState.Starting.Brush" Color="#FF4EA1FF" />
-    <SolidColorBrush x:Key="MeshNodeState.Client.Brush" Color="#FF4ADE80" />
-    <SolidColorBrush x:Key="MeshNodeState.Serving.Brush" Color="#FF4ADE80" />
-    <SolidColorBrush x:Key="MeshNodeState.Failed.Brush" Color="#FFF87171" />
-
-    <!-- Node execution states. -->
-    <SolidColorBrush x:Key="NodeState.Pending.Brush" Color="#FF6B7686" />
-    <SolidColorBrush x:Key="NodeState.Running.Brush" Color="#FF4EA1FF" />
-    <SolidColorBrush x:Key="NodeState.Completed.Brush" Color="#FF4ADE80" />
-    <SolidColorBrush x:Key="NodeState.Faulted.Brush" Color="#FFF87171" />
-
-    <!-- Node header accents by type. -->
-    <SolidColorBrush x:Key="NodeType.Input.Brush" Color="#FF2E4F7A" />
-    <SolidColorBrush x:Key="NodeType.Model.Brush" Color="#FF3C3566" />
-    <SolidColorBrush x:Key="NodeType.Transform.Brush" Color="#FF2B5348" />
-    <SolidColorBrush x:Key="NodeType.Plan.Brush" Color="#FF35506B" />
-    <SolidColorBrush x:Key="NodeType.Compile.Brush" Color="#FF5A3A5E" />
-    <SolidColorBrush x:Key="NodeType.Output.Brush" Color="#FF6B4326" />
-
-    <!-- Activity feed accents. -->
-    <SolidColorBrush x:Key="Activity.Info.Brush" Color="#FF7F8CA3" />
-    <SolidColorBrush x:Key="Activity.Request.Brush" Color="#FF9C8CFF" />
-    <SolidColorBrush x:Key="Activity.RunStarted.Brush" Color="#FF5B8DEF" />
-    <SolidColorBrush x:Key="Activity.RunCompleted.Brush" Color="#FF4ADE80" />
-    <SolidColorBrush x:Key="Activity.RunFaulted.Brush" Color="#FFF87171" />
-    <SolidColorBrush x:Key="Activity.NodeStarted.Brush" Color="#FF4EA1FF" />
-    <SolidColorBrush x:Key="Activity.NodeCompleted.Brush" Color="#FF4ADE80" />
-    <SolidColorBrush x:Key="Activity.NodeFaulted.Brush" Color="#FFF87171" />
-    <SolidColorBrush x:Key="Activity.ModelStream.Brush" Color="#FFFFB454" />
-    <SolidColorBrush x:Key="Activity.FileWritten.Brush" Color="#FF4ADE80" />
-    <SolidColorBrush x:Key="Activity.Confirmation.Brush" Color="#FFFFD166" />
-    <SolidColorBrush x:Key="Activity.Error.Brush" Color="#FFF87171" />
-
-    <!-- A field level problem in a settings panel, for example a file that is no longer there. -->
-    <SolidColorBrush x:Key="Field.Error.Brush" Color="#FFF87171" />
-
-    <!-- Pending wire feedback: green while the drop would be accepted, red while it would not. -->
-    <SolidColorBrush x:Key="Wire.True.Brush" Color="#FF7CE38B" />
-    <SolidColorBrush x:Key="Wire.False.Brush" Color="#FFF87171" />
 
     <converters:ResourceLookupConverter x:Key="ResourceLookup" />
+    <converters:BrushKeyConverter x:Key="BrushKey" />
     <converters:EnumToBooleanConverter x:Key="EnumToBoolean" />
+    <converters:EnumToVisibilityConverter x:Key="EnumToVisibility" />
     <converters:StringToVisibilityConverter x:Key="StringToVisibility" />
-    <BooleanToVisibilityConverter x:Key="BooleanToVisibility" />
+    <converters:CountToVisibilityConverter x:Key="CountToVisibility" />
+    <converters:NullToVisibilityConverter x:Key="NullToVisibility" />
+    <converters:BooleanToVisibilityConverter x:Key="BooleanToVisibility" />
 
-    <sys:Double x:Key="Font.Size.Small">11</sys:Double>
+    <!--
+        One type scale, used everywhere. Five steps is enough for an interface this dense and
+        few enough that a sixth is always a mistake rather than a need.
+    -->
+    <sys:Double x:Key="Font.Size.Micro">10.5</sys:Double>
+    <sys:Double x:Key="Font.Size.Small">11.5</sys:Double>
     <sys:Double x:Key="Font.Size.Normal">12.5</sys:Double>
     <sys:Double x:Key="Font.Size.Large">14</sys:Double>
-    <sys:Double x:Key="Font.Size.Title">17</sys:Double>
-    <FontFamily x:Key="Font.Mono">Cascadia Mono, Consolas, Courier New</FontFamily>
+    <sys:Double x:Key="Font.Size.Title">16</sys:Double>
+
+    <FontFamily x:Key="Font.Sans">Segoe UI Variable Text, Segoe UI, Arial</FontFamily>
+
+    <!--
+        Icons. Not bundled, unlike the monospace face: these ship with Windows 11, which is the
+        only platform this runs on, and a glyph font is a poor thing to carry a copy of when the
+        operating system already guarantees one.
+    -->
+    <FontFamily x:Key="Font.Icons">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
+
+    <!--
+        JetBrains Mono travels with the application as a compiled resource, so paths, identifiers
+        and diagnostics look the same on every machine rather than falling to whatever monospace
+        the machine happens to have. The names after it are the fallback chain if the resource
+        cannot be loaded at all, and they are ordinary installed fonts rather than a second copy.
+    -->
+    <FontFamily x:Key="Font.Mono">pack://application:,,,/Assets/Fonts/#JetBrains Mono, Cascadia Mono, Consolas, Courier New</FontFamily>
 
     <!-- Base text -->
     <Style TargetType="TextBlock">
         <Setter Property="Foreground" Value="{StaticResource Text.Primary.Brush}" />
+        <Setter Property="FontFamily" Value="{StaticResource Font.Sans}" />
         <Setter Property="FontSize" Value="{StaticResource Font.Size.Normal}" />
         <Setter Property="TextOptions.TextFormattingMode" Value="Ideal" />
+    </Style>
+
+    <!-- Anything that is a path, an identifier, a diagnostic or a number to be compared. -->
+    <Style x:Key="MonoText" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="FontFamily" Value="{StaticResource Font.Mono}" />
+        <Setter Property="FontSize" Value="{StaticResource Font.Size.Small}" />
+    </Style>
+
+    <Style x:Key="MutedText" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="Foreground" Value="{StaticResource Text.Muted.Brush}" />
+        <Setter Property="FontSize" Value="{StaticResource Font.Size.Small}" />
     </Style>
 
     <Style x:Key="FieldLabel" TargetType="TextBlock">
@@ -235,7 +171,7 @@
     <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
         <Setter Property="Background" Value="{StaticResource Accent.Primary.Brush}" />
         <Setter Property="BorderBrush" Value="{StaticResource Accent.Primary.Brush}" />
-        <Setter Property="Foreground" Value="#FF0B1220" />
+        <Setter Property="Foreground" Value="{StaticResource Text.Inverse.Brush}" />
         <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
 
@@ -367,7 +303,7 @@
                         </Trigger>
                         <Trigger Property="IsSelected" Value="True">
                             <Setter TargetName="Root" Property="Background" Value="{StaticResource Accent.Primary.Brush}" />
-                            <Setter Property="Foreground" Value="#FF0B1220" />
+                            <Setter Property="Foreground" Value="{StaticResource Text.Inverse.Brush}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -705,8 +641,170 @@
         <Setter Property="Padding" Value="12" />
     </Style>
 
+    <!--
+        Scroll bars. The system ones are painted with system colours, which is how a dark window
+        ends up with a light grey gutter down the side of every panel. Thin, flat, and part of the
+        theme like everything else.
+    -->
+    <Style x:Key="ScrollBar.Thumb" TargetType="Thumb">
+        <Setter Property="OverridesDefaultStyle" Value="True" />
+        <Setter Property="IsTabStop" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Thumb">
+                    <Border x:Name="Root"
+                            Background="{StaticResource Accent.Neutral.Brush}"
+                            CornerRadius="4"
+                            Margin="2"
+                            Opacity="0.45" />
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Root" Property="Opacity" Value="0.8" />
+                        </Trigger>
+                        <Trigger Property="IsDragging" Value="True">
+                            <Setter TargetName="Root" Property="Opacity" Value="1" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- The arrow buttons and the page track are removed rather than restyled: nothing needs them. -->
+    <Style x:Key="ScrollBar.HiddenPart" TargetType="RepeatButton">
+        <Setter Property="OverridesDefaultStyle" Value="True" />
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="IsTabStop" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RepeatButton">
+                    <Border Background="Transparent" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="ScrollBar">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Width" Value="11" />
+        <Setter Property="MinWidth" Value="11" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ScrollBar">
+                    <Grid Background="{TemplateBinding Background}">
+                        <Track x:Name="PART_Track" IsDirectionReversed="True">
+                            <Track.DecreaseRepeatButton>
+                                <RepeatButton Style="{StaticResource ScrollBar.HiddenPart}" Command="ScrollBar.PageUpCommand" />
+                            </Track.DecreaseRepeatButton>
+                            <Track.Thumb>
+                                <Thumb Style="{StaticResource ScrollBar.Thumb}" />
+                            </Track.Thumb>
+                            <Track.IncreaseRepeatButton>
+                                <RepeatButton Style="{StaticResource ScrollBar.HiddenPart}" Command="ScrollBar.PageDownCommand" />
+                            </Track.IncreaseRepeatButton>
+                        </Track>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="Orientation" Value="Horizontal">
+                            <Setter Property="Height" Value="11" />
+                            <Setter Property="MinHeight" Value="11" />
+                            <Setter Property="Width" Value="Auto" />
+                            <Setter Property="MinWidth" Value="0" />
+                            <Setter TargetName="PART_Track" Property="IsDirectionReversed" Value="False" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Tool tips. The system template is a white box with a black border in every theme. -->
+    <Style TargetType="ToolTip">
+        <Setter Property="Foreground" Value="{StaticResource Text.Primary.Brush}" />
+        <Setter Property="FontFamily" Value="{StaticResource Font.Sans}" />
+        <Setter Property="FontSize" Value="{StaticResource Font.Size.Small}" />
+        <Setter Property="MaxWidth" Value="380" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToolTip">
+                    <Border Background="{StaticResource Surface.Card.Brush}"
+                            BorderBrush="{StaticResource Surface.Border.Brush}"
+                            BorderThickness="1"
+                            CornerRadius="4"
+                            Padding="9,6">
+                        <ContentPresenter />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Right click menus, which reuse the submenu item template the menu bar already defines. -->
+    <Style TargetType="ContextMenu">
+        <Setter Property="Foreground" Value="{StaticResource Text.Primary.Brush}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ContextMenu">
+                    <Border Background="{StaticResource Surface.Card.Brush}"
+                            BorderBrush="{StaticResource Surface.Border.Brush}"
+                            BorderThickness="1"
+                            CornerRadius="6"
+                            Padding="4">
+                        <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Cycle" />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--
+        Progress. Used by a node that can say how far through a list of files it is, and by the
+        Python environment while it downloads.
+    -->
+    <Style TargetType="ProgressBar">
+        <Setter Property="Height" Value="3" />
+        <Setter Property="Foreground" Value="{StaticResource Accent.Primary.Brush}" />
+        <Setter Property="Background" Value="{StaticResource Surface.Track.Brush}" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ProgressBar">
+                    <Border Background="{TemplateBinding Background}" CornerRadius="2" ClipToBounds="True">
+                        <Grid>
+                            <Rectangle x:Name="PART_Track" />
+                            <Rectangle x:Name="PART_Indicator"
+                                       HorizontalAlignment="Left"
+                                       Fill="{TemplateBinding Foreground}"
+                                       RadiusX="2"
+                                       RadiusY="2" />
+                        </Grid>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--
+        Splitters. A hairline in the border colour inside a wider invisible grab area, so the
+        divider reads as a rule rather than as a bar.
+    -->
     <Style TargetType="GridSplitter">
-        <Setter Property="Background" Value="{StaticResource Surface.Border.Brush}" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="GridSplitter">
+                    <Grid Background="Transparent">
+                        <Rectangle x:Name="Line" Fill="{StaticResource Surface.Border.Brush}" />
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Line" Property="Fill" Value="{StaticResource Accent.Primary.Brush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
 </ResourceDictionary>

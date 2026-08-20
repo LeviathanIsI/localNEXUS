@@ -16,6 +16,48 @@ public sealed class AppConfig
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
+    /// <summary>The theme the window is wearing. Applied before anything is painted.</summary>
+    public Theming.AppTheme Theme { get; set; } = Theming.AppTheme.VsCodeDark;
+
+    /// <summary>
+    /// Repair attempts a newly added compile check node starts with.
+    /// </summary>
+    /// <remarks>
+    /// These defaults are starting points, not overrides. A node writes its own value into the
+    /// graph file, so changing a default here changes the next node added and never a graph that
+    /// already exists.
+    /// </remarks>
+    public int DefaultRetryLimit { get; set; } = 3;
+
+    /// <summary>Characters of project map a newly added plan node starts with.</summary>
+    public int DefaultMapCharacters { get; set; } = 4000;
+
+    /// <summary>Characters of candidate file contents a newly added plan node starts with.</summary>
+    public int DefaultCandidateCharacters { get; set; } = 16000;
+
+    /// <summary>Characters of same-run signatures a newly added plan node starts with.</summary>
+    public int DefaultEmittedCharacters { get; set; } = 4000;
+
+    /// <summary>How many candidate files a newly added plan node offers before reading any.</summary>
+    public int DefaultCandidateLimit { get; set; } = 12;
+
+    /// <summary>
+    /// The cloud provider a newly added model node is pointed at when it is set to a cloud
+    /// provider. Blank means the provider default.
+    /// </summary>
+    public string? CloudBaseUrl { get; set; }
+
+    /// <summary>
+    /// The key a newly added model node starts with, so a key is typed once rather than once per
+    /// node.
+    /// </summary>
+    /// <remarks>
+    /// Stored in clear text in this file, which is the same posture a graph file already has: a
+    /// model node writes its key into the graph it belongs to. Worth knowing before pasting a key
+    /// into a file that gets shared.
+    /// </remarks>
+    public string? CloudApiKey { get; set; }
+
     /// <summary>The Unity project folder that was open when the app last closed.</summary>
     public string? LastUnityProjectPath { get; set; }
 

@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -34,6 +35,9 @@ public sealed partial class ActivityEvent : ObservableObject
 
     /// <summary>Trailing detail such as a token count or an elapsed time, shown right aligned.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasDiffCounts))]
+    [NotifyPropertyChangedFor(nameof(AddedText))]
+    [NotifyPropertyChangedFor(nameof(RemovedText))]
     private string? _detail;
 
     private TaskCompletionSource<bool>? _completion;
@@ -77,6 +81,30 @@ public sealed partial class ActivityEvent : ObservableObject
             }
         }
     }
+
+    /// <summary>
+    /// True when the detail is a pair of line counts, which the feed colours rather than printing
+    /// as text.
+    /// </summary>
+    /// <remarks>
+    /// Read out of the detail rather than carried as a second pair of fields, because the detail
+    /// is already what a feed entry says about itself and one of the things it can say is how much
+    /// a file changed. A writer that has counts sets them; nothing else has to know.
+    /// </remarks>
+    public bool HasDiffCounts => DiffCounts.Success;
+
+    /// <summary>The added count, with its sign, or null when the detail is not a pair of counts.</summary>
+    public string? AddedText => HasDiffCounts ? $"+{DiffCounts.Groups["added"].Value}" : null;
+
+    /// <summary>The removed count, with its sign, or null when the detail is not a pair of counts.</summary>
+    public string? RemovedText => HasDiffCounts ? $"-{DiffCounts.Groups["removed"].Value}" : null;
+
+    private Match DiffCounts => DiffCountPattern.Match(Detail ?? string.Empty);
+
+    /// <summary>The shape a change size is written in, for example <c>+34 -6</c>.</summary>
+    private static readonly Regex DiffCountPattern = new(
+        @"^\+(?<added>\d+) -(?<removed>\d+)$",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     /// <summary>True when the entry has a body worth rendering.</summary>
     public bool HasText

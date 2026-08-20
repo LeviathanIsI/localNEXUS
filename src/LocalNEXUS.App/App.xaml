@@ -5,14 +5,24 @@
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
-                <!-- Nodify's own control styles and its dark palette come first so that the
-                     application theme below can override anything it needs to. -->
+                <!-- Nodify's own control styles come first so the application theme can override them. -->
                 <ResourceDictionary Source="pack://application:,,,/Nodify;component/Themes/Dark.xaml" />
                 <ResourceDictionary Source="pack://application:,,,/Nodify;component/Themes/Nodify.xaml" />
 
+                <!--
+                    The theme, which is colours and nothing else. The theme service replaces this
+                    entry at startup with whichever theme was last chosen, and again whenever one
+                    is picked; the brushes below take their colours from it dynamically, so nothing
+                    is rebuilt and nothing has to be restarted.
+                -->
+                <ResourceDictionary Source="Views/Themes/VsCodeDark.xaml" />
+
+                <ResourceDictionary Source="Views/Brushes.xaml" />
                 <ResourceDictionary Source="Views/Theme.xaml" />
+                <ResourceDictionary Source="Views/ShellStyles.xaml" />
                 <ResourceDictionary Source="Views/NodeTemplates.xaml" />
                 <ResourceDictionary Source="Views/SettingsTemplates.xaml" />
+                <ResourceDictionary Source="Views/InspectorTemplates.xaml" />
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Application.Resources>

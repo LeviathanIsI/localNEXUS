@@ -9,19 +9,32 @@ using LocalNEXUS.App.Models;
 using LocalNEXUS.App.Nodes;
 using LocalNEXUS.App.Services.Dialogs;
 using LocalNEXUS.App.Services.Files;
+using System.Windows.Threading;
 using LocalNEXUS.App.Services.Persistence;
+using LocalNEXUS.App.Services.ProjectIndex;
+using LocalNEXUS.App.Services.Theming;
 
 namespace LocalNEXUS.App.ViewModels;
 
 /// <summary>
-/// The window: the canvas, the palette, the settings panel, and the File menu.
+/// The window: the shell around everything else, and the graph document inside it.
 /// </summary>
 /// <remarks>
+/// The shell is an activity bar down the side, a side bar that doubles as the run outline, a
+/// tabbed editor area, a tabbed bottom panel and a status bar. This view model owns which of
+/// those are showing and which primary section the activity bar has selected; the parts
+/// themselves belong to the view models they draw.
+///
+/// The right hand inspector is one slot rather than one per section, which is why
+/// <see cref="InspectorContent"/> exists. It answers "what can I do about the selected thing"
+/// wherever the selected thing came from, and WPF picks the panel by the type of whatever it
+/// returns. A second inspector would drift from the first the first time either changed.
+///
 /// Canvas selection is tracked through each node's own <see cref="NodeBase.IsSelected"/> flag,
-/// which the item container binds two way. That keeps the settings panel in step with the canvas
+/// which the item container binds two way. That keeps the inspector in step with the canvas
 /// without the view model reaching into the visual tree.
 /// </remarks>
-public sealed partial class MainViewModel : ObservableObject
+public sealed partial class MainViewModel : ObservableObject, IDisposable
 {
     private const double CascadeStep = 36d;
 
@@ -35,17 +48,59 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly HashSet<NodeBase> _observedNodes = new();
 
     private int _cascadeIndex;
+    private bool _disposed;
 
-    /// <summary>The node whose settings the right hand panel is showing, or null when nothing is selected.</summary>
+    /// <summary>The node whose settings the inspector is showing, or null when nothing is selected.</summary>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(DeleteSelectionCommand))]
     [NotifyPropertyChangedFor(nameof(HasSelection))]
+    [NotifyPropertyChangedFor(nameof(InspectorContent))]
+    [NotifyPropertyChangedFor(nameof(InspectorHeader))]
     private NodeBase? _selectedNode;
 
     /// <summary>Path of the graph currently open, or null when it has never been saved.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(WindowTitle))]
+    [NotifyPropertyChangedFor(nameof(TitleText))]
     private string? _currentGraphPath;
+
+    /// <summary>Which primary view the activity bar has selected.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsWorkspace))]
+    [NotifyPropertyChangedFor(nameof(IsNetwork))]
+    [NotifyPropertyChangedFor(nameof(IsPanelShowing))]
+    [NotifyPropertyChangedFor(nameof(IsChatShowing))]
+    [NotifyPropertyChangedFor(nameof(PanelRowHeight))]
+    [NotifyPropertyChangedFor(nameof(InspectorContent))]
+    [NotifyPropertyChangedFor(nameof(InspectorHeader))]
+    [NotifyPropertyChangedFor(nameof(TitleText))]
+    [NotifyPropertyChangedFor(nameof(StatusSummary))]
+    private PrimarySection _activeSection = PrimarySection.Workspace;
+
+    /// <summary>True while the settings panel is covering the primary view.</summary>
+    [ObservableProperty]
+    private bool _isSettingsOpen;
+
+    /// <summary>True while the side bar is showing. Collapsing it gives the canvas the width.</summary>
+    [ObservableProperty]
+    private bool _isSideBarVisible = true;
+
+    /// <summary>True while the right inspector is showing.</summary>
+    [ObservableProperty]
+    private bool _isInspectorVisible = true;
+
+    /// <summary>Which tab of the bottom panel is showing.</summary>
+    [ObservableProperty]
+    private BottomPanelTab _panelTab = BottomPanelTab.Activity;
+
+    /// <summary>True while the bottom panel is expanded.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsPanelShowing))]
+    [NotifyPropertyChangedFor(nameof(PanelRowHeight))]
+    private bool _isPanelVisible = true;
+
+    /// <summary>The height the panel was last dragged to, remembered across being hidden.</summary>
+    private GridLength _panelHeight = new(240d);
 
     public MainViewModel(
         GraphModel graph,
@@ -58,7 +113,11 @@ public sealed partial class MainViewModel : ObservableObject
         PythonEnvironmentViewModel pythonEnvironment,
         NetworkViewModel network,
         UnityProjectService unityProject,
-        AppConfig config)
+        ProjectIndexService projectIndex,
+        ThemeService themes,
+        AppSettingsViewModel settings,
+        AppConfig config,
+        Dispatcher dispatcher)
     {
         Graph = graph;
         _factory = factory;
@@ -72,10 +131,24 @@ public sealed partial class MainViewModel : ObservableObject
         PythonEnvironment = pythonEnvironment;
         Network = network;
         UnityProject = unityProject;
+        ProjectIndex = projectIndex;
+        Themes = themes;
+        Settings = settings;
         PendingConnection = new PendingConnectionViewModel(graph, message => _feed.Error("Connection refused", message));
 
+        Document = new GraphDocumentViewModel(graph, () => Feed.RunState, dispatcher);
+        Problems = new ProblemsViewModel(graph);
+
+        NodePalette = NodeFactory.Descriptors
+            .Select(d => new PaletteItemViewModel(d.TypeKey, d.DisplayName, d.Description, AddNodeCommand))
+            .ToList();
+
         Graph.Nodes.CollectionChanged += OnNodesChanged;
+        Graph.Connections.CollectionChanged += OnConnectionsChanged;
         UnityProject.PropertyChanged += OnUnityProjectChanged;
+        Feed.PropertyChanged += OnFeedChanged;
+        Network.PropertyChanged += OnNetworkChanged;
+        Document.PropertyChanged += OnDocumentChanged;
 
         // The graph handed in is normally empty, but it does not have to be.
         ResyncNodeSubscriptions();
@@ -99,26 +172,153 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>The Unity project that output nodes write into.</summary>
     public UnityProjectService UnityProject { get; }
 
+    /// <summary>What the open project contains, shown under the explorer.</summary>
+    public ProjectIndexService ProjectIndex { get; }
+
+    /// <summary>The theme the window is wearing.</summary>
+    public ThemeService Themes { get; }
+
+    /// <summary>The settings panel, opened by the gear at the bottom of the activity bar.</summary>
+    public AppSettingsViewModel Settings { get; }
+
+    /// <summary>The open graph: its editor tab, and its nodes as the run outline shows them.</summary>
+    public GraphDocumentViewModel Document { get; }
+
+    /// <summary>Compiler diagnostics from the graph, for the Problems tab.</summary>
+    public ProblemsViewModel Problems { get; }
+
     /// <summary>The wire currently being dragged.</summary>
     public PendingConnectionViewModel PendingConnection { get; }
 
-    /// <summary>The node types offered by the palette.</summary>
-    public IReadOnlyList<NodeFactory.NodeDescriptor> NodePalette => NodeFactory.Descriptors;
+    /// <summary>
+    /// The node types a menu can offer, each carrying the command that adds one.
+    /// </summary>
+    /// <remarks>
+    /// Built once from the factory's own list, so a new node type is still one entry there and
+    /// nothing here. The command is on the item because these are shown from a context menu as
+    /// well as from the menu bar, and a popup is its own visual tree to bind out of.
+    /// </remarks>
+    public IReadOnlyList<PaletteItemViewModel> NodePalette { get; }
 
     /// <summary>True when a node is selected.</summary>
     public bool HasSelection => SelectedNode is not null;
 
+    /// <summary>True while the activity bar has the Workspace selected.</summary>
+    public bool IsWorkspace => ActiveSection == PrimarySection.Workspace;
+
+    /// <summary>True while the activity bar has the Network selected.</summary>
+    public bool IsNetwork => ActiveSection == PrimarySection.Network;
+
+    /// <summary>
+    /// Whatever the right hand inspector should be showing: the selected node in the Workspace,
+    /// and whichever machine, model or coverage section is selected in the Network.
+    /// </summary>
+    /// <remarks>
+    /// One slot, one meaning. The view picks the panel from the type of what comes back, so a new
+    /// kind of selectable thing is a data template and nothing else, and the inspector cannot
+    /// drift between the two sections because there is only one of it.
+    /// </remarks>
+    public object? InspectorContent => ActiveSection == PrimarySection.Workspace
+        ? SelectedNode
+        : Network.InspectorTarget;
+
+    /// <summary>What the top of the inspector says about whatever is selected.</summary>
+    public InspectorHeader InspectorHeader => InspectorHeader.For(InspectorContent);
+
+    /// <summary>
+    /// True when the bottom panel and the chat box are showing. Both belong to the Workspace: the
+    /// Network has no run to transcribe and nothing to type a request at, so the space goes to the
+    /// table instead of to an empty transcript.
+    /// </summary>
+    public bool IsPanelShowing => IsPanelVisible && IsWorkspace;
+
+    /// <summary>True while the chat box is showing, which is whenever the Workspace is.</summary>
+    public bool IsChatShowing => IsWorkspace;
+
+    /// <summary>
+    /// The height of the panel row. Bound two way so the splitter writes the dragged height back
+    /// here, which is what lets hiding the panel collapse the row to nothing and showing it again
+    /// return to the size it was left at rather than to a default.
+    /// </summary>
+    public GridLength PanelRowHeight
+    {
+        get => IsPanelShowing ? _panelHeight : GridLength.Auto;
+        set
+        {
+            if (!IsPanelShowing || value.IsAuto || value.Value <= 0d)
+            {
+                return;
+            }
+
+            _panelHeight = value;
+        }
+    }
+
     /// <summary>Text for the window title bar.</summary>
-    public string WindowTitle
+    public string WindowTitle => $"{TitleText} - LocalNEXUS";
+
+    /// <summary>
+    /// What the middle of the title bar says: the document, the project it writes into, and the
+    /// application, in that order, because that is the order of how specific each one is.
+    /// </summary>
+    public string TitleText
     {
         get
         {
-            var graphName = CurrentGraphPath is null
-                ? "Untitled graph"
-                : Path.GetFileName(CurrentGraphPath);
+            if (ActiveSection == PrimarySection.Network)
+            {
+                return "Network";
+            }
 
-            return $"LocalNEXUS  |  {graphName}";
+            var graphName = Document.Name;
+
+            return UnityProject.ProjectName is { } project
+                ? $"{graphName} - {project}"
+                : graphName;
         }
+    }
+
+    /// <summary>
+    /// The right hand end of the status bar: what the section currently showing amounts to.
+    /// </summary>
+    public string StatusSummary => ActiveSection == PrimarySection.Network
+        ? Network.CoverageSummary
+        : Document.SummaryText;
+
+    /// <summary>Switches the primary view, which is what the activity bar icons do.</summary>
+    [RelayCommand]
+    private void ShowSection(PrimarySection section)
+    {
+        ActiveSection = section;
+        IsSettingsOpen = false;
+    }
+
+    /// <summary>Opens the settings panel over whichever section is showing.</summary>
+    [RelayCommand]
+    private void OpenSettings() => IsSettingsOpen = true;
+
+    /// <summary>Closes the settings panel, landing back where the work was left.</summary>
+    [RelayCommand]
+    private void CloseSettings() => IsSettingsOpen = false;
+
+    /// <summary>Shows or hides the side bar.</summary>
+    [RelayCommand]
+    private void ToggleSideBar() => IsSideBarVisible = !IsSideBarVisible;
+
+    /// <summary>Shows or hides the right hand inspector.</summary>
+    [RelayCommand]
+    private void ToggleInspector() => IsInspectorVisible = !IsInspectorVisible;
+
+    /// <summary>Shows or hides the bottom panel.</summary>
+    [RelayCommand]
+    private void TogglePanel() => IsPanelVisible = !IsPanelVisible;
+
+    /// <summary>Brings one tab of the bottom panel forward, expanding the panel if it was collapsed.</summary>
+    [RelayCommand]
+    private void ShowPanelTab(BottomPanelTab tab)
+    {
+        PanelTab = tab;
+        IsPanelVisible = true;
     }
 
     /// <summary>Adds a node of the given type at the cursor.</summary>
@@ -210,6 +410,7 @@ public sealed partial class MainViewModel : ObservableObject
         Graph.Clear();
         SelectedNode = null;
         CurrentGraphPath = null;
+        Document.MarkSaved(null);
         _cascadeIndex = 0;
         _feed.Info("New graph", "The canvas was cleared.");
     }
@@ -239,6 +440,7 @@ public sealed partial class MainViewModel : ObservableObject
         {
             _serializer.Save(Graph, path);
             CurrentGraphPath = path;
+            Document.MarkSaved(path);
             _config.LastGraphPath = path;
             _config.Save();
             _feed.Info("Graph saved", path);
@@ -277,6 +479,7 @@ public sealed partial class MainViewModel : ObservableObject
             var warnings = _serializer.LoadInto(Graph, path);
 
             CurrentGraphPath = path;
+            Document.MarkSaved(path);
             _config.LastGraphPath = path;
             _config.Save();
 
@@ -384,9 +587,77 @@ public sealed partial class MainViewModel : ObservableObject
 
     private void OnUnityProjectChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(UnityProjectService.StatusText))
+        if (e.PropertyName is nameof(UnityProjectService.StatusText) or nameof(UnityProjectService.ProjectPath))
         {
             OnPropertyChanged(nameof(WindowTitle));
+            OnPropertyChanged(nameof(TitleText));
         }
+    }
+
+    private void OnConnectionsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        => OnPropertyChanged(nameof(StatusSummary));
+
+    private void OnDocumentChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(GraphDocumentViewModel.SummaryText))
+        {
+            OnPropertyChanged(nameof(StatusSummary));
+        }
+        else if (e.PropertyName is nameof(GraphDocumentViewModel.Name))
+        {
+            OnPropertyChanged(nameof(WindowTitle));
+            OnPropertyChanged(nameof(TitleText));
+        }
+    }
+
+    /// <summary>
+    /// Follows the run, so that a fault turns every node the run never reached from pending to
+    /// skipped. Nothing about a node changes when that happens, which is the point: the node did
+    /// not do anything, the run did.
+    /// </summary>
+    private void OnFeedChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ActivityFeedViewModel.RunState))
+        {
+            Document.OnRunStateChanged();
+        }
+    }
+
+    private void OnNetworkChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(NetworkViewModel.InspectorTarget))
+        {
+            OnPropertyChanged(nameof(InspectorContent));
+            OnPropertyChanged(nameof(InspectorHeader));
+        }
+        else if (e.PropertyName is nameof(NetworkViewModel.CoverageSummary))
+        {
+            OnPropertyChanged(nameof(StatusSummary));
+        }
+    }
+
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+
+        Graph.Nodes.CollectionChanged -= OnNodesChanged;
+        Graph.Connections.CollectionChanged -= OnConnectionsChanged;
+        UnityProject.PropertyChanged -= OnUnityProjectChanged;
+        Feed.PropertyChanged -= OnFeedChanged;
+        Network.PropertyChanged -= OnNetworkChanged;
+        Document.PropertyChanged -= OnDocumentChanged;
+
+        foreach (var node in _observedNodes.ToList())
+        {
+            Unobserve(node);
+        }
+
+        Document.Dispose();
+        Problems.Dispose();
     }
 }

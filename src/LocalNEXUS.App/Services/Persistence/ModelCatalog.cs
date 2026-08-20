@@ -113,6 +113,53 @@ public sealed partial class ModelCatalog : ObservableObject
         return true;
     }
 
+    /// <summary>
+    /// Stops scanning a folder that was added here, persists that, and rescans. Returns false for
+    /// a folder this does not own.
+    /// </summary>
+    /// <remarks>
+    /// Only folders added through the settings panel can be removed through it. The default models
+    /// folder is where a model dropped in with no configuration at all is found, and the ones
+    /// listed in model-paths.txt belong to that file: removing either from here would be a change
+    /// somewhere the person cannot see it, and would come back the next time the file was read.
+    /// </remarks>
+    public bool RemoveFolder(string folder)
+    {
+        if (string.IsNullOrWhiteSpace(folder))
+        {
+            return false;
+        }
+
+        var full = Path.GetFullPath(folder);
+
+        var match = _config.ExtraModelFolders
+            .FirstOrDefault(f => string.Equals(Path.GetFullPath(f), full, StringComparison.OrdinalIgnoreCase));
+
+        if (match is null)
+        {
+            return false;
+        }
+
+        _config.ExtraModelFolders.Remove(match);
+        _config.Save();
+        Refresh();
+        return true;
+    }
+
+    /// <summary>True when this folder was added here, and so can be removed here.</summary>
+    public bool IsRemovable(string folder)
+    {
+        if (string.IsNullOrWhiteSpace(folder))
+        {
+            return false;
+        }
+
+        var full = Path.GetFullPath(folder);
+
+        return _config.ExtraModelFolders
+            .Any(f => string.Equals(Path.GetFullPath(f), full, StringComparison.OrdinalIgnoreCase));
+    }
+
     /// <summary>Finds the catalog entry for a path, or null when it is no longer present.</summary>
     public LocalModelInfo? FindByPath(string? path)
     {

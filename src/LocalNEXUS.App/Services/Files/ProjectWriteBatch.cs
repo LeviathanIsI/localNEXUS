@@ -69,12 +69,16 @@ public sealed class ProjectWriteBatch
     /// Writes everything staged. On failure, restores every file already written in this call and
     /// removes any it created, then rethrows.
     /// </summary>
-    /// <returns>The absolute paths written, and how many bytes in total.</returns>
-    public async Task<(IReadOnlyList<string> Written, long Bytes)> CommitAsync(CancellationToken ct)
+    /// <returns>What was written, each with the size of the change it made.</returns>
+    /// <remarks>
+    /// The size of each change comes free here and nowhere else: the original has to be read
+    /// anyway so that a failure partway can put it back, so counting what changed costs a
+    /// comparison rather than a second read.
+    /// </remarks>
+    public async Task<IReadOnlyList<WrittenFile>> CommitAsync(CancellationToken ct)
     {
         var originals = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-        var written = new List<string>();
-        long bytes = 0;
+        var written = new List<WrittenFile>();
 
         try
         {
@@ -82,17 +86,21 @@ public sealed class ProjectWriteBatch
             {
                 ct.ThrowIfCancellationRequested();
 
-                originals[path] = File.Exists(path) ? await File.ReadAllTextAsync(path, ct).ConfigureAwait(false) : null;
+                var original = File.Exists(path)
+                    ? await File.ReadAllTextAsync(path, ct).ConfigureAwait(false)
+                    : null;
 
-                bytes += await _writer.WriteAsync(path, content, ct).ConfigureAwait(false);
-                written.Add(path);
+                originals[path] = original;
+
+                var bytes = await _writer.WriteAsync(path, content, ct).ConfigureAwait(false);
+                written.Add(new WrittenFile(path, bytes, DiffStat.Between(original, content)));
             }
 
-            return (written, bytes);
+            return written;
         }
         catch
         {
-            Rollback(originals, written);
+            Rollback(originals, written.Select(w => w.Path));
             throw;
         }
     }

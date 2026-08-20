@@ -3,19 +3,30 @@
                     xmlns:nodify="clr-namespace:Nodify;assembly=Nodify">
 
     <!--
-        Canvas visuals. One template serves every node type: the base class already exposes the
-        title, the pins and the execution state, and the only per type difference is the header
-        accent, which is resolved from the node's type key.
+        Canvas visuals. One template serves every node type, because the base class already exposes
+        the title, the pins and the state, and the only per type difference is the accent.
+
+        Nodes are neutral surfaces. The body is the same colour in every theme and the type colour
+        appears only on the bar down the leading edge. A tinted header per type turns a graph of a
+        dozen nodes into a paint chart, and it competes with the one thing on a node that has to be
+        readable at a glance, which is what state it is in.
+
+        The four states are drawn distinctly and honestly. Pending is plain grey, because a node
+        that has not run yet is not asking for attention. Running carries a live dot, a clock and
+        whatever progress the node itself reports. Completed carries its own summary. Faulted is
+        red and stays on the node that actually faulted; a node the run never reached is a plain
+        grey Skipped, which is presentation reading the run state rather than anything the node
+        was told.
     -->
 
     <!--
         The pin marker. Colour comes from the pin type, so a Text pin can never be mistaken for a
-        Code pin, and the centre is filled only once something is wired to it, which makes an
+        Code pin, and the centre fills only once something is wired to it, which makes an
         unconnected input visible at a glance.
 
         Nodify's default connector template paints the whole pin row with the control Background
-        and leaves the dot itself transparent, so the dot is drawn here instead and the row is
-        left unpainted. The data context inside this template is the Pin.
+        and leaves the dot itself transparent, so the dot is drawn here instead and the row is left
+        unpainted. The data context inside this template is the Pin.
     -->
     <ControlTemplate x:Key="PinConnectorTemplate" TargetType="Control">
         <Grid Width="14" Height="14">
@@ -58,56 +69,85 @@
                            ToolTip="{Binding}" />
     </DataTemplate>
 
+    <!--
+        The item on the canvas is the node view model, which carries the node itself plus the two
+        things the canvas needs that the node does not have: how long it has been running, and
+        whether a state of Pending means waiting or means never reached.
+    -->
     <DataTemplate x:Key="NodeTemplate">
-        <nodify:Node Input="{Binding Inputs}"
-                     Output="{Binding Outputs}"
+        <nodify:Node Input="{Binding Node.Inputs}"
+                     Output="{Binding Node.Outputs}"
                      InputConnectorTemplate="{StaticResource InputConnectorTemplate}"
                      OutputConnectorTemplate="{StaticResource OutputConnectorTemplate}"
-                     HeaderBrush="{Binding TypeKey, Converter={StaticResource ResourceLookup}, ConverterParameter=NodeType}"
+                     HeaderBrush="{StaticResource Surface.Card.Brush}"
                      ContentBrush="{StaticResource Surface.Card.Brush}"
-                     Background="{StaticResource Surface.Panel.Brush}"
-                     BorderBrush="{Binding State, Converter={StaticResource ResourceLookup}, ConverterParameter=NodeState}"
+                     Background="{StaticResource Surface.Card.Brush}"
+                     BorderBrush="{Binding DisplayState, Converter={StaticResource ResourceLookup}, ConverterParameter=NodeDisplayState}"
                      BorderThickness="1.5"
                      Foreground="{StaticResource Text.Primary.Brush}"
-                     MinWidth="188">
+                     MinWidth="200">
 
             <nodify:Node.Header>
-                <StackPanel Margin="2,1">
-                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
-                    <TextBlock Text="{Binding TypeKey}"
-                               Foreground="{StaticResource Text.Secondary.Brush}"
-                               FontSize="{StaticResource Font.Size.Small}" />
-                </StackPanel>
+                <Grid Margin="0,1">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <!-- The only colour a node carries. -->
+                    <Rectangle Grid.Column="0"
+                               Style="{StaticResource AccentBar}"
+                               Margin="0,0,9,0"
+                               Fill="{Binding TypeKey, Converter={StaticResource ResourceLookup}, ConverterParameter=NodeType}" />
+
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+                        <TextBlock Style="{StaticResource MutedText}" Text="{Binding TypeKey}" />
+                    </StackPanel>
+                </Grid>
             </nodify:Node.Header>
 
-            <!-- Live state: the dot mirrors NodeState and the line below it carries whatever the
-                 node last reported, such as a token rate or the path it wrote. -->
             <StackPanel Margin="2,4">
-                <StackPanel Orientation="Horizontal">
-                    <Ellipse Width="8" Height="8"
-                             VerticalAlignment="Center"
-                             Fill="{Binding State, Converter={StaticResource ResourceLookup}, ConverterParameter=NodeState}" />
-                    <TextBlock Text="{Binding State}"
-                               Margin="6,0,0,0"
+
+                <!-- State, and the clock while it is running. -->
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Right"
+                               Style="{StaticResource MonoText}"
+                               Margin="10,0,0,0"
+                               Foreground="{StaticResource Status.Info.Brush}"
+                               Text="{Binding ElapsedText}"
+                               Visibility="{Binding IsRunning, Converter={StaticResource BooleanToVisibility}}" />
+
+                    <Ellipse Style="{StaticResource StateDot}"
+                             Margin="0,0,7,0"
+                             Fill="{Binding DisplayState, Converter={StaticResource ResourceLookup}, ConverterParameter=NodeDisplayState}" />
+
+                    <TextBlock Text="{Binding StateText}"
                                FontSize="{StaticResource Font.Size.Small}"
-                               Foreground="{StaticResource Text.Secondary.Brush}" />
-                </StackPanel>
-                <TextBlock Text="{Binding StatusMessage}"
-                           Margin="0,4,0,0"
-                           MaxWidth="230"
+                               Foreground="{Binding DisplayState, Converter={StaticResource ResourceLookup}, ConverterParameter=NodeDisplayState}" />
+                </DockPanel>
+
+                <!-- Only drawn when the node reports a countable fraction. A bar on a guess is worse than none. -->
+                <ProgressBar Margin="0,6,0,0"
+                             Maximum="100"
+                             Value="{Binding ProgressPercent, Mode=OneWay}"
+                             Visibility="{Binding HasProgress, Converter={StaticResource BooleanToVisibility}}" />
+
+                <TextBlock Text="{Binding Detail}"
+                           Margin="0,5,0,0"
+                           MaxWidth="240"
                            TextWrapping="Wrap"
                            TextTrimming="CharacterEllipsis"
                            MaxHeight="46"
-                           FontSize="{StaticResource Font.Size.Small}"
-                           Foreground="{StaticResource Text.Secondary.Brush}"
-                           Visibility="{Binding StatusMessage, Converter={StaticResource StringToVisibility}}" />
+                           Style="{StaticResource MutedText}"
+                           Visibility="{Binding Detail, Converter={StaticResource StringToVisibility}}" />
             </StackPanel>
         </nodify:Node>
     </DataTemplate>
 
-    <!-- Position and selection are the node's own state, so the container binds straight to it. -->
+    <!-- Position and selection are the node's own state, so the container binds straight through. -->
     <Style x:Key="NodeContainerStyle" TargetType="nodify:ItemContainer">
-        <Setter Property="Location" Value="{Binding Location, Mode=TwoWay}" />
+        <Setter Property="Location" Value="{Binding Node.Location, Mode=TwoWay}" />
         <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
         <Setter Property="SelectedBrush" Value="{StaticResource Accent.Primary.Brush}" />
         <Setter Property="HighlightBrush" Value="{StaticResource Accent.Primary.Brush}" />
@@ -117,15 +157,18 @@
         <nodify:Connection Source="{Binding Source.Anchor}"
                            Target="{Binding Target.Anchor}"
                            Stroke="{Binding PinType, Converter={StaticResource ResourceLookup}, ConverterParameter=Pin}"
-                           StrokeThickness="2.5"
+                           StrokeThickness="2"
                            Foreground="{StaticResource Text.Secondary.Brush}"
                            FontSize="{StaticResource Font.Size.Small}"
                            ArrowEnds="End"
-                           ArrowSize="8,8" />
+                           ArrowSize="7,7" />
     </DataTemplate>
 
-    <!-- The wire being dragged. It turns red and states the reason as soon as the pin under the
-         cursor would be refused, so an invalid drop is visible before the mouse is released. -->
+    <!--
+        The wire being dragged. It turns to the danger colour and states the reason as soon as the
+        pin under the cursor would be refused, so an invalid drop is visible before the mouse is
+        released.
+    -->
     <DataTemplate x:Key="PendingConnectionTemplate">
         <nodify:PendingConnection IsVisible="{Binding IsVisible}"
                                   PreviewTarget="{Binding PreviewTarget, Mode=OneWayToSource}"
@@ -134,7 +177,7 @@
                                   AllowOnlyConnectors="True"
                                   EnablePreview="True"
                                   EnableSnapping="True"
-                                  StrokeThickness="2.5"
+                                  StrokeThickness="2"
                                   Stroke="{Binding IsValid, Converter={StaticResource ResourceLookup}, ConverterParameter=Wire}"
                                   Foreground="{StaticResource Text.Primary.Brush}"
                                   FontSize="{StaticResource Font.Size.Small}"

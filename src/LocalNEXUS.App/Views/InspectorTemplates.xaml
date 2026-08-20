@@ -1,0 +1,220 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:distributed="clr-namespace:LocalNEXUS.App.Services.Distributed">
+
+    <!--
+        What the one inspector slot shows when the Network has the selection. The Workspace half of
+        the same slot is in SettingsTemplates.xaml, one template per node type; between them they
+        are the whole of "what can I do about the selected thing".
+
+        Coverage is a table rather than a chain of boxes. A chain looks like a pipeline, which is
+        true, but the questions asked of it are which layers, held by whom, with how much slack,
+        and those are columns. The uncovered row is the one that matters and it is named in red
+        with the rest of the table intact around it, so the gap is read in context rather than as
+        an error message on its own.
+    -->
+
+    <!-- A model the mesh knows about. -->
+    <DataTemplate DataType="{x:Type distributed:NetworkServedModel}">
+        <StackPanel>
+
+            <TextBlock Style="{StaticResource HintText}"
+                       Margin="0,0,0,10"
+                       Foreground="{Binding Availability, Converter={StaticResource ResourceLookup}, ConverterParameter=ModelAvailability}"
+                       Text="{Binding ChainStatusText}" />
+
+            <TextBlock Style="{StaticResource SectionHeader}" Text="Coverage" />
+
+            <Grid Margin="0,8,0,4">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="16" />
+                    <ColumnDefinition Width="80" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Column="1" Style="{StaticResource MonoText}" Foreground="{StaticResource Text.Muted.Brush}" Text="LAYERS" />
+                <TextBlock Grid.Column="2" Style="{StaticResource MonoText}" Foreground="{StaticResource Text.Muted.Brush}" Text="COVERED BY" />
+                <TextBlock Grid.Column="3" Style="{StaticResource MonoText}" Foreground="{StaticResource Text.Muted.Brush}" Text="SPARE" />
+            </Grid>
+
+            <!--
+                Selecting a section hands the slot over to it, which is how an uncovered section
+                becomes a panel about fixing that section rather than a red row somebody has to
+                interpret.
+            -->
+            <ListBox ItemsSource="{Binding Plan.Assignments}"
+                     SelectedItem="{Binding DataContext.Network.SelectedSection, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                     Background="Transparent"
+                     BorderThickness="0">
+                <ListBox.ItemContainerStyle>
+                    <Style TargetType="ListBoxItem" BasedOn="{StaticResource ListRow}">
+                        <Setter Property="Padding" Value="0,5" />
+                    </Style>
+                </ListBox.ItemContainerStyle>
+
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="16" />
+                                <ColumnDefinition Width="80" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <Ellipse Grid.Column="0"
+                                     Style="{StaticResource StateDot}"
+                                     HorizontalAlignment="Left"
+                                     Fill="{Binding Coverage, Converter={StaticResource ResourceLookup}, ConverterParameter=SectionCoverage}" />
+
+                            <TextBlock Grid.Column="1"
+                                       Style="{StaticResource MonoText}"
+                                       Text="{Binding Section.LayerRangeText}"
+                                       TextTrimming="CharacterEllipsis" />
+
+                            <TextBlock Grid.Column="2"
+                                       Text="{Binding SourceText}"
+                                       FontSize="{StaticResource Font.Size.Small}"
+                                       TextTrimming="CharacterEllipsis"
+                                       ToolTip="{Binding StatusDetail}"
+                                       Foreground="{Binding Coverage, Converter={StaticResource ResourceLookup}, ConverterParameter=SectionCoverage}" />
+
+                            <TextBlock Grid.Column="3"
+                                       Style="{StaticResource MonoText}"
+                                       Text="{Binding SpareSources}"
+                                       Foreground="{Binding Coverage, Converter={StaticResource ResourceLookup}, ConverterParameter=SectionCoverage}" />
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+
+            <TextBlock Style="{StaticResource HintText}"
+                       Text="{Binding RequirementText}" />
+
+            <TextBlock Style="{StaticResource HintText}"
+                       Text="Sections, who covers each and how much slack stands behind them are all read from the mesh. Nothing here is planned by this install." />
+        </StackPanel>
+    </DataTemplate>
+
+    <!-- One machine in the mesh. -->
+    <DataTemplate DataType="{x:Type distributed:InferenceSource}">
+        <StackPanel>
+
+            <TextBlock Style="{StaticResource HintText}"
+                       Margin="0,0,0,10"
+                       Text="Everything here is reported by the mesh. This application does not probe peers or configure them, so a remote machine is a report rather than a form." />
+
+            <TextBlock Style="{StaticResource FieldLabel}" Text="Peer key" />
+            <TextBox Text="{Binding SourceId, Mode=OneWay}"
+                     IsReadOnly="True"
+                     FontFamily="{StaticResource Font.Mono}"
+                     FontSize="{StaticResource Font.Size.Small}"
+                     TextWrapping="Wrap" />
+            <TextBlock Style="{StaticResource HintText}"
+                       Text="Assigned by the engine and stable across sessions, which is what reputation will attach to later." />
+
+            <TextBlock Style="{StaticResource FieldLabel}" Text="What it brings" />
+            <TextBlock Text="{Binding CapabilityText}" />
+
+            <TextBlock Style="{StaticResource FieldLabel}" Text="Path to it" />
+            <TextBlock Style="{StaticResource MonoText}" Text="{Binding EndpointText}" />
+
+            <TextBlock Style="{StaticResource FieldLabel}" Text="Last seen" />
+            <TextBlock Style="{StaticResource MonoText}" Text="{Binding LastSeenText}" />
+
+            <TextBlock Style="{StaticResource FieldLabel}" Text="Engine version" />
+            <TextBlock Style="{StaticResource MonoText}"
+                       Text="{Binding Version, TargetNullValue=not reported}" />
+
+            <TextBlock Style="{StaticResource FieldLabel}" Text="Trust" />
+            <TextBlock Text="{Binding Trust}" />
+            <TextBlock Style="{StaticResource HintText}"
+                       Text="Always trusted today, because a private mesh is joined by invitation and every peer in it was let in deliberately. The question is asked now so that the answer can change later." />
+
+            <!-- This machine is the one thing on this screen that is a form rather than a report. -->
+            <StackPanel Visibility="{Binding IsThisMachine, Converter={StaticResource BooleanToVisibility}}">
+                <Rectangle Height="1" Margin="0,16,0,4" Fill="{StaticResource Surface.Border.Brush}" />
+
+                <TextBlock Style="{StaticResource SectionHeader}" Margin="0,10,0,0" Text="What this machine offers" />
+
+                <CheckBox Style="{StaticResource ToggleSwitch}"
+                          Margin="0,10,0,0"
+                          Content="Offer this machine's compute"
+                          IsChecked="{Binding DataContext.Network.Contribute, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+
+                <TextBlock Style="{StaticResource FieldLabel}" Text="Memory cap, GB" />
+                <TextBox Text="{Binding DataContext.Network.MaxVramGb, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=LostFocus}" />
+
+                <Button Style="{StaticResource SmallButton}"
+                        Margin="0,12,0,0"
+                        HorizontalAlignment="Left"
+                        Content="Apply and restart the node"
+                        Command="{Binding DataContext.Network.ApplySettingsCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+            </StackPanel>
+        </StackPanel>
+    </DataTemplate>
+
+    <!-- One section of a model, which is the panel for fixing a gap. -->
+    <DataTemplate DataType="{x:Type distributed:SourceAssignment}">
+        <StackPanel>
+
+            <TextBlock Style="{StaticResource HintText}"
+                       Margin="0,0,0,12"
+                       Foreground="{Binding Coverage, Converter={StaticResource ResourceLookup}, ConverterParameter=SectionCoverage}"
+                       Text="{Binding StatusDetail}" />
+
+            <!-- The two things that would actually resolve a gap, and nothing that would not. -->
+            <StackPanel Visibility="{Binding IsBlocking, Converter={StaticResource BooleanToVisibility}}">
+
+                <Border Style="{StaticResource Card}" Margin="0,0,0,10">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource SectionHeader}" Text="Raise this machine's cap" />
+                        <TextBlock Style="{StaticResource HintText}"
+                                   Text="The planner places a section on a machine only if the cap allows it, so raising the cap here is what lets this machine take the gap." />
+
+                        <TextBlock Style="{StaticResource FieldLabel}" Text="Memory cap, GB" />
+                        <TextBox Text="{Binding DataContext.Network.MaxVramGb, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=LostFocus}" />
+
+                        <Button Style="{StaticResource PrimaryButton}"
+                                Margin="0,10,0,0"
+                                HorizontalAlignment="Left"
+                                Content="Apply and restart the node"
+                                Command="{Binding DataContext.Network.ApplySettingsCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource SectionHeader}" Text="Invite another machine" />
+                        <TextBlock Style="{StaticResource HintText}"
+                                   Text="Any machine with room for these layers can fill the gap. The token is private and joins only over the local network." />
+
+                        <Button Style="{StaticResource SmallButton}"
+                                Margin="0,10,0,0"
+                                HorizontalAlignment="Left"
+                                Content="Copy invite token"
+                                Command="{Binding DataContext.Network.CopyInviteCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                    </StackPanel>
+                </Border>
+
+                <TextBlock Style="{StaticResource HintText}"
+                           Text="How much memory these layers need is not something the mesh reports, so it is not stated here. What is certain is that no machine currently holds them." />
+            </StackPanel>
+
+            <!-- A section that is fine says what it is doing and offers nothing to do about it. -->
+            <StackPanel Visibility="{Binding IsBlocking, Converter={StaticResource BooleanToVisibility}, ConverterParameter=Invert}">
+                <TextBlock Style="{StaticResource FieldLabel}" Text="Covered by" />
+                <TextBlock Text="{Binding SourceText}" />
+
+                <TextBlock Style="{StaticResource FieldLabel}" Text="Slack" />
+                <TextBlock Text="{Binding CoverageText}"
+                           Foreground="{Binding Coverage, Converter={StaticResource ResourceLookup}, ConverterParameter=SectionCoverage}" />
+
+                <TextBlock Style="{StaticResource HintText}"
+                           Text="The engine detects a source that drops and replans onto whatever slack there is. Nothing here retries above it, because anything that did would be racing the only component that knows the topology." />
+            </StackPanel>
+        </StackPanel>
+    </DataTemplate>
+
+</ResourceDictionary>

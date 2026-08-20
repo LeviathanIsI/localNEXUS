@@ -1,7 +1,8 @@
 <Window x:Class="LocalNEXUS.App.Views.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:nodify="clr-namespace:Nodify;assembly=Nodify"
+        xmlns:behaviors="clr-namespace:LocalNEXUS.App.Infrastructure.Behaviors"
+        xmlns:shell="clr-namespace:LocalNEXUS.App.Views.Shell"
         xmlns:views="clr-namespace:LocalNEXUS.App.Views"
         xmlns:vm="clr-namespace:LocalNEXUS.App.ViewModels"
         d:DataContext="{d:DesignInstance Type=vm:MainViewModel}"
@@ -11,190 +12,358 @@
         Title="{Binding WindowTitle}"
         Height="920"
         Width="1560"
-        MinHeight="600"
-        MinWidth="1000"
+        MinHeight="620"
+        MinWidth="1040"
         WindowStartupLocation="CenterScreen"
-        Background="{StaticResource Surface.Window.Brush}"
+        Background="{StaticResource Surface.Chrome.Brush}"
         Foreground="{StaticResource Text.Primary.Brush}"
-        TextOptions.TextFormattingMode="Ideal">
+        FontFamily="{StaticResource Font.Sans}"
+        TextOptions.TextFormattingMode="Ideal"
+        behaviors:WindowCommandsBehavior.IsEnabled="True">
+
+    <!--
+        The shell: title bar with the menus, activity bar, side bar, editor area, inspector,
+        bottom panel and status bar.
+
+        The window draws its own title bar, which is the only way the menu bar can be part of it
+        and the only way the caption can be themed. The caption buttons get their handlers from an
+        attached behaviour so that the code behind stays a call to InitializeComponent.
+    -->
+
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="30"
+                      ResizeBorderThickness="6"
+                      CornerRadius="0"
+                      GlassFrameThickness="0"
+                      UseAeroCaptionButtons="False" />
+    </WindowChrome.WindowChrome>
 
     <Window.InputBindings>
         <KeyBinding Key="Delete" Command="{Binding DeleteSelectionCommand}" />
         <KeyBinding Key="S" Modifiers="Ctrl" Command="{Binding SaveGraphCommand}" />
         <KeyBinding Key="O" Modifiers="Ctrl" Command="{Binding LoadGraphCommand}" />
         <KeyBinding Key="N" Modifiers="Ctrl" Command="{Binding NewGraphCommand}" />
+        <KeyBinding Key="Enter" Modifiers="Ctrl" Command="{Binding Feed.RunCommand}" />
+        <KeyBinding Key="F5" Command="{Binding Feed.RunCommand}" />
+        <KeyBinding Key="F6" Command="{Binding Feed.TogglePauseCommand}" />
+        <KeyBinding Key="B" Modifiers="Ctrl" Command="{Binding ToggleSideBarCommand}" />
+        <KeyBinding Key="J" Modifiers="Ctrl" Command="{Binding TogglePanelCommand}" />
+        <KeyBinding Key="OemComma" Modifiers="Ctrl" Command="{Binding OpenSettingsCommand}" />
+        <KeyBinding Key="Escape" Command="{Binding CloseSettingsCommand}" />
     </Window.InputBindings>
 
-    <DockPanel>
+    <!-- A maximised window with custom chrome overhangs the work area by the resize border. -->
+    <Border x:Name="Root">
+        <Border.Style>
+            <Style TargetType="Border">
+                <Setter Property="Margin" Value="0" />
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding WindowState, RelativeSource={RelativeSource AncestorType=Window}}" Value="Maximized">
+                        <Setter Property="Margin" Value="7" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+        </Border.Style>
 
-        <Menu DockPanel.Dock="Top">
-            <MenuItem Header="_File">
-                <MenuItem Header="_Open Unity Project or Folder..." Command="{Binding OpenUnityProjectCommand}" />
-                <Separator />
-                <MenuItem Header="_New Graph" InputGestureText="Ctrl+N" Command="{Binding NewGraphCommand}" />
-                <MenuItem Header="_Save Graph..." InputGestureText="Ctrl+S" Command="{Binding SaveGraphCommand}" />
-                <MenuItem Header="_Load Graph..." InputGestureText="Ctrl+O" Command="{Binding LoadGraphCommand}" />
-            </MenuItem>
-        </Menu>
+        <DockPanel>
 
-        <!-- Which project output nodes will write into -->
-        <Border DockPanel.Dock="Top"
-                Background="{StaticResource Surface.Panel.Brush}"
-                BorderBrush="{StaticResource Surface.Border.Brush}"
-                BorderThickness="0,1,0,1"
-                Padding="12,6">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Text="Unity project:"
-                           Foreground="{StaticResource Text.Secondary.Brush}"
-                           FontSize="{StaticResource Font.Size.Small}"
-                           VerticalAlignment="Center" />
-                <TextBlock Text="{Binding UnityProject.StatusText}"
-                           Margin="8,0,0,0"
-                           FontSize="{StaticResource Font.Size.Small}"
-                           VerticalAlignment="Center" />
-            </StackPanel>
-        </Border>
-
-        <TabControl>
-            <TabItem Header="Workspace">
+            <!-- Title bar -->
+            <Border DockPanel.Dock="Top"
+                    Height="30"
+                    Background="{StaticResource Surface.Chrome.Brush}">
                 <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="3*" MinHeight="260" />
-                        <RowDefinition Height="5" />
-                        <RowDefinition Height="2*" MinHeight="180" />
-                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
 
-                    <Grid Grid.Row="0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" MinWidth="420" />
-                            <ColumnDefinition Width="5" />
-                            <ColumnDefinition Width="376" MinWidth="300" />
-                        </Grid.ColumnDefinitions>
+                    <Border Grid.Column="0"
+                            Width="14" Height="14"
+                            Margin="10,0,8,0"
+                            CornerRadius="3"
+                            BorderThickness="1.5"
+                            BorderBrush="{StaticResource Accent.Primary.Brush}" />
 
-                <!-- Canvas and palette -->
-                <DockPanel Grid.Column="0">
+                    <Menu Grid.Column="1"
+                          Background="Transparent"
+                          VerticalAlignment="Center"
+                          WindowChrome.IsHitTestVisibleInChrome="True">
 
-                    <Border DockPanel.Dock="Top"
-                            Background="{StaticResource Surface.Panel.Brush}"
-                            BorderBrush="{StaticResource Surface.Border.Brush}"
-                            BorderThickness="0,0,0,1"
-                            Padding="10,7">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="Add node"
-                                       Foreground="{StaticResource Text.Secondary.Brush}"
-                                       FontSize="{StaticResource Font.Size.Small}"
-                                       VerticalAlignment="Center"
-                                       Margin="0,0,10,0" />
+                        <MenuItem Header="_File">
+                            <MenuItem Header="_New graph" InputGestureText="Ctrl+N" Command="{Binding NewGraphCommand}" />
+                            <MenuItem Header="_Open graph..." InputGestureText="Ctrl+O" Command="{Binding LoadGraphCommand}" />
+                            <MenuItem Header="_Save graph..." InputGestureText="Ctrl+S" Command="{Binding SaveGraphCommand}" />
+                            <Separator />
+                            <MenuItem Header="Open _Unity project..." Command="{Binding OpenUnityProjectCommand}" />
+                            <Separator />
+                            <MenuItem Header="Se_ttings" InputGestureText="Ctrl+," Command="{Binding OpenSettingsCommand}" />
+                            <Separator />
+                            <MenuItem Header="E_xit" Command="{x:Static SystemCommands.CloseWindowCommand}" />
+                        </MenuItem>
 
-                            <ItemsControl ItemsSource="{Binding NodePalette}">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <StackPanel Orientation="Horizontal" />
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Button Style="{StaticResource SmallButton}"
-                                                Margin="0,0,6,0"
-                                                Content="{Binding DisplayName}"
-                                                ToolTip="{Binding Description}"
-                                                CommandParameter="{Binding TypeKey}"
-                                                Command="{Binding DataContext.AddNodeCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
+                        <MenuItem Header="_Edit">
+                            <MenuItem Header="_Add node" ItemsSource="{Binding NodePalette}">
+                                <MenuItem.ItemContainerStyle>
+                                    <Style TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}">
+                                        <Setter Property="Header" Value="{Binding DisplayName}" />
+                                        <Setter Property="ToolTip" Value="{Binding Description}" />
+                                        <Setter Property="Command" Value="{Binding Command}" />
+                                        <Setter Property="CommandParameter" Value="{Binding TypeKey}" />
+                                    </Style>
+                                </MenuItem.ItemContainerStyle>
+                            </MenuItem>
+                            <Separator />
+                            <MenuItem Header="_Delete selected" InputGestureText="Del" Command="{Binding DeleteSelectionCommand}" />
+                        </MenuItem>
 
-                            <Rectangle Width="1"
-                                       Margin="6,2,10,2"
-                                       Fill="{StaticResource Surface.Border.Brush}" />
+                        <MenuItem Header="_View">
+                            <MenuItem Header="_Workspace" Command="{Binding ShowSectionCommand}" CommandParameter="{x:Static vm:PrimarySection.Workspace}" />
+                            <MenuItem Header="_Network" Command="{Binding ShowSectionCommand}" CommandParameter="{x:Static vm:PrimarySection.Network}" />
+                            <Separator />
+                            <MenuItem Header="Toggle _side bar" InputGestureText="Ctrl+B" Command="{Binding ToggleSideBarCommand}" />
+                            <MenuItem Header="Toggle _inspector" Command="{Binding ToggleInspectorCommand}" />
+                            <MenuItem Header="Toggle _panel" InputGestureText="Ctrl+J" Command="{Binding TogglePanelCommand}" />
+                            <Separator />
+                            <MenuItem Header="_Problems" Command="{Binding ShowPanelTabCommand}" CommandParameter="{x:Static vm:BottomPanelTab.Problems}" />
+                            <MenuItem Header="_Activity" Command="{Binding ShowPanelTabCommand}" CommandParameter="{x:Static vm:BottomPanelTab.Activity}" />
+                            <MenuItem Header="_Output" Command="{Binding ShowPanelTabCommand}" CommandParameter="{x:Static vm:BottomPanelTab.Output}" />
+                        </MenuItem>
 
-                            <Button Style="{StaticResource SmallButton}"
-                                    Content="Delete selected"
-                                    Command="{Binding DeleteSelectionCommand}" />
-                        </StackPanel>
-                    </Border>
+                        <MenuItem Header="_Run">
+                            <MenuItem Header="_Run graph" InputGestureText="Ctrl+Enter" Command="{Binding Feed.RunCommand}" />
+                            <MenuItem Header="_Pause or resume" InputGestureText="F6" Command="{Binding Feed.TogglePauseCommand}" />
+                            <MenuItem Header="_Stop" Command="{Binding Feed.CancelCommand}" />
+                            <Separator />
+                            <MenuItem Header="_Clear the transcript" Command="{Binding Feed.ClearFeedCommand}" />
+                        </MenuItem>
+                    </Menu>
 
-                    <nodify:NodifyEditor ItemsSource="{Binding Graph.Nodes}"
-                                         Connections="{Binding Graph.Connections}"
-                                         PendingConnection="{Binding PendingConnection}"
-                                         ItemTemplate="{StaticResource NodeTemplate}"
-                                         ItemContainerStyle="{StaticResource NodeContainerStyle}"
-                                         ConnectionTemplate="{StaticResource ConnectionTemplate}"
-                                         PendingConnectionTemplate="{StaticResource PendingConnectionTemplate}"
-                                         DisconnectConnectorCommand="{Binding DisconnectPinCommand}"
-                                         RemoveConnectionCommand="{Binding RemoveConnectionCommand}"
-                                         GridCellSize="16"
-                                         DisplayConnectionsOnTop="False"
-                                         Background="{StaticResource Surface.Window.Brush}" />
-                </DockPanel>
+                    <TextBlock Grid.Column="2"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"
+                               Style="{StaticResource MonoText}"
+                               Foreground="{StaticResource Text.Muted.Brush}"
+                               Text="{Binding WindowTitle}"
+                               TextTrimming="CharacterEllipsis" />
 
-                <GridSplitter Grid.Column="1"
+                    <!-- Run controls, which say what the run is doing rather than only offering Run. -->
+                    <StackPanel Grid.Column="3"
+                                Orientation="Horizontal"
+                                VerticalAlignment="Center"
+                                Margin="0,0,8,0"
+                                WindowChrome.IsHitTestVisibleInChrome="True">
+
+                        <TextBlock VerticalAlignment="Center"
+                                   Margin="0,0,10,0"
+                                   FontSize="{StaticResource Font.Size.Small}"
+                                   Foreground="{StaticResource Status.Danger.Brush}"
+                                   Text="Run faulted"
+                                   Visibility="{Binding Feed.RunState, Converter={StaticResource EnumToVisibility}, ConverterParameter=Faulted}" />
+
+                        <Button Style="{StaticResource SmallButton}"
+                                Margin="0,0,6,0"
+                                MinWidth="60"
+                                Content="{Binding Feed.PauseButtonText}"
+                                Command="{Binding Feed.TogglePauseCommand}"
+                                Visibility="{Binding Feed.IsRunning, Converter={StaticResource BooleanToVisibility}}" />
+
+                        <Button Style="{StaticResource DangerButton}"
+                                MinWidth="60"
+                                Content="Stop"
+                                Command="{Binding Feed.CancelCommand}"
+                                Visibility="{Binding Feed.IsRunning, Converter={StaticResource BooleanToVisibility}}" />
+
+                        <Button Style="{StaticResource PrimaryButton}"
+                                MinWidth="60"
+                                Padding="12,3"
+                                FontSize="{StaticResource Font.Size.Small}"
+                                Content="Run"
+                                Command="{Binding Feed.RunCommand}"
+                                Visibility="{Binding Feed.IsRunning, Converter={StaticResource BooleanToVisibility}, ConverterParameter=Invert}" />
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="4"
+                                Orientation="Horizontal"
+                                WindowChrome.IsHitTestVisibleInChrome="True">
+                        <Button Style="{StaticResource WindowButton}"
+                                Content="&#xE921;"
+                                ToolTip="Minimise"
+                                Command="{x:Static SystemCommands.MinimizeWindowCommand}" />
+
+                        <Button Style="{StaticResource WindowButton}"
+                                Content="&#xE922;"
+                                ToolTip="Maximise"
+                                Command="{x:Static SystemCommands.MaximizeWindowCommand}"
+                                Visibility="{Binding WindowState, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource EnumToVisibility}, ConverterParameter=!Maximized}" />
+
+                        <Button Style="{StaticResource WindowButton}"
+                                Content="&#xE923;"
+                                ToolTip="Restore"
+                                Command="{x:Static SystemCommands.RestoreWindowCommand}"
+                                Visibility="{Binding WindowState, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource EnumToVisibility}, ConverterParameter=Maximized}" />
+
+                        <Button Style="{StaticResource WindowCloseButton}"
+                                Content="&#xE8BB;"
+                                ToolTip="Close"
+                                Command="{x:Static SystemCommands.CloseWindowCommand}" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- Status bar -->
+            <shell:StatusBarView DockPanel.Dock="Bottom" />
+
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" MinHeight="220" />
+                    <RowDefinition Height="Auto" />
+                    <!--
+                        Bound two way so the splitter writes the dragged height back to the view
+                        model. That is what lets hiding the panel collapse this row to nothing and
+                        showing it again return to the size it was left at.
+                    -->
+                    <RowDefinition Height="{Binding PanelRowHeight, Mode=TwoWay}" MinHeight="0" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <Grid Grid.Row="0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" MinWidth="320" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <shell:ActivityBarView Grid.Column="0" />
+
+                    <!-- Side bar, whose contents follow the section the activity bar has selected. -->
+                    <Grid Grid.Column="1"
+                          Width="264"
+                          Visibility="{Binding IsSideBarVisible, Converter={StaticResource BooleanToVisibility}}">
+                        <shell:WorkspaceSideBarView Visibility="{Binding IsWorkspace, Converter={StaticResource BooleanToVisibility}}" />
+                        <shell:NetworkSideBarView DataContext="{Binding Network}"
+                                                  Visibility="{Binding DataContext.IsNetwork, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BooleanToVisibility}}" />
+                    </Grid>
+
+                    <GridSplitter Grid.Column="2"
+                                  Width="1"
+                                  HorizontalAlignment="Stretch"
+                                  VerticalAlignment="Stretch"
+                                  ResizeBehavior="PreviousAndNext"
+                                  Visibility="{Binding IsSideBarVisible, Converter={StaticResource BooleanToVisibility}}" />
+
+                    <Grid Grid.Column="3">
+                        <shell:EditorAreaView Visibility="{Binding IsWorkspace, Converter={StaticResource BooleanToVisibility}}" />
+                        <views:NetworkView DataContext="{Binding Network}"
+                                           Visibility="{Binding DataContext.IsNetwork, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BooleanToVisibility}}" />
+                    </Grid>
+
+                    <GridSplitter Grid.Column="4"
+                                  Width="1"
+                                  HorizontalAlignment="Stretch"
+                                  VerticalAlignment="Stretch"
+                                  ResizeBehavior="PreviousAndNext"
+                                  Visibility="{Binding IsInspectorVisible, Converter={StaticResource BooleanToVisibility}}" />
+
+                    <!-- One inspector, serving both sections. -->
+                    <shell:InspectorView Grid.Column="5"
+                                         Width="340"
+                                         Visibility="{Binding IsInspectorVisible, Converter={StaticResource BooleanToVisibility}}" />
+                </Grid>
+
+                <GridSplitter Grid.Row="1"
+                              Height="4"
                               HorizontalAlignment="Stretch"
-                              VerticalAlignment="Stretch"
-                              ResizeBehavior="PreviousAndNext" />
+                              VerticalAlignment="Center"
+                              ResizeDirection="Rows"
+                              ResizeBehavior="PreviousAndNext"
+                              Visibility="{Binding IsPanelShowing, Converter={StaticResource BooleanToVisibility}}" />
 
-                <!-- Settings for the selected node -->
-                <Border Grid.Column="2"
+                <!--
+                    The panel and the chat box belong to the Workspace. The Network has neither,
+                    because there is no run to transcribe and nothing to type a request at.
+                -->
+                <shell:BottomPanelView Grid.Row="2"
+                                       Visibility="{Binding IsPanelShowing, Converter={StaticResource BooleanToVisibility}}" />
+
+                <Border Grid.Row="3"
                         Background="{StaticResource Surface.Panel.Brush}"
                         BorderBrush="{StaticResource Surface.Border.Brush}"
-                        BorderThickness="1,0,0,0">
+                        BorderThickness="0,1,0,0"
+                        Padding="16,10"
+                        Visibility="{Binding IsChatShowing, Converter={StaticResource BooleanToVisibility}}">
                     <Grid>
-                        <ScrollViewer VerticalScrollBarVisibility="Auto"
-                                      Padding="16,14"
-                                      Visibility="{Binding HasSelection, Converter={StaticResource BooleanToVisibility}}">
-                            <StackPanel>
-                                <TextBlock Text="Node settings"
-                                           FontWeight="SemiBold"
-                                           FontSize="14"
-                                           Margin="0,0,0,12" />
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="10" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
 
-                                <!-- Every node has a title, so it lives here rather than in each panel -->
-                                <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,4" Text="Title" />
-                                <TextBox Text="{Binding SelectedNode.Title, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBox Grid.Column="0"
+                                 Text="{Binding Feed.RequestText, UpdateSourceTrigger=PropertyChanged}"
+                                 AcceptsReturn="True"
+                                 TextWrapping="Wrap"
+                                 VerticalScrollBarVisibility="Auto"
+                                 MinHeight="34"
+                                 MaxHeight="120"
+                                 Padding="10,7" />
 
-                                <Rectangle Height="1"
-                                           Margin="0,16,0,4"
-                                           Fill="{StaticResource Surface.Border.Brush}" />
-
-                                <ContentControl Content="{Binding SelectedNode}" />
-                            </StackPanel>
-                        </ScrollViewer>
-
-                        <TextBlock Text="Select a node to edit its settings."
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center"
-                                   TextWrapping="Wrap"
-                                   Margin="24"
-                                   TextAlignment="Center"
-                                   Foreground="{StaticResource Text.Secondary.Brush}">
-                            <TextBlock.Style>
-                                <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
-                                    <Setter Property="Visibility" Value="Visible" />
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding HasSelection}" Value="True">
-                                            <Setter Property="Visibility" Value="Collapsed" />
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </TextBlock.Style>
-                        </TextBlock>
+                        <Button Grid.Column="2"
+                                Style="{StaticResource PrimaryButton}"
+                                MinWidth="96"
+                                VerticalAlignment="Stretch"
+                                Content="Run"
+                                Command="{Binding Feed.RunCommand}" />
                     </Grid>
                 </Border>
 
-                    </Grid>
+                <!--
+                    Settings opens over whatever is showing and closes back onto it, because it is
+                    about the application rather than about a thing being worked on, and coming
+                    back from it should land where the work was left.
+                -->
+                <Grid Grid.Row="0"
+                      Grid.RowSpan="4"
+                      Background="{StaticResource Surface.Scrim.Brush}"
+                      Visibility="{Binding IsSettingsOpen, Converter={StaticResource BooleanToVisibility}}">
 
-                    <GridSplitter Grid.Row="1"
-                                  HorizontalAlignment="Stretch"
-                                  VerticalAlignment="Stretch"
-                                  ResizeBehavior="PreviousAndNext" />
+                    <Border Margin="60,30"
+                            MaxWidth="1000"
+                            Background="{StaticResource Surface.Window.Brush}"
+                            BorderBrush="{StaticResource Surface.Border.Brush}"
+                            BorderThickness="1"
+                            CornerRadius="6">
+                        <DockPanel>
+                            <Border DockPanel.Dock="Top"
+                                    Background="{StaticResource Surface.Chrome.Brush}"
+                                    BorderBrush="{StaticResource Surface.Border.Brush}"
+                                    BorderThickness="0,0,0,1"
+                                    Padding="16,8"
+                                    CornerRadius="6,6,0,0">
+                                <DockPanel>
+                                    <Button DockPanel.Dock="Right"
+                                            Style="{StaticResource IconButton}"
+                                            Content="&#xE8BB;"
+                                            ToolTip="Close settings"
+                                            Command="{Binding CloseSettingsCommand}" />
 
-                    <views:ActivityFeedView Grid.Row="2" DataContext="{Binding Feed}" />
+                                    <TextBlock Text="Settings"
+                                               FontWeight="SemiBold"
+                                               FontSize="{StaticResource Font.Size.Large}"
+                                               VerticalAlignment="Center" />
+                                </DockPanel>
+                            </Border>
+
+                            <views:SettingsView DataContext="{Binding Settings}" />
+                        </DockPanel>
+                    </Border>
                 </Grid>
-            </TabItem>
-
-            <TabItem Header="Network">
-                <views:NetworkView DataContext="{Binding Network}" />
-            </TabItem>
-        </TabControl>
-    </DockPanel>
+            </Grid>
+        </DockPanel>
+    </Border>
 </Window>

@@ -96,10 +96,18 @@ public sealed partial class OutputNode : NodeBase
             }
         }
 
+        // Read before writing so the feed can say how much changed rather than only how big the
+        // result is. One extra read on a path that is about to write the same file anyway.
+        var original = File.Exists(absolutePath)
+            ? await File.ReadAllTextAsync(absolutePath, ct).ConfigureAwait(false)
+            : null;
+
         var bytes = await ctx.Services.FileWriter.WriteAsync(absolutePath, content, ct).ConfigureAwait(false);
+        var change = DiffStat.Between(original, content);
 
         StatusMessage = $"{displayPath}  ({bytes} bytes)";
-        ctx.Feed.Add(ActivityKind.FileWritten, $"Wrote {displayPath}", absolutePath, Id).Detail = $"{bytes} bytes";
+        ctx.Feed.Add(ActivityKind.FileWritten, $"Wrote {displayPath}", absolutePath, Id).Detail =
+            change.HasChange ? change.Text : $"{bytes} bytes";
 
         return NodeResult.Empty;
     }
@@ -152,15 +160,28 @@ public sealed partial class OutputNode : NodeBase
             }
         }
 
-        var (written, bytes) = await batch.CommitAsync(ct).ConfigureAwait(false);
+        var written = await batch.CommitAsync(ct).ConfigureAwait(false);
+
+        // Matched back by path rather than by position, because the batch writes one entry per
+        // distinct path and a plan is allowed to name the same file twice.
+        var changes = written.ToDictionary(w => w.Path, w => w.Change, StringComparer.OrdinalIgnoreCase);
 
         foreach (var file in files)
         {
-            ctx.Feed.Add(
+            var folder = Path.GetDirectoryName(file.RelativePath)?.Replace('\\', '/') ?? string.Empty;
+            var absolute = project.ResolveTargetPath(folder, Path.GetFileName(file.RelativePath));
+
+            var entry = ctx.Feed.Add(
                 ActivityKind.FileWritten,
                 $"{(file.Operation == FileOperation.Create ? "Wrote" : "Edited")} {file.RelativePath}",
                 null,
                 Id);
+
+            // How much changed, so that a three line fix and a rewrite do not read the same.
+            if (changes.TryGetValue(Path.GetFullPath(absolute), out var change) && change.HasChange)
+            {
+                entry.Detail = change.Text;
+            }
 
             if (UnityScriptRules.DescribeAttachmentNeeded(file.Types) is { } note)
             {
@@ -170,6 +191,7 @@ public sealed partial class OutputNode : NodeBase
 
         // The index is now out of date by exactly the files just written, and the cheapest correct
         // answer is to let the next run notice their timestamps changed.
+        var bytes = written.Sum(w => w.Bytes);
         StatusMessage = $"{written.Count} file(s), {bytes} bytes";
 
         return NodeResult.Empty;

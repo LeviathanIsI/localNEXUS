@@ -68,6 +68,19 @@ public sealed partial class CompileCheckNode : NodeBase
     [ObservableProperty]
     private string _lastDiagnostics = string.Empty;
 
+    /// <summary>
+    /// The same diagnostics with their parts still separate, which is what the Problems panel
+    /// lists.
+    /// </summary>
+    /// <remarks>
+    /// A whole new list is published rather than one being added to, because a check runs off the
+    /// UI thread and the binding engine marshals a property change for us but not a collection
+    /// change. That is also why this sits beside the printed form rather than replacing it: the
+    /// text is what goes to the model during a repair, and it has already earned its place.
+    /// </remarks>
+    [ObservableProperty]
+    private IReadOnlyList<CompileDiagnostic> _lastProblems = Array.Empty<CompileDiagnostic>();
+
     /// <summary>What the last check compiled against, so a passing result can be judged.</summary>
     [ObservableProperty]
     private string _referenceSummary = string.Empty;
@@ -120,6 +133,7 @@ public sealed partial class CompileCheckNode : NodeBase
 
         Outcome = CompileOutcome.Checking;
         LastDiagnostics = string.Empty;
+        LastProblems = Array.Empty<CompileDiagnostic>();
 
         var compiler = ctx.Services.Compiler;
         var projectPath = ctx.Services.UnityProject.ProjectPath;
@@ -178,6 +192,7 @@ public sealed partial class CompileCheckNode : NodeBase
 
         Outcome = CompileOutcome.Checking;
         LastDiagnostics = string.Empty;
+        LastProblems = Array.Empty<CompileDiagnostic>();
 
         var settled = new List<GeneratedFile>();
         var repairs = 0;
@@ -489,11 +504,13 @@ public sealed partial class CompileCheckNode : NodeBase
                 Id);
 
             LastDiagnostics = string.Empty;
+            LastProblems = Array.Empty<CompileDiagnostic>();
             return;
         }
 
         var listing = result.FormatDiagnostics(DiagnosticsShown);
         LastDiagnostics = listing;
+        LastProblems = result.Diagnostics;
 
         ctx.Feed.Add(
             ActivityKind.NodeFaulted,

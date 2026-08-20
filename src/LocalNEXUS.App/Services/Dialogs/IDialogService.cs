@@ -26,4 +26,11 @@ public interface IDialogService
 
     /// <summary>Opens a file in whatever the system uses to edit it. Does nothing when it is missing.</summary>
     void OpenFileInEditor(string file);
+
+    /// <summary>
+    /// Puts text on the clipboard. Behind the service because the clipboard is a shared operating
+    /// system resource that another process can have open, so it can fail and a view model should
+    /// not be the thing that knows that.
+    /// </summary>
+    void CopyToClipboard(string text);
 }

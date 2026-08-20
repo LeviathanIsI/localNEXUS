@@ -14,6 +14,17 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!--
+        Bundled as WPF resources rather than as files beside the exe, which is what makes the font
+        survive single file publishing: a Resource is compiled into the assembly and reached
+        through a pack uri, so there is no path to resolve differently from the IDE and from the
+        published exe. JetBrains Mono is OFL licensed and OFL.txt travels with it.
+    -->
+    <Resource Include="Assets\Fonts\JetBrainsMono-Regular.ttf" />
+    <Resource Include="Assets\Fonts\JetBrainsMono-Bold.ttf" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Scripting" Version="4.11.0" />
     <PackageReference Include="Nodify" Version="7.3.0" />

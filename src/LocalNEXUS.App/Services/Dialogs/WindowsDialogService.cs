@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
@@ -87,6 +88,26 @@ public sealed class WindowsDialogService : IDialogService
             FileName = file,
             UseShellExecute = true
         });
+    }
+
+    /// <inheritdoc />
+    public void CopyToClipboard(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return;
+        }
+
+        try
+        {
+            Clipboard.SetText(text);
+        }
+        catch (COMException)
+        {
+            // The clipboard is a shared resource and another process can hold it open. Failing to
+            // copy an invite token is not worth interrupting anyone over, and the token is still
+            // on screen to be selected by hand.
+        }
     }
 
     private static void ApplyInitialDirectory(Action<string> assign, string? initialDirectory)

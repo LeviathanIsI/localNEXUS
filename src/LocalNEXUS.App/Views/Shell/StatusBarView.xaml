@@ -1,0 +1,80 @@
+<UserControl x:Class="LocalNEXUS.App.Views.Shell.StatusBarView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:LocalNEXUS.App.ViewModels"
+             d:DataContext="{d:DesignInstance Type=vm:MainViewModel}"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             Height="24"
+             Background="{StaticResource Surface.Chrome.Brush}">
+
+    <!--
+        The status bar. Four things that are always true and one that depends on where you are.
+
+        Every one of them is a dot and a word, and the dot is resolved from the state enum rather
+        than from a rule written here, so the three way distinction the whole application is built
+        on, healthy and working and failed, is the same three colours in every one of them. A mesh
+        node that is starting and a Python environment that is downloading are both blue, and
+        neither can accidentally be drawn as the red that means something broke.
+    -->
+
+    <Grid>
+        <StackPanel Orientation="Horizontal" Margin="10,0,0,0">
+
+            <StackPanel Orientation="Horizontal"
+                        Margin="0,0,16,0"
+                        ToolTip="The state of the current or most recent run.">
+                <Ellipse Style="{StaticResource StateDot}"
+                         Width="6" Height="6"
+                         Margin="0,0,6,0"
+                         Fill="{Binding Feed.RunState, Converter={StaticResource ResourceLookup}, ConverterParameter=RunState}" />
+                <TextBlock FontSize="{StaticResource Font.Size.Micro}" Text="{Binding Feed.RunState}" />
+            </StackPanel>
+
+            <StackPanel Orientation="Horizontal"
+                        Margin="0,0,16,0"
+                        ToolTip="{Binding Network.Mesh.StatusText}">
+                <Ellipse Style="{StaticResource StateDot}"
+                         Width="6" Height="6"
+                         Margin="0,0,6,0"
+                         Fill="{Binding Network.Mesh.State, Converter={StaticResource ResourceLookup}, ConverterParameter=MeshNodeState}" />
+                <TextBlock FontSize="{StaticResource Font.Size.Micro}" Text="{Binding Network.Mesh.StatusText}" />
+            </StackPanel>
+
+            <StackPanel Orientation="Horizontal"
+                        Margin="0,0,16,0"
+                        ToolTip="{Binding PythonEnvironment.Environment.StatusText}">
+                <Ellipse Style="{StaticResource StateDot}"
+                         Width="6" Height="6"
+                         Margin="0,0,6,0"
+                         Fill="{Binding PythonEnvironment.Environment.State, Converter={StaticResource ResourceLookup}, ConverterParameter=PythonEnvironmentState}" />
+                <TextBlock FontSize="{StaticResource Font.Size.Micro}" Text="Python" />
+                <TextBlock FontSize="{StaticResource Font.Size.Micro}"
+                           Margin="4,0,0,0"
+                           Foreground="{StaticResource Text.Secondary.Brush}"
+                           Text="{Binding PythonEnvironment.Environment.State}" />
+            </StackPanel>
+
+            <StackPanel Orientation="Horizontal"
+                        Margin="0,0,16,0"
+                        ToolTip="{Binding UnityProject.StatusText}">
+                <Ellipse Style="{StaticResource StateDot}"
+                         Width="6" Height="6"
+                         Margin="0,0,6,0"
+                         Fill="{Binding ProjectIndex.State, Converter={StaticResource ResourceLookup}, ConverterParameter=ProjectIndexState}" />
+                <TextBlock FontSize="{StaticResource Font.Size.Micro}"
+                           Text="{Binding UnityProject.ProjectName, TargetNullValue=No project}" />
+            </StackPanel>
+        </StackPanel>
+
+        <!-- What the section currently showing amounts to. -->
+        <TextBlock HorizontalAlignment="Right"
+                   VerticalAlignment="Center"
+                   Margin="0,0,12,0"
+                   Style="{StaticResource MonoText}"
+                   FontSize="{StaticResource Font.Size.Micro}"
+                   Foreground="{StaticResource Text.Secondary.Brush}"
+                   Text="{Binding StatusSummary}" />
+    </Grid>
+</UserControl>
