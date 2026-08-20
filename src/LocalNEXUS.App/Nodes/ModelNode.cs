@@ -21,8 +21,12 @@ namespace LocalNEXUS.App.Nodes;
 /// classes. Every provider shares a single request path over the OpenAI compatible API; where
 /// inference physically happens, one machine or several, is decided during resolution and the
 /// graph does not care.
+///
+/// It is also a repair source: something downstream that finds a problem with the code this node
+/// produced can hand the problem back and ask for another attempt. The node knows nothing about
+/// what kind of problem or who is asking.
 /// </remarks>
-public sealed partial class ModelNode : NodeBase
+public sealed partial class ModelNode : NodeBase, ICodeRepairSource
 {
     /// <summary>Base URL used for every OpenRouter request.</summary>
     public const string OpenRouterBaseUrl = "https://openrouter.ai/api/v1";
@@ -377,6 +381,27 @@ public sealed partial class ModelNode : NodeBase
         string userContent,
         CancellationToken ct)
     {
+        var text = await StreamTextAsync(ctx, entry, endpoint, userContent, ct).ConfigureAwait(false);
+
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            throw new InvalidOperationException($"{Title} received an empty reply from {ModelDisplayName}.");
+        }
+
+        return NodeResult.FromPin(Completion, text);
+    }
+
+    /// <summary>
+    /// One streamed request. Separate from the node result so that a repair, which is another
+    /// request to the same model with a different message, uses exactly this path.
+    /// </summary>
+    private async Task<string> StreamTextAsync(
+        NodeExecutionContext ctx,
+        ActivityEvent entry,
+        ModelEndpoint endpoint,
+        string userContent,
+        CancellationToken ct)
+    {
         var onToken = new DelegateProgress<string>(entry.Append);
 
         var result = await ctx.Services.ModelClient
@@ -387,12 +412,112 @@ public sealed partial class ModelNode : NodeBase
         entry.Detail = result.Summary;
         StatusMessage = result.Summary;
 
-        if (string.IsNullOrWhiteSpace(result.Text))
+        return result.Text;
+    }
+
+    /// <inheritdoc />
+    public bool CanRepair(NodeExecutionContext ctx, out string reason)
+    {
+        reason = string.Empty;
+
+        switch (Provider)
         {
-            throw new InvalidOperationException($"{Title} received an empty reply from {ModelDisplayName}.");
+            case ModelProvider.Local when ModelSource == LocalModelSource.MissingFile:
+                reason = $"{Title} points at a model that is no longer there: {ModelFilePath}";
+                return false;
+
+            case ModelProvider.Local when string.IsNullOrWhiteSpace(EffectiveLocalModelPath) && string.IsNullOrWhiteSpace(BaseUrl):
+                reason = $"{Title} has no local model selected.";
+                return false;
+
+            case ModelProvider.Network when SelectedNetworkModel is null:
+                reason = $"{Title} has no network model selected.";
+                return false;
+
+            case ModelProvider.SelfHosted when string.IsNullOrWhiteSpace(SelfHostedModelId):
+                reason = $"{Title} has no model id set for its self hosted server.";
+                return false;
+
+            case ModelProvider.OpenRouter when string.IsNullOrWhiteSpace(OpenRouterModel):
+                reason = $"{Title} has no OpenRouter model slug set.";
+                return false;
+
+            default:
+                return true;
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<string> ReviseAsync(CodeRepairRequest request, NodeExecutionContext ctx, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(ctx);
+
+        // What this node was asked for in this run, so the fix is aimed at the same goal rather
+        // than only at silencing the compiler. Falls back to the run request when the prompt pin
+        // carried nothing, which is the case for a node wired straight to the chat box.
+        var intent = ctx.GetText(Prompt);
+
+        if (string.IsNullOrWhiteSpace(intent))
+        {
+            intent = ctx.UserRequest;
         }
 
-        return NodeResult.FromPin(Completion, result.Text);
+        var entry = ctx.Feed.Add(
+            ActivityKind.ModelStream,
+            $"{Title}  (repair {request.Attempt} of {request.AttemptLimit}, {ModelDisplayName})",
+            null,
+            Id);
+
+        try
+        {
+            var endpoint = await ResolveEndpointAsync(ctx, entry, ct).ConfigureAwait(false);
+            var message = BuildRepairMessage(request, intent);
+
+            return await StreamTextAsync(ctx, entry, endpoint, message, ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            entry.Flush();
+            entry.Detail = "cancelled";
+            throw;
+        }
+        catch (Exception)
+        {
+            entry.Flush();
+            entry.Detail = "failed";
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// The message sent when asking for a fix.
+    /// </summary>
+    /// <remarks>
+    /// Ordered so the model reads what it was for, then what is wrong, then the code, because the
+    /// last thing in a prompt is the thing it edits. The errors come already capped by the caller.
+    /// The system prompt is unchanged, so a node configured to emit raw code still does.
+    /// </remarks>
+    private static string BuildRepairMessage(CodeRepairRequest request, string intent)
+    {
+        var builder = new System.Text.StringBuilder();
+
+        builder.AppendLine($"The C# file {request.FileName} you produced does not compile. Fix it.");
+        builder.AppendLine();
+        builder.AppendLine("This is what it was meant to do:");
+        builder.AppendLine(intent.Trim());
+        builder.AppendLine();
+        builder.AppendLine($"These are the compiler messages, from {request.FileName}:");
+        builder.AppendLine(request.FormattedDiagnostics);
+        builder.AppendLine();
+        builder.AppendLine($"This is the current content of {request.FileName}:");
+        builder.AppendLine(request.FailingCode);
+        builder.AppendLine();
+        builder.Append(
+            "Return the complete corrected file. Do not return a patch, a fragment, or an explanation, "
+            + "and keep everything that already worked.");
+
+        return builder.ToString();
     }
 
     /// <summary>

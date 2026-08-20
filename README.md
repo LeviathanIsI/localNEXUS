@@ -16,7 +16,7 @@ than a fixed pipeline, so the features on the roadmap drop in without rework.
 
 - **Node canvas.** Add, drag, wire and delete nodes. Built on
   [Nodify](https://miroiu.github.io/nodify).
-- **Four node types.** Input, Model, Transform, Output.
+- **Five node types.** Input, Model, Transform, Compile check, Output.
 - **Typed pins.** Pins are colour coded by what they carry (`Text` is blue, `Code` is
   amber). Invalid drops are refused while you drag, and the wire tells you why.
 - **A general graph executor.** Nodes are ordered by their connections using Kahn's
@@ -31,6 +31,9 @@ than a fixed pipeline, so the features on the roadmap drop in without rework.
   pick an engine.
 - **Live streaming.** Tokens land in the activity feed as they arrive, followed by token
   counts, throughput and elapsed time.
+- **Compile checking and repair.** The Compile check node compiles generated C# against the
+  open Unity project before anything is written, and when it does not compile it hands the
+  errors back to the model that wrote it and asks for another attempt, up to a retry cap.
 - **File writing.** The Output node writes into the Unity project you opened, optionally
   asking for confirmation in the feed first.
 - **Save and load.** Graphs round trip through JSON, positions and settings included.
@@ -53,6 +56,7 @@ than a fixed pipeline, so the features on the roadmap drop in without rework.
 | Node canvas      | [Nodify](https://www.nuget.org/packages/Nodify)                               |
 | MVVM             | [CommunityToolkit.Mvvm](https://www.nuget.org/packages/CommunityToolkit.Mvvm) |
 | Scripting        | Roslyn (`Microsoft.CodeAnalysis.CSharp.Scripting`)                            |
+| Compile checking | Roslyn against the open Unity project's own reference assemblies               |
 | Local inference  | bundled llama.cpp `llama-server`, spawned as a silent child process           |
 | Safetensors      | `transformers serve` in a supervised Python child process, built by bundled `uv` |
 | Distributed      | bundled [Mesh LLM](https://github.com/Mesh-LLM/mesh-llm) node, spawned as a silent child process |
@@ -283,6 +287,50 @@ build rather than by reading its documentation:
   again within the test window. Treat recovery-after-replacement as unproven rather than
   guaranteed.
 
+## Checking that generated code compiles
+
+Drop a **Compile check** node between the model and the Output node:
+
+```
+Input -> Model -> Transform -> Compile check -> Output
+```
+
+It compiles what passes through it and only lets it onward if it compiles. Nothing is written
+until it passes, so a failed run leaves the project exactly as it found it. That ordering is the
+whole of the file writing story: there is no staging folder and no promote step, because the
+check happens before the writer runs at all.
+
+### What it compiles against
+
+The Unity editor version the open project records, or the newest one installed if that version
+is not on the machine, plus the assemblies the project has already compiled into
+`Library\ScriptAssemblies`. That means a misspelled Unity member or a type that does not exist
+is caught exactly as Unity would catch it, and code can use the types the project already
+defines. The panel says which of those it found, because a pass against a partial reference set
+is a weaker claim than a pass against a complete one.
+
+It compiles the one file, not the project. It cannot see another file generated in the same run,
+and it does not run whatever source generators or analyzers the project configures. If no Unity
+install or no open project can be found, the node says the check could not be run and passes the
+code through: code that cannot be checked is not code that is broken, and it is not reported as
+though it were.
+
+### The repair loop
+
+When the code does not compile, the node follows its own incoming wire back to whoever produced
+the code and asks for another attempt, handing over the original request, the failing file and
+the compiler errors. It repeats until the code compiles or the **retry limit** is reached, three
+by default. Every attempt appears in the activity feed with its number and the errors it was
+given, so a loop is never silent.
+
+A Transform node in between is not in the way: it passes the request further upstream and applies
+itself to whatever comes back, so a repaired reply gets its markdown fence stripped exactly as
+the first one did.
+
+If the code still does not compile, the node either faults the run and names the errors that
+remain, or passes the last attempt on with a warning. Faulting is the default, so that a run
+reporting success means the code compiles.
+
 ## Opening a Unity project
 
 **File > Open Unity Project or Folder**, and choose the project root, the folder that
@@ -340,7 +388,8 @@ between nodes, so it never interrupts a model mid stream.
 ```
 src/LocalNEXUS.App/
   Models/          NodeBase, Pin, Connection, GraphModel, pin typing and validation
-  Nodes/           InputNode, ModelNode, TransformNode, OutputNode, NodeFactory
+  Nodes/           InputNode, ModelNode, TransformNode, CompileCheckNode, OutputNode,
+                   NodeFactory
   Services/
     Execution/     GraphExecutor, RunContext, RunState, topological sort
     Inference/     IModelClient, OpenAiCompatibleClient, and the local runtimes behind
@@ -348,6 +397,8 @@ src/LocalNEXUS.App/
                    RuntimeResolver, ModelFormatDetector, ModelDescriptor
     Python/        the supervised Python environment: PythonProvisioner,
                    AcceleratorProbe, PythonEnvironmentState
+    Compilation/   ICodeCompiler, RoslynUnityCompiler, UnityReferenceResolver,
+                   UnityInstallLocator, CompileDiagnostic, CompileResult
     Distributed/   the mesh and what it reports: MeshManager, MeshStatusReader,
                    InferenceSource, ModelSection, CoveragePlan, NetworkServedModel
     Processes/     ChildProcessGroup, JobObject, and the registry of what we started

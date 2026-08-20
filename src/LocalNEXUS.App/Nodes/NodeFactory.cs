@@ -38,6 +38,7 @@ public sealed class NodeFactory
         new NodeDescriptor("Input", "Input", "Emits the request typed into the chat box."),
         new NodeDescriptor("Model", "Model", "Sends its input to a local or hosted model and emits the reply."),
         new NodeDescriptor("Transform", "Transform", "Rewrites the value passing through it with a template or a C# expression."),
+        new NodeDescriptor("Compile", "Compile check", "Compiles the code passing through it and asks the model that wrote it to fix what does not."),
         new NodeDescriptor("Output", "Output", "Writes its input to a file inside the opened Unity project.")
     };
 
@@ -48,6 +49,7 @@ public sealed class NodeFactory
         "Input" => new InputNode(),
         "Model" => new ModelNode(_catalog, _mesh, _dialogs),
         "Transform" => new TransformNode(),
+        "Compile" => new CompileCheckNode(),
         "Output" => new OutputNode(),
         _ => throw new NotSupportedException($"Unknown node type '{typeKey}'.")
     };

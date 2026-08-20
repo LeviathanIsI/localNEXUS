@@ -4,6 +4,7 @@ using System.Windows.Threading;
 using LocalNEXUS.App.Infrastructure;
 using LocalNEXUS.App.Models;
 using LocalNEXUS.App.Nodes;
+using LocalNEXUS.App.Services.Compilation;
 using LocalNEXUS.App.Services.Dialogs;
 using LocalNEXUS.App.Services.Distributed;
 using LocalNEXUS.App.Services.Execution;
@@ -101,10 +102,15 @@ public partial class App : Application
 
         _modelClient = new OpenAiCompatibleClient();
 
+        // Roslyn against the open project's own Unity references. The reference set is cached
+        // behind this and rebuilt only when the project's compiled assemblies change.
+        var compiler = new RoslynUnityCompiler(new UnityReferenceResolver());
+
         var services = new ExecutionServices(
             _modelClient,
             runtimes,
             mesh,
+            compiler,
             unityProject,
             new FileWriter(),
             feed);

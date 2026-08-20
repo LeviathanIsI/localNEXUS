@@ -53,4 +53,34 @@ public sealed class NodeExecutionContext
 
     /// <summary>True when the given input pin has an incoming wire.</summary>
     public bool IsConnected(Pin inputPin) => _run.Graph.Connections.Any(c => c.Target == inputPin);
+
+    /// <summary>
+    /// The node on the other end of an input pin's wire, or null when the pin is unconnected.
+    /// </summary>
+    /// <remarks>
+    /// A node that needs to ask its upstream neighbour for something, rather than merely read
+    /// what it produced, needs to be able to find it. Following the wire is the graph's own
+    /// answer to who that is, so nothing here has to know what kind of node either end is.
+    /// </remarks>
+    public NodeBase? GetSourceNode(Pin inputPin)
+    {
+        ArgumentNullException.ThrowIfNull(inputPin);
+
+        var connection = _run.Graph.Connections.FirstOrDefault(c => c.Target == inputPin);
+        return connection?.Source.Owner;
+    }
+
+    /// <summary>
+    /// A context belonging to another node of the same run, so that node can read its own inputs.
+    /// </summary>
+    /// <remarks>
+    /// Used when one node asks another to do more work. The run, its values and its services are
+    /// shared; only the node the context is about differs.
+    /// </remarks>
+    public NodeExecutionContext ForNode(NodeBase node)
+    {
+        ArgumentNullException.ThrowIfNull(node);
+
+        return ReferenceEquals(node, Node) ? this : new NodeExecutionContext(node, _run, Services);
+    }
 }

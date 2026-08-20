@@ -1,4 +1,5 @@
 using LocalNEXUS.App.Infrastructure;
+using LocalNEXUS.App.Services.Compilation;
 using LocalNEXUS.App.Services.Distributed;
 using LocalNEXUS.App.Services.Files;
 using LocalNEXUS.App.Services.Inference;
@@ -16,6 +17,7 @@ public sealed class ExecutionServices
         IModelClient modelClient,
         RuntimeResolver runtimes,
         MeshManager mesh,
+        ICodeCompiler compiler,
         UnityProjectService unityProject,
         FileWriter fileWriter,
         IActivityFeed feed)
@@ -23,6 +25,7 @@ public sealed class ExecutionServices
         ModelClient = modelClient;
         Runtimes = runtimes;
         Mesh = mesh;
+        Compiler = compiler;
         UnityProject = unityProject;
         FileWriter = fileWriter;
         Feed = feed;
@@ -39,6 +42,9 @@ public sealed class ExecutionServices
 
     /// <summary>This install's mesh node: what the network can serve, and where to send it.</summary>
     public MeshManager Mesh { get; }
+
+    /// <summary>Answers whether a piece of code compiles against the open Unity project.</summary>
+    public ICodeCompiler Compiler { get; }
 
     /// <summary>The Unity project that output nodes write into.</summary>
     public UnityProjectService UnityProject { get; }

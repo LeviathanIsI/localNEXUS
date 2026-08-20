@@ -21,6 +21,10 @@
         <settings:TransformNodeSettingsView />
     </DataTemplate>
 
+    <DataTemplate DataType="{x:Type nodes:CompileCheckNode}">
+        <settings:CompileCheckNodeSettingsView />
+    </DataTemplate>
+
     <DataTemplate DataType="{x:Type nodes:OutputNode}">
         <settings:OutputNodeSettingsView />
     </DataTemplate>

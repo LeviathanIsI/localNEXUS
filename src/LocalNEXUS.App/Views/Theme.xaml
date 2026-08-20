@@ -59,6 +59,18 @@
     <SolidColorBrush x:Key="PythonEnvironmentState.Ready.Brush" Color="#FF4ADE80" />
     <SolidColorBrush x:Key="PythonEnvironmentState.Failed.Brush" Color="#FFF87171" />
 
+    <!--
+        How a compile check ended. Checking is the same blue as anything else in progress, and
+        Unavailable is grey rather than red, because a check that could not run has found nothing
+        wrong with the code and must not be read as though it had.
+    -->
+    <SolidColorBrush x:Key="CompileOutcome.NotRun.Brush" Color="#FF6B7686" />
+    <SolidColorBrush x:Key="CompileOutcome.Checking.Brush" Color="#FF4EA1FF" />
+    <SolidColorBrush x:Key="CompileOutcome.Compiled.Brush" Color="#FF4ADE80" />
+    <SolidColorBrush x:Key="CompileOutcome.Repaired.Brush" Color="#FFFFB454" />
+    <SolidColorBrush x:Key="CompileOutcome.Failed.Brush" Color="#FFF87171" />
+    <SolidColorBrush x:Key="CompileOutcome.Unavailable.Brush" Color="#FF6B7686" />
+
     <!-- This install's own mesh node, on the This machine card. -->
     <SolidColorBrush x:Key="MeshNodeState.Stopped.Brush" Color="#FF6B7686" />
     <SolidColorBrush x:Key="MeshNodeState.Starting.Brush" Color="#FF4EA1FF" />
@@ -76,6 +88,7 @@
     <SolidColorBrush x:Key="NodeType.Input.Brush" Color="#FF2E4F7A" />
     <SolidColorBrush x:Key="NodeType.Model.Brush" Color="#FF3C3566" />
     <SolidColorBrush x:Key="NodeType.Transform.Brush" Color="#FF2B5348" />
+    <SolidColorBrush x:Key="NodeType.Compile.Brush" Color="#FF5A3A5E" />
     <SolidColorBrush x:Key="NodeType.Output.Brush" Color="#FF6B4326" />
 
     <!-- Activity feed accents. -->

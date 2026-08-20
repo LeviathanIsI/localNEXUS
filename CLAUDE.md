@@ -104,7 +104,25 @@ Two rules follow and are not negotiable. The application never terminates an eng
 
 **Model discovery does not filter by format.** Both formats are one list, format is a label rather than a choice, and nobody is asked which engine they want. Extra search folders are first-class: `model-paths.txt` beside the config, one folder per line, scanned for both formats.
 
+**Generated code is compiled before it is written, and by Roslyn rather than by Unity.** A run that reports success has to mean the code compiles, so the Compile-check node sits between the coder and the file writer and nothing is written until it passes. It compiles with Roslyn against the reference set assembled from the open project: the project's own `Library\ScriptAssemblies`, the editor's `Managed\UnityEngine` modules and `UnityEditor.dll`, and the editor's netstandard 2.1 reference assembly, at C# 9 because that is what Unity accepts. Invoking the Unity editor in batch mode was measured and rejected on two counts, both fatal for a repair loop: it takes seconds rather than milliseconds per attempt, and a second instance refuses to open a project the editor already has open, which is exactly the situation of anyone using this tool while working in Unity. What Roslyn gives up is real and is not hidden: it compiles the one file rather than the project, so it cannot see a sibling generated in the same run, and it does not run the project's source generators or analyzers. When no Unity install or project can be found the check reports that it could not run and passes the code through, because code that cannot be checked is not code that is broken.
+
+**The repair loop belongs to the node, not the executor.** The executor orders nodes and knows nothing about any of them, and that does not change. The Compile-check node follows its own incoming wire, asks whatever it finds there whether it implements `ICodeRepairSource`, and if it does, hands over the failing code and the diagnostics and asks for another attempt, bounded by a retry cap on the node. No node type is named anywhere in the loop. A cycle in the graph is not the mechanism and must not become one: the executor rejects cycles, and a retry count belongs in a setting rather than in how many times somebody drew a loop. `TransformNode` implements the interface by passing the request upstream and applying itself to whatever comes back, which is what keeps a repaired reply going through the same fence stripping the first one did.
+
 **Deliberately deferred.** Do not design these until asked, they need real-world shape first: the trust scoring algorithm and the contribution/barter economics. Peer discovery is no longer on this list because the engine provides it; do not build a second one.
+
+## Resources and the user's machine
+
+- Never download models, datasets, or large binaries to the user's machine without asking first. This includes anything fetched for testing.
+- Never create projects, folders, or files outside the repo and the app's own scratch locations without asking.
+- If a test needs a resource that is not already present, stop and ask. Do not acquire it and do not silently skip the test: say which leg is unexercised and why.
+- Vendored tool binaries the build genuinely requires (llama.cpp, mesh-llm, uv) are the exception, and even those get named before they are fetched.
+
+## Verification
+
+- Build the work. Do not construct test harnesses, download models, or create test projects to prove it.
+- Confirm it compiles clean and the exe publishes and launches. That is the bar.
+- If something cannot be verified without resources that are not present, say so in one line and move on. Do not acquire anything.
+- Report what was built, what was found, and anything that needs a decision. Not a test log.
 
 ## Working style
 
