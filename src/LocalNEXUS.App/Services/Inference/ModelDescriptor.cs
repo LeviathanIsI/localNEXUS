@@ -58,6 +58,24 @@ public sealed class ModelDescriptor
         _ => "unrecognised"
     };
 
+    /// <summary>
+    /// The quantization this model was built at, or "not stated" when the name does not say.
+    /// </summary>
+    /// <remarks>
+    /// Read from the name rather than from the file. A GGUF header does carry the type, but
+    /// reading it means opening and parsing every model in the catalogue to fill in a label, and
+    /// the naming convention is close to universal. Where the convention was not followed this
+    /// says so instead of guessing, which is the same rule format detection follows: report what
+    /// is known, never invent what is not.
+    /// </remarks>
+    public string Quantisation => QuantisationLabel.Read(DisplayName);
+
+    /// <summary>Size on disk in GB, or zero when it could not be read.</summary>
+    public double SizeGb => SizeBytes / 1024d / 1024d / 1024d;
+
+    /// <summary>Size as the panels show it.</summary>
+    public string SizeLabel => SizeBytes > 0 ? $"{SizeGb:0.0} GB" : "size unknown";
+
     /// <summary>Name, size and format, as shown in the dropdown.</summary>
     public string CatalogLabel => SizeBytes > 0
         ? $"{DisplayName}  ({SizeBytes / 1024d / 1024d / 1024d:0.0} GB, {FormatLabel})"

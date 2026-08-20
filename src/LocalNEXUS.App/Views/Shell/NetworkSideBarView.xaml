@@ -29,56 +29,105 @@
                           Content="Offer this machine"
                           IsChecked="{Binding Contribute}" />
 
-                <Grid Margin="0,12,0,0">
+                <!--
+                    Offering nothing is a coherent thing to be doing, not a failure, so it says
+                    what is missing in the ordinary hint colour instead of colouring itself red at
+                    someone who is halfway through deciding.
+                -->
+                <TextBlock Style="{StaticResource HintText}"
+                           Text="Tick the models below to share them. Nothing is shared until you do."
+                           Visibility="{Binding IsOfferingNothing, Converter={StaticResource BooleanToVisibility}}" />
+
+                <!--
+                    A slider rather than a field, because the question is what share of the card
+                    to give away and a proportion is what a slider is for. The number beside it is
+                    a readout: the control is the track, and the track cannot reach past what the
+                    machine has.
+                -->
+                <TextBlock Style="{StaticResource FieldLabel}" Text="Memory to share" />
+
+                <Grid Visibility="{Binding HasMemoryReading, Converter={StaticResource BooleanToVisibility}}">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="10" />
-                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
 
-                    <StackPanel Grid.Column="0">
-                        <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,4" Text="Memory cap, GB" />
-                        <TextBox Text="{Binding MaxVramGb, UpdateSourceTrigger=LostFocus}" />
-                    </StackPanel>
+                    <Slider Grid.Column="0"
+                            VerticalAlignment="Center"
+                            Minimum="0"
+                            Maximum="{Binding MemoryMaximumGb}"
+                            Value="{Binding MemoryShareGb}"
+                            Ticks="{Binding MemoryTicks}"
+                            SmallChange="0.5"
+                            LargeChange="1"
+                            AutomationProperties.Name="Memory to share" />
 
-                    <StackPanel Grid.Column="2">
-                        <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,4" Text="Port" />
-                        <TextBox Text="{Binding ApiPort, UpdateSourceTrigger=LostFocus}" />
-                    </StackPanel>
+                    <TextBlock Grid.Column="1"
+                               Style="{StaticResource MonoText}"
+                               Margin="10,0,0,0"
+                               MinWidth="52"
+                               TextAlignment="Right"
+                               VerticalAlignment="Center"
+                               Text="{Binding MemoryReadout}" />
                 </Grid>
 
                 <TextBlock Style="{StaticResource HintText}"
-                           Text="The cap is enforced by the mesh planner rather than merely declared, so it is a promise the engine keeps." />
+                           Text="No graphics driver answered, so the engine decides how much it can use."
+                           Visibility="{Binding HasMemoryReading, Converter={StaticResource BooleanToVisibility}, ConverterParameter=Invert}" />
+
+                <CheckBox Margin="0,8,0,0"
+                          Content="Share all of it"
+                          ToolTip="Unlocks the rest of the card. The slider keeps its current value."
+                          IsChecked="{Binding OfferAllMemory}"
+                          Visibility="{Binding HasMemoryReading, Converter={StaticResource BooleanToVisibility}}" />
+
+                <TextBlock Style="{StaticResource HintText}" Text="{Binding MemorySummary}" />
+
+                <TextBlock Style="{StaticResource FieldLabel}" Text="Port" />
+                <TextBox Text="{Binding ApiPort, UpdateSourceTrigger=LostFocus}" />
 
                 <TextBlock Style="{StaticResource FieldLabel}" Text="Invite token" />
+
                 <TextBox Text="{Binding InviteToken, Mode=OneWay}"
                          IsReadOnly="True"
                          FontFamily="{StaticResource Font.Mono}"
-                         FontSize="{StaticResource Font.Size.Small}" />
+                         FontSize="{StaticResource Font.Size.Small}"
+                         Visibility="{Binding Mesh.HasInviteToken, Converter={StaticResource BooleanToVisibility}}" />
+
+                <TextBlock Style="{StaticResource HintText}"
+                           Margin="0,2,0,0"
+                           Text="Start the node to get a token."
+                           Visibility="{Binding Mesh.HasInviteToken, Converter={StaticResource BooleanToVisibility}, ConverterParameter=Invert}" />
 
                 <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
                     <Button Style="{StaticResource LinkButton}"
                             Content="Copy"
                             Command="{Binding CopyInviteCommand}" />
 
+                    <Button Style="{StaticResource LinkButton}"
+                            Margin="14,0,0,0"
+                            Content="Replace"
+                            ToolTip="Anyone using the old token leaves this mesh."
+                            Command="{Binding RegenerateInviteCommand}" />
+
                     <TextBlock Style="{StaticResource MutedText}"
-                               Margin="10,0,0,0"
+                               Margin="14,0,0,0"
                                VerticalAlignment="Center"
-                               Text="private, LAN only"
+                               Text="local network only"
                                Visibility="{Binding Mesh.IsPublic, Converter={StaticResource BooleanToVisibility}, ConverterParameter=Invert}" />
 
                     <TextBlock Style="{StaticResource MutedText}"
-                               Margin="10,0,0,0"
+                               Margin="14,0,0,0"
                                VerticalAlignment="Center"
                                Foreground="{DynamicResource Status.Warning.Brush}"
-                               Text="published publicly"
+                               Text="published"
                                Visibility="{Binding Mesh.IsPublic, Converter={StaticResource BooleanToVisibility}}" />
                 </StackPanel>
 
                 <Button Style="{StaticResource SmallButton}"
-                        Margin="0,10,0,0"
+                        Margin="0,12,0,0"
                         HorizontalAlignment="Left"
-                        Content="Apply and restart the node"
+                        Content="Apply and restart"
                         Command="{Binding ApplySettingsCommand}" />
             </StackPanel>
         </Border>
@@ -135,6 +184,50 @@
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
+
+                <!--
+                    What this machine can share. Ticking is the whole decision: an unticked model
+                    stays on this machine, and until one is ticked nothing is shared at all.
+                -->
+                <TextBlock Style="{StaticResource SideBarHeader}" Text="SHARE FROM THIS MACHINE" />
+
+                <ItemsControl ItemsSource="{Binding OfferedModels}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <CheckBox Margin="14,3"
+                                      IsChecked="{Binding IsOffered}"
+                                      AutomationProperties.Name="{Binding Name}">
+                                <StackPanel Margin="2,0,0,0">
+                                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+
+                                    <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                        <TextBlock Style="{StaticResource MonoText}"
+                                                   Foreground="{DynamicResource Text.Muted.Brush}"
+                                                   Text="{Binding Quantisation}" />
+                                        <TextBlock Style="{StaticResource MonoText}"
+                                                   Margin="8,0,0,0"
+                                                   Foreground="{DynamicResource Text.Muted.Brush}"
+                                                   Text="{Binding SizeLabel}" />
+                                        <TextBlock Style="{StaticResource MonoText}"
+                                                   Margin="8,0,0,0"
+                                                   Foreground="{DynamicResource Text.Muted.Brush}"
+                                                   Text="{Binding FormatLabel}" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </CheckBox>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <TextBlock Style="{StaticResource HintText}"
+                           Margin="14,2,14,10"
+                           Text="No models found on this machine. Add a folder in Settings, Models."
+                           Visibility="{Binding OfferedModels.Count, Converter={StaticResource CountToVisibility}, ConverterParameter=Invert}" />
+
+                <TextBlock Style="{StaticResource HintText}"
+                           Margin="14,2,14,10"
+                           Text="Changes take effect when you apply and restart the node."
+                           Visibility="{Binding OfferedModels.Count, Converter={StaticResource CountToVisibility}}" />
 
                 <!-- Machines. A machine is a thing to inspect rather than the spine of the page. -->
                 <TextBlock Style="{StaticResource SideBarHeader}" Text="MACHINES" />

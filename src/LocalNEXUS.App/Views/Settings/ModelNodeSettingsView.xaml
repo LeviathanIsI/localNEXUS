@@ -163,11 +163,11 @@
                 </StackPanel>
             </Grid>
             <TextBlock Style="{StaticResource HintText}"
-                       Text="Applied when LocalNEXUS starts the server for this model. 999 layers means offload everything." />
+                       Text="999 puts every layer on the GPU." />
 
             <TextBlock Style="{StaticResource HintText}"
                        Margin="0,10,0,0"
-                       Text="A local model runs on this machine alone. To run one across machines, switch this node to the network provider and pick a model the mesh serves." />
+                       Text="Runs on this machine alone. To use several machines, switch to the network provider." />
 
             <!--
                 The Python runtime, which is what serves safetensors models. Shown always rather
@@ -246,7 +246,7 @@
             </Border>
 
             <TextBlock Style="{StaticResource HintText}"
-                       Text="Set up in the background on first launch. GGUF models do not need it and work while it runs." />
+                       Text="Sets itself up in the background. GGUF models work while it does." />
         </StackPanel>
 
         <!-- Network served model -->
@@ -278,7 +278,7 @@
                 </ComboBox.ItemTemplate>
             </ComboBox>
             <TextBlock Style="{StaticResource HintText}"
-                       Text="Models the mesh can serve right now, from the Network tab. A model that is starting or blocked cannot be picked; the tab shows which section it is waiting on. Whether the model runs on one machine or as layer stages across several is the mesh's decision, made at run time." />
+                       Text="Models the network can serve right now. A model that is starting or blocked cannot be picked; the Network tab shows what it is waiting on." />
         </StackPanel>
 
         <!-- Self hosted server -->
@@ -287,13 +287,13 @@
             <TextBox Text="{Binding SelfHostedModelId, UpdateSourceTrigger=PropertyChanged}"
                      FontFamily="{StaticResource Font.Mono}" />
             <TextBlock Style="{StaticResource HintText}"
-                       Text="The model name your server expects in requests. Set the server's address under Endpoint below; nothing is spawned." />
+                       Text="The model name your server expects. Set its address under Endpoint." />
 
             <TextBlock Style="{StaticResource FieldLabel}" Text="API key (optional)" />
             <TextBox Text="{Binding ApiKey, UpdateSourceTrigger=PropertyChanged}"
                      FontFamily="{StaticResource Font.Mono}" />
             <TextBlock Style="{StaticResource HintText}"
-                       Text="Sent as a bearer token when your server requires one. Stored in plain text inside the saved graph file." />
+                       Text="Only if your server needs one. Stored in plain text in the graph file." />
         </StackPanel>
 
         <!-- OpenRouter model selection -->
@@ -308,7 +308,7 @@
             <TextBox Text="{Binding ApiKey, UpdateSourceTrigger=PropertyChanged}"
                      FontFamily="{StaticResource Font.Mono}" />
             <TextBlock Style="{StaticResource HintText}"
-                       Text="Stored in plain text inside the saved graph file. Keep shared graphs free of keys." />
+                       Text="Stored in plain text in the graph file, so take it out before sharing one." />
         </StackPanel>
 
         <TextBlock Style="{StaticResource SectionHeader}" Margin="0,20,0,0" Text="Prompt" />
@@ -336,7 +336,7 @@
         </StackPanel>
 
         <TextBlock Style="{StaticResource HintText}"
-                   Text="How this node is asked to express a change to an existing file. Automatic sends the whole file for a new or short one and a line tagged diff for anything larger, which is the format smaller models handle best. The applier tolerates whitespace that does not match, and names the lines it could not find when it cannot." />
+                   Text="How this node asks for a change to a file. Automatic suits most models." />
 
         <TextBlock Style="{StaticResource SectionHeader}" Margin="0,20,0,0" Text="Sampling" />
 
@@ -364,6 +364,6 @@
         <TextBox Text="{Binding BaseUrl, UpdateSourceTrigger=PropertyChanged}"
                  FontFamily="{StaticResource Font.Mono}" />
         <TextBlock Style="{StaticResource HintText}"
-                   Text="Leave blank for a local model and LocalNEXUS starts and reuses its own servers, splitting across sources when needed. Set it to point this node at a server that is already running; nothing is spawned then." />
+                   Text="Leave blank to let LocalNEXUS run the model. Set it to use a server that is already running." />
     </StackPanel>
 </UserControl>

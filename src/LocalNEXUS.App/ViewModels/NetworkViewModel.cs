@@ -9,6 +9,7 @@ using LocalNEXUS.App.Services.Dialogs;
 using LocalNEXUS.App.Services.Distributed;
 using LocalNEXUS.App.Services.Inference;
 using LocalNEXUS.App.Services.Persistence;
+using LocalNEXUS.App.Services.Python;
 using LocalNEXUS.App.ViewModels.Network;
 
 namespace LocalNEXUS.App.ViewModels;
@@ -87,13 +88,25 @@ public sealed partial class NetworkViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private bool _contribute;
 
-    /// <summary>The GGUF this machine serves while contributing.</summary>
+    /// <summary>How much of the card is shared, in GB. The slider owns this.</summary>
     [ObservableProperty]
-    private LocalModelInfo? _offeredModel;
+    [NotifyPropertyChangedFor(nameof(MemoryReadout))]
+    [NotifyPropertyChangedFor(nameof(MemorySummary))]
+    private double _memoryShareGb;
 
-    /// <summary>Cap on the memory offered, in GB. Blank lets the engine decide.</summary>
+    /// <summary>
+    /// True when the cap follows the card instead of a typed number.
+    /// </summary>
+    /// <remarks>
+    /// It changes what the slider can reach, not where it currently sits. Unchecked, the slider
+    /// stops at the backoff, so overcommitting the card is not something that can be done by
+    /// accident. Checked, the rest of the range unlocks and the value stays where it was; going
+    /// further is then a thing somebody drags to on purpose.
+    /// </remarks>
     [ObservableProperty]
-    private string _maxVramGb;
+    [NotifyPropertyChangedFor(nameof(MemoryMaximumGb))]
+    [NotifyPropertyChangedFor(nameof(MemorySummary))]
+    private bool _offerAllMemory;
 
     /// <summary>Port the node's OpenAI compatible API listens on.</summary>
     [ObservableProperty]
@@ -116,10 +129,15 @@ public sealed partial class NetworkViewModel : ObservableObject, IDisposable
         _publish = config.MeshPublish;
         _joinToken = config.MeshJoinToken ?? string.Empty;
         _apiPort = config.MeshApiPort.ToString(CultureInfo.InvariantCulture);
-        _maxVramGb = config.MeshMaxVramGb > 0
-            ? config.MeshMaxVramGb.ToString("0.##", CultureInfo.InvariantCulture)
-            : string.Empty;
-        _offeredModel = catalog.FindByPath(config.MeshOfferedModelPath) ?? catalog.Models.FirstOrDefault();
+        _offerAllMemory = config.MeshOfferAllMemory;
+
+        // A machine that has never been configured starts at the safe ceiling rather than at zero,
+        // so the number on screen is both useful and one the hardware can keep.
+        var share = config.MeshMaxVramGb > 0 ? config.MeshMaxVramGb : SafeCeilingGb;
+        _memoryShareGb = Math.Clamp(share, 0d, Math.Max(SafeCeilingGb, _offerAllMemory ? MemoryCeilingGb : SafeCeilingGb));
+
+        RebuildOfferedModels();
+        catalog.Models.CollectionChanged += (_, _) => RebuildOfferedModels();
 
         Groups = BuildFilterGroups();
 
@@ -186,6 +204,69 @@ public sealed partial class NetworkViewModel : ObservableObject, IDisposable
     /// <summary>The invite token, which is the only way into a private mesh.</summary>
     public string InviteToken => Mesh.InviteToken;
 
+    /// <summary>Every local model, each with whether this machine offers it.</summary>
+    public ObservableCollection<OfferedModelViewModel> OfferedModels { get; } = new();
+
+    /// <summary>How many models are ticked.</summary>
+    public int OfferedCount => OfferedModels.Count(m => m.IsOffered);
+
+    /// <summary>
+    /// True when this machine is offering its compute but has not been given anything to serve.
+    /// </summary>
+    /// <remarks>
+    /// Not a failure. It is a coherent thing to be doing, and the panel says what is missing
+    /// rather than colouring itself red at somebody who is halfway through a decision.
+    /// </remarks>
+    public bool IsOfferingNothing => Contribute && OfferedCount == 0;
+
+    /// <summary>What this machine's graphics card reports, or null when no driver answered.</summary>
+    public GraphicsMemory? Memory => AcceleratorProbe.DetectMemory();
+
+    /// <summary>True once a card was found, which is when there is a range to slide along.</summary>
+    public bool HasMemoryReading => MemoryCeilingGb > 0d;
+
+    /// <summary>Everything on the card, which is the ceiling nothing can go above.</summary>
+    public double MemoryCeilingGb => Memory?.TotalGb ?? 0d;
+
+    /// <summary>What is held back before anything is shared.</summary>
+    public double MemoryBackoffGb => Memory?.BackoffGb ?? 0d;
+
+    /// <summary>The most that can be shared while the backoff stands.</summary>
+    public double SafeCeilingGb => Memory?.SafeCeilingGb ?? 0d;
+
+    /// <summary>
+    /// The end of the slider: the safe ceiling normally, the whole card once that is asked for.
+    /// </summary>
+    public double MemoryMaximumGb => OfferAllMemory ? MemoryCeilingGb : SafeCeilingGb;
+
+    /// <summary>The marker on the track, so the safe ceiling is visible against the whole card.</summary>
+    public System.Windows.Media.DoubleCollection MemoryTicks => new() { SafeCeilingGb };
+
+    /// <summary>The slider value as it is shown beside it. Display only.</summary>
+    public string MemoryReadout => $"{MemoryShareGb:0.#} GB";
+
+    /// <summary>What the card has and what is being offered from it.</summary>
+    public string MemorySummary
+    {
+        get
+        {
+            if (Memory is not { } memory)
+            {
+                return "No graphics driver answered, so there is no ceiling to check a cap against. "
+                       + "The engine decides how much it can use.";
+            }
+
+            var held = Math.Max(0d, memory.TotalGb - MemoryShareGb);
+
+            var opening = $"{memory.GpuName} has {memory.TotalGb:0.#} GB. "
+                + $"Sharing {MemoryShareGb:0.#} GB keeps {held:0.#} GB for everything else.";
+
+            return OfferAllMemory
+                ? $"{opening} The whole card is available to the slider, so your own models can end up competing with the mesh."
+                : $"{opening} {memory.BackoffSummary}";
+        }
+    }
+
     /// <summary>Orders the table by a column, reversing it when the same column is picked twice.</summary>
     [RelayCommand]
     private void Sort(ModelColumn column)
@@ -240,6 +321,34 @@ public sealed partial class NetworkViewModel : ObservableObject, IDisposable
 
         _dialogs.CopyToClipboard(Mesh.InviteToken);
         _feed.Info("Invite token copied", "It is private and only usable on the local network.");
+    }
+
+    /// <summary>
+    /// Replaces this machine's invite token by giving the node a new identity.
+    /// </summary>
+    /// <remarks>
+    /// The token cannot be reissued on its own: it is the node's public key and addresses, minted
+    /// by the engine. Rotating the identity is what makes an old token stop working, and it is
+    /// also what makes this machine a stranger to every peer that knew it, so the question is
+    /// asked before it happens rather than after.
+    /// </remarks>
+    [RelayCommand]
+    private async Task RegenerateInviteAsync()
+    {
+        var approved = await _feed
+            .RequestConfirmationAsync(
+                "Replace the invite token?",
+                "Anyone using the old token leaves this mesh and needs the new one. This machine also gets a new "
+                + "identity on the network, so peers see it as a machine they have not met.",
+                CancellationToken.None)
+            .ConfigureAwait(true);
+
+        if (!approved)
+        {
+            return;
+        }
+
+        await Mesh.RotateIdentityAsync(CancellationToken.None).ConfigureAwait(true);
     }
 
     /// <summary>Starts or stops this install's mesh node.</summary>
@@ -335,7 +444,24 @@ public sealed partial class NetworkViewModel : ObservableObject, IDisposable
 
     partial void OnFilterTextChanged(string value) => ApplyFilters();
 
-    partial void OnContributeChanged(bool value) => OnPropertyChanged(nameof(CoverageSummary));
+    partial void OnContributeChanged(bool value)
+    {
+        OnPropertyChanged(nameof(CoverageSummary));
+        OnPropertyChanged(nameof(IsOfferingNothing));
+    }
+
+    /// <summary>
+    /// Only the reach changes. Growing it leaves the value alone, and shrinking it pulls a value
+    /// that is now out of range back to the safe ceiling rather than leaving the slider showing a
+    /// number it can no longer represent.
+    /// </summary>
+    partial void OnOfferAllMemoryChanged(bool value)
+    {
+        if (!value && MemoryShareGb > SafeCeilingGb)
+        {
+            MemoryShareGb = SafeCeilingGb;
+        }
+    }
 
     /// <summary>
     /// Picking a row in the table is picking a model, and it takes the inspector off whatever it
@@ -365,7 +491,7 @@ public sealed partial class NetworkViewModel : ObservableObject, IDisposable
     {
         new ModelFilterGroup(
             "STATUS",
-            "Whether the mesh can assemble the model right now.",
+            "Whether the network can run the model right now.",
             new[]
             {
                 new ModelFilter("All", _ => true, ApplyFilterCommand, isSelected: true),
@@ -376,8 +502,8 @@ public sealed partial class NetworkViewModel : ObservableObject, IDisposable
 
         new ModelFilterGroup(
             "FORMAT",
-            "Inferred from the quantization label, because the mesh reports a quantization and not a format. "
-            + "A label a GGUF file would carry counts as GGUF; anything else is left unknown rather than guessed.",
+            "Worked out from the quantization label. The mesh reports a quantization rather than a format, so "
+            + "anything without a label a GGUF file would carry is left as not reported.",
             new[]
             {
                 new ModelFilter("All", _ => true, ApplyFilterCommand, isSelected: true),
@@ -387,8 +513,8 @@ public sealed partial class NetworkViewModel : ObservableObject, IDisposable
 
         new ModelFilterGroup(
             "PROVIDER",
-            "Where the model is served from. Cloud models are configured on a model node and are not "
-            + "part of the mesh, so this list never has any.",
+            "Where the model is served from. Cloud models are set up on a model node and are not part of "
+            + "the mesh, so none appear here.",
             new[]
             {
                 new ModelFilter("All", _ => true, ApplyFilterCommand, isSelected: true),
@@ -398,8 +524,8 @@ public sealed partial class NetworkViewModel : ObservableObject, IDisposable
 
         new ModelFilterGroup(
             "SHARING",
-            "Read from the posture of the mesh itself. A private mesh is joined by invitation, so "
-            + "everything in it is invite only; publishing the mesh makes all of it public at once.",
+            "A private mesh is joined by invitation, so everything in it is invite only. Publishing the "
+            + "mesh makes all of it public at once.",
             new[]
             {
                 new ModelFilter("All", _ => true, ApplyFilterCommand, isSelected: true),
@@ -546,31 +672,55 @@ public sealed partial class NetworkViewModel : ObservableObject, IDisposable
         _config.MeshPublish = Publish;
         _config.MeshName = string.IsNullOrWhiteSpace(MeshName) ? "LocalNEXUS" : MeshName.Trim();
         _config.MeshJoinToken = string.IsNullOrWhiteSpace(JoinToken) ? null : JoinToken.Trim();
-        _config.MeshOfferedModelPath = OfferedModel?.Path;
-        _config.MeshMaxVramGb = ParseMaxVram(MaxVramGb);
+        _config.MeshOfferedModelPaths = OfferedModels.Where(m => m.IsOffered).Select(m => m.Path).ToList();
+        _config.MeshOfferAllMemory = OfferAllMemory;
+        _config.MeshMaxVramGb = MemoryShareGb;
         _config.MeshApiPort = ParsePort(ApiPort, _config.MeshApiPort);
         _config.Save();
     }
 
-    /// <summary>
-    /// Reads the memory cap. Unlike the previous engine's declared offer, which orchestrators
-    /// merely honoured, this value is enforced by the mesh planner, so a bad one is worth refusing
-    /// rather than silently treating as unlimited.
-    /// </summary>
-    private double ParseMaxVram(string text)
+    /// <summary>Rebuilds the offer list, keeping every tick that still points at a model on disk.</summary>
+    private void RebuildOfferedModels()
     {
-        if (string.IsNullOrWhiteSpace(text))
+        var offered = new HashSet<string>(_config.MeshOfferedModelPaths, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var row in OfferedModels)
         {
-            return 0d;
+            row.PropertyChanged -= OnOfferedModelChanged;
         }
 
-        if (double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed) && parsed > 0)
+        OfferedModels.Clear();
+
+        foreach (var model in Catalog.Models)
         {
-            return parsed;
+            var row = new OfferedModelViewModel(model, offered.Contains(model.Path), OnOfferChanged);
+            row.PropertyChanged += OnOfferedModelChanged;
+            OfferedModels.Add(row);
         }
 
-        _feed.Error("Memory cap ignored", "The memory cap has to be a number of GB, or blank to let the engine decide.");
-        return 0d;
+        OnOfferChanged();
+    }
+
+    private void OnOfferedModelChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(OfferedModelViewModel.IsOffered))
+        {
+            OnPropertyChanged(nameof(OfferedCount));
+            OnPropertyChanged(nameof(IsOfferingNothing));
+        }
+    }
+
+    /// <summary>
+    /// Saves the offer as it changes, so a tick is not something that has to be applied twice.
+    /// The node still needs restarting for it to take effect, which the panel says.
+    /// </summary>
+    private void OnOfferChanged()
+    {
+        _config.MeshOfferedModelPaths = OfferedModels.Where(m => m.IsOffered).Select(m => m.Path).ToList();
+        _config.Save();
+
+        OnPropertyChanged(nameof(OfferedCount));
+        OnPropertyChanged(nameof(IsOfferingNothing));
     }
 
     private int ParsePort(string text, int fallback)

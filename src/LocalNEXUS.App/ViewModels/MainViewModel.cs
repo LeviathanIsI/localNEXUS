@@ -54,6 +54,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(DeleteSelectionCommand))]
     [NotifyPropertyChangedFor(nameof(HasSelection))]
+    [NotifyPropertyChangedFor(nameof(CanDeleteSelection))]
     [NotifyPropertyChangedFor(nameof(InspectorContent))]
     [NotifyPropertyChangedFor(nameof(InspectorHeader))]
     private NodeBase? _selectedNode;
@@ -68,6 +69,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsWorkspace))]
     [NotifyPropertyChangedFor(nameof(IsNetwork))]
+    [NotifyPropertyChangedFor(nameof(CanDeleteSelection))]
+    [NotifyCanExecuteChangedFor(nameof(AddNodeCommand))]
+    [NotifyCanExecuteChangedFor(nameof(NewGraphCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SaveGraphCommand))]
+    [NotifyCanExecuteChangedFor(nameof(LoadGraphCommand))]
+    [NotifyCanExecuteChangedFor(nameof(DeleteSelectionCommand))]
+    [NotifyCanExecuteChangedFor(nameof(TogglePanelCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ShowPanelTabCommand))]
     [NotifyPropertyChangedFor(nameof(IsPanelShowing))]
     [NotifyPropertyChangedFor(nameof(IsChatShowing))]
     [NotifyPropertyChangedFor(nameof(PanelRowHeight))]
@@ -203,6 +212,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// <summary>True when a node is selected.</summary>
     public bool HasSelection => SelectedNode is not null;
 
+    /// <summary>True when there is a selection on a canvas that is actually showing.</summary>
+    public bool CanDeleteSelection => HasSelection && IsWorkspace;
+
     /// <summary>
     /// True while the activity bar has the Workspace selected. Settable, so the activity bar
     /// expresses the choice as a radio button being chosen rather than as a command hanging off
@@ -315,6 +327,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         ActiveSection = section;
         IsSettingsOpen = false;
+
+        // The run controls belong to the canvas, so they go quiet when it is not showing.
+        Feed.IsActive = IsWorkspace;
     }
 
     /// <summary>Opens the settings panel over whichever section is showing.</summary>
@@ -334,11 +349,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private void ToggleInspector() => IsInspectorVisible = !IsInspectorVisible;
 
     /// <summary>Shows or hides the bottom panel.</summary>
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(IsWorkspace))]
     private void TogglePanel() => IsPanelVisible = !IsPanelVisible;
 
     /// <summary>Brings one tab of the bottom panel forward, expanding the panel if it was collapsed.</summary>
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(IsWorkspace))]
     private void ShowPanelTab(BottomPanelTab tab)
     {
         PanelTab = tab;
@@ -346,7 +361,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>Adds a node of the given type at the cursor.</summary>
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(IsWorkspace))]
     private void AddNode(string? typeKey)
     {
         if (string.IsNullOrWhiteSpace(typeKey))
@@ -368,7 +383,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>Removes every selected node together with its wires.</summary>
-    [RelayCommand(CanExecute = nameof(HasSelection))]
+    [RelayCommand(CanExecute = nameof(CanDeleteSelection))]
     private void DeleteSelection()
     {
         foreach (var node in Graph.Nodes.Where(n => n.IsSelected).ToList())
@@ -428,7 +443,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>Clears the canvas.</summary>
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(IsWorkspace))]
     private void NewGraph()
     {
         Graph.Clear();
@@ -440,7 +455,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>Saves the graph, asking for a path.</summary>
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(IsWorkspace))]
     private void SaveGraph()
     {
         AppPaths.EnsureCreated();
@@ -476,7 +491,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>Loads a graph, replacing whatever is on the canvas.</summary>
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(IsWorkspace))]
     private void LoadGraph()
     {
         AppPaths.EnsureCreated();

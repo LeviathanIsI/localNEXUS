@@ -75,9 +75,9 @@
                      MinHeight="150"
                      MaxHeight="300" />
             <TextBlock Style="{StaticResource HintText}"
-                       Text="A single expression evaluated with the incoming value bound to input, a string. The result is converted to text and sent on. System, System.Linq, System.Text and System.Text.RegularExpressions are imported." />
+                       Text="One C# expression. The incoming text is input, and the result is sent on. Regex, Linq and the usual System namespaces are available." />
             <TextBlock Style="{StaticResource HintText}"
-                       Text="Compilation errors are reported in the activity feed when the node runs." />
+                       Text="Errors show in the activity feed when the node runs." />
         </StackPanel>
     </StackPanel>
 </UserControl>

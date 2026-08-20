@@ -87,7 +87,8 @@
             <nodify:NodifyEditor.ContextMenu>
                 <ContextMenu>
                     <MenuItem Header="Add node"
-                              ItemsSource="{Binding NodePalette}">
+                              ItemsSource="{Binding NodePalette}"
+                              IsEnabled="{Binding IsWorkspace}">
                         <MenuItem.ItemContainerStyle>
                             <Style TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}">
                                 <Setter Property="Header" Value="{Binding DisplayName}" />

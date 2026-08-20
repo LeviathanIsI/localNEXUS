@@ -79,7 +79,7 @@
                 Padding="16,7">
             <TextBlock Style="{StaticResource MutedText}"
                        TextWrapping="Wrap"
-                       Text="Size and throughput are not reported by the mesh, so those columns say so rather than guessing. Last verified is the most recent time the mesh saw a source holding part of the model." />
+                       Text="The mesh does not report size or throughput. Last verified is when it last saw a machine holding part of the model." />
         </Border>
 
         <!-- Column headings. -->

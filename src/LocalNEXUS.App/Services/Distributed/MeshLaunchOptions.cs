@@ -25,8 +25,22 @@ public sealed record MeshLaunchOptions
     /// <summary>True when this machine offers its own compute rather than only routing requests.</summary>
     public bool Contribute { get; init; }
 
-    /// <summary>The GGUF this machine serves while contributing. Blank means it offers capacity without a model of its own.</summary>
-    public string OfferedModelPath { get; init; } = string.Empty;
+    /// <summary>
+    /// The models this machine serves while contributing, in the order they were chosen. Empty
+    /// means it offers capacity without a model of its own.
+    /// </summary>
+    /// <remarks>
+    /// Only the first is a launch argument, because the engine takes one startup model on the
+    /// command line. The rest are loaded into the node once it is up, which is the engine's own
+    /// mechanism for it and keeps this from having to know how many models a node can hold.
+    /// </remarks>
+    public IReadOnlyList<string> OfferedModelPaths { get; init; } = Array.Empty<string>();
+
+    /// <summary>The model passed on the command line, or blank when none was chosen.</summary>
+    public string StartupModelPath => OfferedModelPaths.FirstOrDefault() ?? string.Empty;
+
+    /// <summary>The models loaded after the node answers, which is everything after the first.</summary>
+    public IReadOnlyList<string> AdditionalModelPaths => OfferedModelPaths.Skip(1).ToList();
 
     /// <summary>Cap on the memory this machine offers, in GB. Zero lets the engine decide.</summary>
     public double MaxVramGb { get; init; }
@@ -60,10 +74,10 @@ public sealed record MeshLaunchOptions
 
         if (Contribute)
         {
-            if (!string.IsNullOrWhiteSpace(OfferedModelPath))
+            if (!string.IsNullOrWhiteSpace(StartupModelPath))
             {
                 arguments.Add("--gguf");
-                arguments.Add(OfferedModelPath);
+                arguments.Add(StartupModelPath);
             }
 
             if (MaxVramGb > 0)

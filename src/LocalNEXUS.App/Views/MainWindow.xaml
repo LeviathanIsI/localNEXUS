@@ -105,7 +105,9 @@
                         </MenuItem>
 
                         <MenuItem Header="_Edit">
-                            <MenuItem Header="_Add node" ItemsSource="{Binding NodePalette}">
+                            <MenuItem Header="_Add node"
+                                      ItemsSource="{Binding NodePalette}"
+                                      IsEnabled="{Binding IsWorkspace}">
                                 <MenuItem.ItemContainerStyle>
                                     <Style TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}">
                                         <Setter Property="Header" Value="{Binding DisplayName}" />

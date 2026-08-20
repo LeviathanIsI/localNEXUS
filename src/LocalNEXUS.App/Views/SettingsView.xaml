@@ -56,7 +56,7 @@
                 <StackPanel Visibility="{Binding Section, Converter={StaticResource EnumToVisibility}, ConverterParameter=Appearance}">
                     <TextBlock Style="{StaticResource SectionHeader}" FontSize="{StaticResource Font.Size.Title}" Text="Appearance" />
                     <TextBlock Style="{StaticResource HintText}"
-                               Text="Themes apply as they are picked. Nothing restarts, and the choice is remembered for the next session." />
+                               Text="Pick a theme. It applies right away." />
 
                     <ItemsControl ItemsSource="{Binding ThemeChoices}" Margin="0,14,0,0">
                         <ItemsControl.ItemTemplate>
@@ -85,7 +85,7 @@
                     -->
                     <Border Style="{StaticResource Card}" Margin="0,10,0,0">
                         <StackPanel>
-                            <TextBlock Style="{StaticResource SectionHeader}" Text="How states read in this theme" />
+                            <TextBlock Style="{StaticResource SectionHeader}" Text="How states look" />
 
                             <ItemsControl Margin="0,10,0,0">
                                 <ItemsControl.ItemsPanel>
@@ -139,7 +139,7 @@
                 <StackPanel Visibility="{Binding Section, Converter={StaticResource EnumToVisibility}, ConverterParameter=Models}">
                     <TextBlock Style="{StaticResource SectionHeader}" FontSize="{StaticResource Font.Size.Title}" Text="Models" />
                     <TextBlock Style="{StaticResource HintText}"
-                               Text="Every folder here is scanned for both formats. Format is a label rather than a choice, and nothing asks which engine to use." />
+                               Text="GGUF and safetensors models in these folders all show up together." />
 
                     <TextBlock Style="{StaticResource FieldLabel}" Text="Folders being scanned" />
 
@@ -186,17 +186,17 @@
 
                     <TextBlock Style="{StaticResource SectionHeader}" Margin="0,16,0,0" Text="Cloud provider" />
                     <TextBlock Style="{StaticResource HintText}"
-                               Text="What a newly added model node starts from, so a key is typed once rather than once per node. Existing nodes keep whatever they were saved with." />
+                               Text="Used by model nodes you add from now on, so you only type the key once. Nodes you already have keep their own." />
 
                     <TextBlock Style="{StaticResource FieldLabel}" Text="Base URL" />
                     <TextBox Text="{Binding CloudBaseUrl, UpdateSourceTrigger=LostFocus}" />
-                    <TextBlock Style="{StaticResource HintText}" Text="Blank uses the default for whichever provider the node is set to." />
+                    <TextBlock Style="{StaticResource HintText}" Text="Leave blank to use the provider's own address." />
 
                     <TextBlock Style="{StaticResource FieldLabel}" Text="API key" />
                     <TextBox Text="{Binding CloudApiKey, UpdateSourceTrigger=LostFocus}" FontFamily="{StaticResource Font.Mono}" />
                     <TextBlock Style="{StaticResource HintText}"
                                Foreground="{DynamicResource Status.Warning.Brush}"
-                               Text="Stored in clear text in config.json, which is the same posture a graph file already has. Worth knowing before pasting a key into a file that gets shared." />
+                               Text="Stored in plain text in config.json." />
                 </StackPanel>
 
                 <!-- Unity -->
@@ -205,7 +205,7 @@
 
                     <TextBlock Style="{StaticResource FieldLabel}" Text="Open project" />
                     <TextBlock Text="{Binding Index.IndexedProject, TargetNullValue=No project is open.}" />
-                    <TextBlock Style="{StaticResource HintText}" Text="Open a different one from File, Open Unity project." />
+                    <TextBlock Style="{StaticResource HintText}" Text="Change it from File, Open Unity project." />
 
                     <TextBlock Style="{StaticResource FieldLabel}" Text="What is known about it" />
                     <StackPanel Orientation="Horizontal">
@@ -227,7 +227,7 @@
                             Command="{Binding ReindexCommand}" />
 
                     <TextBlock Style="{StaticResource HintText}"
-                               Text="The index is cached per file by write time and length, so editing one script re-reads one script. Reading it again from scratch is only needed if something outside the editor changed a lot of files at once." />
+                               Text="Only needed if something outside the editor changed a lot of files at once." />
                 </StackPanel>
 
                 <!-- Runtime -->
@@ -273,7 +273,7 @@
                     </StackPanel>
 
                     <TextBlock Style="{StaticResource HintText}"
-                               Text="Built by the bundled uv into this install's own folder, never into a Python already on the machine. GGUF models work throughout, so this only matters for safetensors." />
+                               Text="Only needed to run safetensors models. GGUF models work without it." />
 
                     <Rectangle Height="1" Margin="0,20,0,0" Fill="{DynamicResource Surface.Border.Brush}" />
 
@@ -289,7 +289,7 @@
                     <TextBlock Style="{StaticResource FieldLabel}" Text="Mesh name" />
                     <TextBox Text="{Binding Network.MeshName, UpdateSourceTrigger=LostFocus}" />
 
-                    <TextBlock Style="{StaticResource FieldLabel}" Text="Invite token to join, if joining someone else" />
+                    <TextBlock Style="{StaticResource FieldLabel}" Text="Join another mesh" />
                     <TextBox Text="{Binding Network.JoinToken, UpdateSourceTrigger=LostFocus}" FontFamily="{StaticResource Font.Mono}" />
 
                     <CheckBox Style="{StaticResource ToggleSwitch}"
@@ -299,7 +299,7 @@
 
                     <TextBlock Style="{StaticResource HintText}"
                                Foreground="{DynamicResource Status.Warning.Brush}"
-                               Text="Off by default. This is the only setting that causes any contact beyond the local network." />
+                               Text="The only setting that reaches beyond your local network." />
 
                     <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
                         <Button Style="{StaticResource SmallButton}" Margin="0,0,8,0" Content="Apply and restart the node" Command="{Binding Network.ApplySettingsCommand}" />
@@ -312,13 +312,13 @@
                 <StackPanel Visibility="{Binding Section, Converter={StaticResource EnumToVisibility}, ConverterParameter=Behaviour}">
                     <TextBlock Style="{StaticResource SectionHeader}" FontSize="{StaticResource Font.Size.Title}" Text="Behaviour" />
                     <TextBlock Style="{StaticResource HintText}"
-                               Text="What a newly added node starts from. These are starting points, never overrides: a node saves its own values into the graph, so changing a default here cannot reach back into a graph that already exists." />
+                               Text="What a newly added node starts from. Graphs you have already saved keep their own values." />
 
                     <TextBlock Style="{StaticResource SectionHeader}" Margin="0,16,0,0" Text="Compile check" />
 
                     <TextBlock Style="{StaticResource FieldLabel}" Text="Repair attempts after the first failure" />
                     <TextBox Text="{Binding DefaultRetryLimit, UpdateSourceTrigger=LostFocus}" MaxWidth="120" HorizontalAlignment="Left" />
-                    <TextBlock Style="{StaticResource HintText}" Text="Each attempt is handed the compiler errors from the one before it. Zero means one compile and no repair." />
+                    <TextBlock Style="{StaticResource HintText}" Text="Zero checks the code without trying to fix it." />
 
                     <TextBlock Style="{StaticResource SectionHeader}" Margin="0,20,0,0" Text="Plan context budget" />
 

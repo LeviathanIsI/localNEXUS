@@ -47,6 +47,21 @@ public sealed partial class ActivityFeedViewModel : ObservableObject
     {
     }
 
+    /// <summary>
+    /// True while the run controls are in front of the user.
+    /// </summary>
+    /// <remarks>
+    /// A run belongs to the canvas, and the canvas is only on screen in the Workspace. Without
+    /// this, the Run menu keeps working while the Network is showing and starts a run nobody can
+    /// see, on a graph they are not looking at. The shell keeps it in step with the active view.
+    /// </remarks>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(RunCommand))]
+    [NotifyCanExecuteChangedFor(nameof(CancelCommand))]
+    [NotifyCanExecuteChangedFor(nameof(TogglePauseCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ClearFeedCommand))]
+    private bool _isActive = true;
+
     public ActivityFeedViewModel(GraphExecutor executor, GraphModel graph, ActivityFeed feed, Dispatcher dispatcher)
     {
         _executor = executor;
@@ -136,14 +151,14 @@ public sealed partial class ActivityFeedViewModel : ObservableObject
     }
 
     /// <summary>Empties the transcript.</summary>
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(IsActive))]
     private void ClearFeed() => _feed.Clear();
 
-    private bool CanRun() => !IsRunning && !string.IsNullOrWhiteSpace(RequestText);
+    private bool CanRun() => IsActive && !IsRunning && !string.IsNullOrWhiteSpace(RequestText);
 
-    private bool CanCancel() => IsRunning;
+    private bool CanCancel() => IsActive && IsRunning;
 
-    private bool CanTogglePause() => IsRunning;
+    private bool CanTogglePause() => IsActive && IsRunning;
 
     /// <summary>
     /// Follows the run's own state so that a fault raised deep inside the executor reaches the

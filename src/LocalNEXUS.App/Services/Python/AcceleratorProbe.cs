@@ -42,7 +42,7 @@ public static class AcceleratorProbe
                 "No NVIDIA driver answered, so the processor build of torch was chosen.");
         }
 
-        var (driverVersion, gpuName) = report.Value;
+        var (driverVersion, gpuName, _) = report.Value;
 
         if (!TryReadMajor(driverVersion, out var major))
         {
@@ -66,7 +66,36 @@ public static class AcceleratorProbe
             $"{gpuName} with driver {driverVersion}, so the CUDA build of torch was chosen.");
     }
 
-    private static (string DriverVersion, string GpuName)? QueryDriver()
+    /// <summary>
+    /// How much memory this machine's GPU has, or null when no driver answered.
+    /// </summary>
+    /// <remarks>
+    /// The same query as <see cref="Detect"/>, because there is no reason to ask the driver twice
+    /// and every reason not to have two places that decide what hardware is present. Cached: the
+    /// answer does not change while the application is running, and the contribution panel reads
+    /// it every time it is drawn.
+    /// </remarks>
+    public static GraphicsMemory? DetectMemory()
+    {
+        if (_memory is not null)
+        {
+            return _memory;
+        }
+
+        var report = QueryDriver();
+
+        if (report is not { } found || found.TotalMemoryMb <= 0)
+        {
+            return null;
+        }
+
+        _memory = new GraphicsMemory(found.GpuName, found.TotalMemoryMb / 1024d);
+        return _memory;
+    }
+
+    private static GraphicsMemory? _memory;
+
+    private static (string DriverVersion, string GpuName, double TotalMemoryMb)? QueryDriver()
     {
         var startInfo = new ProcessStartInfo
         {
@@ -77,8 +106,8 @@ public static class AcceleratorProbe
             RedirectStandardError = true
         };
 
-        startInfo.ArgumentList.Add("--query-gpu=driver_version,name");
-        startInfo.ArgumentList.Add("--format=csv,noheader");
+        startInfo.ArgumentList.Add("--query-gpu=driver_version,name,memory.total");
+        startInfo.ArgumentList.Add("--format=csv,noheader,nounits");
 
         try
         {
@@ -119,7 +148,17 @@ public static class AcceleratorProbe
             }
 
             var parts = firstLine.Split(',', StringSplitOptions.TrimEntries);
-            return parts.Length >= 2 ? (parts[0], parts[1]) : (parts[0], "This machine's NVIDIA GPU");
+
+            var name = parts.Length >= 2 ? parts[1] : "This machine's NVIDIA GPU";
+
+            // Memory is asked for without units, so a card that does not report it reads as zero
+            // rather than as a number nobody can interpret.
+            var memoryMb = parts.Length >= 3
+                && double.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
+                ? parsed
+                : 0d;
+
+            return (parts[0], name, memoryMb);
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
         {

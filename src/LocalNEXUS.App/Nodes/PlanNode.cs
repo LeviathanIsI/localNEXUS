@@ -158,7 +158,7 @@ public sealed partial class PlanNode : NodeBase
 
         ctx.Feed.Info(
             $"{Title}: planning with {plannerNode.Title}",
-            "The model that will write the files is the one that plans them, under a planner's instructions rather than its own.");
+            "The model that writes the files is the one that plans them.");
 
         var reply = await planner
             .AnswerAsync(

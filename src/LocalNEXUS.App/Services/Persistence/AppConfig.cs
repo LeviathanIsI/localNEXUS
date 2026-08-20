@@ -5,8 +5,8 @@ using System.Text.Json.Serialization;
 namespace LocalNEXUS.App.Services.Persistence;
 
 /// <summary>
-/// The handful of settings that survive between sessions. There is no settings screen in this
-/// slice; the file simply remembers what the user last chose through the File menu.
+/// The settings that survive between sessions: everything the settings panel edits, plus what the
+/// window was last left doing.
 /// </summary>
 public sealed class AppConfig
 {
@@ -17,7 +17,7 @@ public sealed class AppConfig
     };
 
     /// <summary>The theme the window is wearing. Applied before anything is painted.</summary>
-    public Theming.AppTheme Theme { get; set; } = Theming.AppTheme.VsCodeDark;
+    public Theming.AppTheme Theme { get; set; } = Theming.AppTheme.EditorDark;
 
     /// <summary>
     /// Repair attempts a newly added compile check node starts with.
@@ -81,14 +81,26 @@ public sealed class AppConfig
     /// <summary>Whether this machine offers its own compute to the mesh rather than only routing.</summary>
     public bool MeshContribute { get; set; }
 
-    /// <summary>The GGUF this machine serves while contributing. Blank offers capacity without a model.</summary>
+    /// <summary>
+    /// The one model this machine used to serve. Kept only so an existing file can be read; the
+    /// list below replaced it and is what gets written.
+    /// </summary>
     public string? MeshOfferedModelPath { get; set; }
 
     /// <summary>
-    /// Cap on the memory this machine offers, in GB. Zero lets the engine decide. Unlike the
-    /// declared offer the previous engine took on trust, this one is enforced by the planner.
+    /// The models this machine offers to the mesh. Empty means it offers none, which is the
+    /// starting state: what gets served to other people is a decision somebody has to make.
     /// </summary>
+    public List<string> MeshOfferedModelPaths { get; set; } = new();
+
+    /// <summary>Cap on the memory this machine offers, in GB. Zero lets the engine decide.</summary>
     public double MeshMaxVramGb { get; set; }
+
+    /// <summary>
+    /// True when the cap follows the card rather than a typed number, so a bigger card is used
+    /// without anyone having to come back and edit a figure.
+    /// </summary>
+    public bool MeshOfferAllMemory { get; set; }
 
     /// <summary>Invite token of a mesh to join. Blank means this install hosts its own private mesh.</summary>
     public string? MeshJoinToken { get; set; }
@@ -122,12 +134,35 @@ public sealed class AppConfig
             }
 
             var json = File.ReadAllText(AppPaths.ConfigFile);
-            return JsonSerializer.Deserialize<AppConfig>(json, SerializerOptions) ?? new AppConfig();
+            var config = JsonSerializer.Deserialize<AppConfig>(json, SerializerOptions) ?? new AppConfig();
+
+            config.Migrate();
+            return config;
         }
         catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
         {
             return new AppConfig();
         }
+    }
+
+    /// <summary>
+    /// Brings a file written by an earlier build forward.
+    /// </summary>
+    /// <remarks>
+    /// The theme rename needs nothing done to it, and that is worth writing down rather than
+    /// leaving to be rediscovered. Enums are written here as numbers, so a saved theme is a
+    /// position rather than a name: <c>VsCodeDark</c> became <c>EditorDark</c> without moving in
+    /// the enum, so an existing choice reads back as the same palette. Reordering those members,
+    /// or writing them as names, would silently change what everybody is looking at, and this is
+    /// where the migration for that would go.
+    /// </remarks>
+    private void Migrate()
+    {
+        // One offered model became a list, and the old value is deliberately not carried across.
+        // It was never chosen: the panel defaulted it to whichever model happened to be first and
+        // saved that, which is exactly the implicit decision the list exists to replace. Starting
+        // at none means the first thing shared is the first thing somebody ticked.
+        MeshOfferedModelPath = null;
     }
 
     /// <summary>

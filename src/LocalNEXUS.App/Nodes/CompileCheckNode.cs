@@ -340,7 +340,7 @@ public sealed partial class CompileCheckNode : NodeBase
 
         ctx.Feed.Info(
             $"{Title}: continuing with {file.RelativePath}, which does not compile",
-            $"{result.Errors.Count} error(s) remain. This node is set to continue rather than fault the run.");
+            $"{result.Errors.Count} error(s) remain. This node is set to continue anyway.");
 
         return new CheckedFile(file with { Content = current }, attempts);
     }
@@ -558,7 +558,7 @@ public sealed partial class CompileCheckNode : NodeBase
 
         ctx.Feed.Info(
             $"{Title}: continuing with code that does not compile",
-            $"{errors} error(s) remain in {fileName} and {attempted}. This node is set to continue rather than fault the run.");
+            $"{errors} error(s) remain in {fileName} and {attempted}. This node is set to continue anyway.");
 
         return NodeResult.FromPin(Checked, repaired.Code);
     }

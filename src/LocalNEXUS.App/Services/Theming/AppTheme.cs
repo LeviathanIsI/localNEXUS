@@ -4,24 +4,24 @@ namespace LocalNEXUS.App.Services.Theming;
 /// The themes shipped with the application.
 /// </summary>
 /// <remarks>
-/// The names are written to the configuration file, so they are part of its format and are not
-/// renamed casually. A value that is no longer recognised falls back to <see cref="VsCodeDark"/>
-/// rather than leaving the window unpainted.
+/// The names are written to the configuration file, so they are part of its format. A value this
+/// build does not recognise falls back to <see cref="EditorDark"/> rather than leaving the window
+/// unpainted, and <see cref="Persistence.AppConfig"/> carries the one rename this enum has had.
 /// </remarks>
 public enum AppTheme
 {
-    /// <summary>The reference palette the shell was designed against.</summary>
-    VsCodeDark,
+    /// <summary>The reference palette, and what the shell was designed against.</summary>
+    EditorDark,
 
-    /// <summary>Cool and very dark, with a bright blue accent.</summary>
+    /// <summary>Cool blue black, bright accent.</summary>
     DeepSlate,
 
-    /// <summary>Softer contrast, which suits long sessions.</summary>
+    /// <summary>Softer contrast, for a long session.</summary>
     WarmCharcoal,
 
-    /// <summary>The highest contrast of the dark themes, with a violet accent.</summary>
+    /// <summary>Highest contrast of the dark themes, violet accent.</summary>
     NearBlack,
 
-    /// <summary>Light, with every state colour chosen for a light background rather than inverted.</summary>
+    /// <summary>Light, with every state colour chosen for a light background.</summary>
     Light
 }

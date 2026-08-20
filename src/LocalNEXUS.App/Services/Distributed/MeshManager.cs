@@ -1,3 +1,5 @@
+using System.ComponentModel;
+using System.Globalization;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
@@ -222,11 +224,181 @@ public sealed partial class MeshManager : ObservableObject, IDisposable
                 options.Contribute
                     ? $"Serving on port {options.ApiPort}, {(options.Publish ? "published publicly" : "private mesh on the local network")}."
                     : $"Joining as a client on port {options.ApiPort}.");
+
+            // The engine takes one model on the command line, so anything else chosen is handed to
+            // the node once it answers. Not awaited: the node takes seconds to come up and the
+            // window has to stay usable, and a model that fails to load is reported rather than
+            // stopping the node that is already serving the others.
+            if (options.AdditionalModelPaths.Count > 0)
+            {
+                _ = LoadAdditionalModelsAsync(options, _shutdown.Token);
+            }
         }
         finally
         {
             _gate.Release();
         }
+    }
+
+    /// <summary>
+    /// Asks the running node to load the models beyond the first.
+    /// </summary>
+    /// <remarks>
+    /// Through the engine's own load command rather than by writing its configuration file. The
+    /// engine owns what it is serving; this asks, and reports what it answers.
+    /// </remarks>
+    private async Task LoadAdditionalModelsAsync(MeshLaunchOptions options, CancellationToken ct)
+    {
+        var executable = AppPaths.FindMeshExecutable();
+
+        if (executable is null)
+        {
+            return;
+        }
+
+        foreach (var path in options.AdditionalModelPaths)
+        {
+            if (ct.IsCancellationRequested)
+            {
+                return;
+            }
+
+            // The node has to be answering before it can be asked to load anything, so each attempt
+            // waits for readiness rather than firing at a port nothing is listening on yet.
+            if (!await WaitForConsoleAsync(options.ConsolePort, ct).ConfigureAwait(false))
+            {
+                _feed.Error(
+                    "Models not offered",
+                    "The mesh node did not answer in time, so the models after the first were not loaded.");
+                return;
+            }
+
+            var name = Path.GetFileName(path);
+
+            try
+            {
+                var exitCode = await RunMeshCommandAsync(
+                    executable,
+                    new[] { "load", path, "--port", options.ConsolePort.ToString(CultureInfo.InvariantCulture) },
+                    ct).ConfigureAwait(false);
+
+                if (exitCode == 0)
+                {
+                    _feed.Info("Model offered", name);
+                }
+                else
+                {
+                    _feed.Error("Model not offered", $"{name} was refused by the mesh node.");
+                }
+            }
+            catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or IOException)
+            {
+                _feed.Error("Model not offered", $"{name}: {ex.Message}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Rotates this node's identity key, which is what invalidates the invite token.
+    /// </summary>
+    /// <remarks>
+    /// The token is not ours to reissue. It is base64 of the node's public key and its current
+    /// addresses, minted by the engine, so the only way to stop an old one working is to give the
+    /// node a new identity. That is a real cost and the caller is expected to have said so: the
+    /// peer key is what CLAUDE.md says reputation attaches to, and this machine becomes a stranger
+    /// to everyone who knew it.
+    /// </remarks>
+    public async Task<bool> RotateIdentityAsync(CancellationToken ct)
+    {
+        var executable = AppPaths.FindMeshExecutable();
+
+        if (executable is null)
+        {
+            _feed.Error("Token not replaced", BuildMissingExecutableMessage());
+            return false;
+        }
+
+        var wasRunning = IsRunning;
+
+        if (wasRunning)
+        {
+            await StopAsync().ConfigureAwait(false);
+        }
+
+        try
+        {
+            var exitCode = await RunMeshCommandAsync(executable, new[] { "auth", "rotate-node" }, ct).ConfigureAwait(false);
+
+            if (exitCode != 0)
+            {
+                _feed.Error("Token not replaced", "The mesh node refused to rotate its identity.");
+                return false;
+            }
+
+            _feed.Info(
+                "Invite token replaced",
+                "This machine has a new identity, so the previous token no longer works and anyone who had it is no longer in this mesh.");
+        }
+        catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or IOException)
+        {
+            _feed.Error("Token not replaced", ex.Message);
+            return false;
+        }
+
+        if (wasRunning)
+        {
+            await StartAsync(ct).ConfigureAwait(false);
+        }
+
+        return true;
+    }
+
+    /// <summary>Runs one mesh command to completion and returns its exit code.</summary>
+    private static async Task<int> RunMeshCommandAsync(string executable, IReadOnlyList<string> arguments, CancellationToken ct)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = executable,
+            WorkingDirectory = Path.GetDirectoryName(executable) ?? AppContext.BaseDirectory,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        };
+
+        foreach (var argument in arguments)
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
+
+        using var process = Process.Start(startInfo)
+            ?? throw new InvalidOperationException("The mesh command could not be started.");
+
+        await process.WaitForExitAsync(ct).ConfigureAwait(false);
+        return process.ExitCode;
+    }
+
+    /// <summary>Waits for the management port to answer, so a command has something to talk to.</summary>
+    private async Task<bool> WaitForConsoleAsync(int consolePort, CancellationToken ct)
+    {
+        var deadline = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(90);
+
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            if (ct.IsCancellationRequested)
+            {
+                return false;
+            }
+
+            if (await _reader.ReadAsync(consolePort, ApiPort, ct).ConfigureAwait(false) is not null)
+            {
+                return true;
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(2), ct).ConfigureAwait(false);
+        }
+
+        return false;
     }
 
     /// <summary>Stops the node and clears everything read from the mesh.</summary>
@@ -294,7 +466,7 @@ public sealed partial class MeshManager : ObservableObject, IDisposable
         ApiPort = _config.MeshApiPort is >= 1 and <= 65535 ? _config.MeshApiPort : MeshLaunchOptions.DefaultApiPort,
         ConsolePort = _config.MeshConsolePort is >= 1 and <= 65535 ? _config.MeshConsolePort : MeshLaunchOptions.DefaultConsolePort,
         Contribute = _config.MeshContribute,
-        OfferedModelPath = _config.MeshOfferedModelPath ?? string.Empty,
+        OfferedModelPaths = _config.MeshOfferedModelPaths.Where(p => !string.IsNullOrWhiteSpace(p)).ToList(),
         MaxVramGb = Math.Max(0d, _config.MeshMaxVramGb),
         JoinToken = _config.MeshJoinToken ?? string.Empty,
         MeshName = string.IsNullOrWhiteSpace(_config.MeshName) ? "LocalNEXUS" : _config.MeshName,

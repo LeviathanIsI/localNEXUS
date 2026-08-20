@@ -10,6 +10,6 @@
     <StackPanel>
         <TextBlock Style="{StaticResource SectionHeader}" Text="Request source" />
         <TextBlock Style="{StaticResource HintText}"
-                   Text="This node has no settings. When a run starts it emits whatever is typed into the chat box at the bottom of the window, on its Text output pin." />
+                   Text="No settings. It sends on whatever you type in the chat box." />
     </StackPanel>
 </UserControl>

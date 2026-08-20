@@ -29,6 +29,6 @@
                   IsChecked="{Binding AskBeforeWriting}" />
 
         <TextBlock Style="{StaticResource HintText}"
-                   Text="The file is created if it does not exist and overwritten if it does. Paths that would resolve outside the opened project are refused." />
+                   Text="Created if it is missing, overwritten if it is not. Paths outside the project are refused." />
     </StackPanel>
 </UserControl>

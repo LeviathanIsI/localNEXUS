@@ -93,7 +93,7 @@
                        Text="{Binding RequirementText}" />
 
             <TextBlock Style="{StaticResource HintText}"
-                       Text="Sections, who covers each and how much slack stands behind them are all read from the mesh. Nothing here is planned by this install." />
+                       Text="Read from the mesh." />
         </StackPanel>
     </DataTemplate>
 
@@ -103,7 +103,7 @@
 
             <TextBlock Style="{StaticResource HintText}"
                        Margin="0,0,0,10"
-                       Text="Everything here is reported by the mesh. This application does not probe peers or configure them, so a remote machine is a report rather than a form." />
+                       Text="Reported by the mesh. Nothing about another machine can be changed from here." />
 
             <TextBlock Style="{StaticResource FieldLabel}" Text="Peer key" />
             <TextBox Text="{Binding SourceId, Mode=OneWay}"
@@ -112,7 +112,7 @@
                      FontSize="{StaticResource Font.Size.Small}"
                      TextWrapping="Wrap" />
             <TextBlock Style="{StaticResource HintText}"
-                       Text="Assigned by the engine and stable across sessions, which is what reputation will attach to later." />
+                       Text="This machine's permanent ID on the network." />
 
             <TextBlock Style="{StaticResource FieldLabel}" Text="What it brings" />
             <TextBlock Text="{Binding CapabilityText}" />
@@ -130,7 +130,7 @@
             <TextBlock Style="{StaticResource FieldLabel}" Text="Trust" />
             <TextBlock Text="{Binding Trust}" />
             <TextBlock Style="{StaticResource HintText}"
-                       Text="Always trusted today, because a private mesh is joined by invitation and every peer in it was let in deliberately. The question is asked now so that the answer can change later." />
+                       Text="Everything in a private mesh was invited in, so all of it is trusted." />
 
             <!-- This machine is the one thing on this screen that is a form rather than a report. -->
             <StackPanel Visibility="{Binding IsThisMachine, Converter={StaticResource BooleanToVisibility}}">
@@ -171,7 +171,7 @@
                     <StackPanel>
                         <TextBlock Style="{StaticResource SectionHeader}" Text="Raise this machine's cap" />
                         <TextBlock Style="{StaticResource HintText}"
-                                   Text="The planner places a section on a machine only if the cap allows it, so raising the cap here is what lets this machine take the gap." />
+                                   Text="Raise the cap to let this machine take these layers." />
 
                         <TextBlock Style="{StaticResource FieldLabel}" Text="Memory cap, GB" />
                         <TextBox Text="{Binding DataContext.Network.MaxVramGb, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=LostFocus}" />
@@ -188,7 +188,7 @@
                     <StackPanel>
                         <TextBlock Style="{StaticResource SectionHeader}" Text="Invite another machine" />
                         <TextBlock Style="{StaticResource HintText}"
-                                   Text="Any machine with room for these layers can fill the gap. The token is private and joins only over the local network." />
+                                   Text="Any machine with room can fill the gap." />
 
                         <Button Style="{StaticResource SmallButton}"
                                 Margin="0,10,0,0"
@@ -199,7 +199,7 @@
                 </Border>
 
                 <TextBlock Style="{StaticResource HintText}"
-                           Text="How much memory these layers need is not something the mesh reports, so it is not stated here. What is certain is that no machine currently holds them." />
+                           Text="The mesh does not report how much memory these layers need. It does report that no machine holds them." />
             </StackPanel>
 
             <!-- A section that is fine says what it is doing and offers nothing to do about it. -->
@@ -212,7 +212,7 @@
                            Foreground="{Binding Coverage, Converter={StaticResource ResourceLookup}, ConverterParameter=SectionCoverage}" />
 
                 <TextBlock Style="{StaticResource HintText}"
-                           Text="The engine detects a source that drops and replans onto whatever slack there is. Nothing here retries above it, because anything that did would be racing the only component that knows the topology." />
+                           Text="If a machine drops out, the mesh moves its work to a spare." />
             </StackPanel>
         </StackPanel>
     </DataTemplate>

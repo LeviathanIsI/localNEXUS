@@ -46,29 +46,29 @@ public sealed partial class ThemeService : ObservableObject
     public static IReadOnlyList<ThemeDefinition> Available { get; } = new[]
     {
         new ThemeDefinition(
-            AppTheme.VsCodeDark,
-            "VS Code Dark+",
-            "The reference palette this interface was designed against.",
-            "Views/Themes/VsCodeDark.xaml"),
+            AppTheme.EditorDark,
+            "Editor dark",
+            "Familiar if you live in an editor.",
+            "Views/Themes/EditorDark.xaml"),
         new ThemeDefinition(
             AppTheme.DeepSlate,
             "Deep slate",
-            "Cool and very dark, with a bright blue accent.",
+            "Cool blue-black, bright accent.",
             "Views/Themes/DeepSlate.xaml"),
         new ThemeDefinition(
             AppTheme.WarmCharcoal,
             "Warm charcoal",
-            "Softer contrast than the others, which suits a long session.",
+            "Easiest on the eyes for long sessions.",
             "Views/Themes/WarmCharcoal.xaml"),
         new ThemeDefinition(
             AppTheme.NearBlack,
             "Near black",
-            "The highest contrast of the dark themes, with a violet accent.",
+            "Highest contrast, violet accent.",
             "Views/Themes/NearBlack.xaml"),
         new ThemeDefinition(
             AppTheme.Light,
             "Light",
-            "Every state colour chosen for a light background rather than inverted from a dark one.",
+            "For bright rooms.",
             "Views/Themes/Light.xaml")
     };
 
