@@ -87,7 +87,7 @@ vendor/uv/*
 *.ggml
 *.safetensors
 *.bin
-models/
+/models/
 
 # ---------------------------------------------------------------------------
 # Operating system noise
