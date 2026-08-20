@@ -9,10 +9,13 @@ namespace LocalNEXUS.App.Services.Persistence;
 /// Discovers the models available for local inference and exposes them to model nodes.
 /// </summary>
 /// <remarks>
-/// The default folder under the user data directory is always scanned, plus any folder the user
-/// added through the panel and any folder listed in the model paths file. A machine with no
-/// models is a normal state, not an error: the dropdown is simply empty and the model node
-/// reports the problem when it is run.
+/// Two ways in, and they mean different things. A folder is a standing instruction to look inside
+/// it and keep looking, and the default folder under the user data directory is always one of
+/// them. A single model is one file or one safetensors folder, added by name, registering nothing
+/// around it. Both end up in the same list and are indistinguishable once they are in it.
+///
+/// A machine with no models is a normal state, not an error: the dropdown is simply empty and the
+/// model node reports the problem when it is run.
 ///
 /// Both formats appear in one list. No filter gates it and nobody is asked to choose an engine,
 /// because the format of a model is a fact about the file rather than a decision the user has to
@@ -30,6 +33,16 @@ public sealed partial class ModelCatalog : ObservableObject
     [ObservableProperty]
     private int _unservableCount;
 
+    /// <summary>
+    /// True when a scan stopped at the folder budget rather than because it ran out of folders.
+    /// </summary>
+    /// <remarks>
+    /// Surfaced because the whole point of removing the depth limit was that a scan which quietly
+    /// gave up is indistinguishable from a machine with no models in it.
+    /// </remarks>
+    [ObservableProperty]
+    private bool _scanWasTruncated;
+
     public ModelCatalog(AppConfig config)
     {
         _config = config;
@@ -46,6 +59,10 @@ public sealed partial class ModelCatalog : ObservableObject
             .Concat(ModelPathsFile.Read())
             .Distinct(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Models added one at a time rather than found by a scan.</summary>
+    public IEnumerable<string> DirectPaths
+        => _config.ExtraModelPaths.Distinct(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>Rescans every search folder and replaces the contents of <see cref="Models"/>.</summary>
     public void Refresh()
     {
@@ -55,9 +72,33 @@ public sealed partial class ModelCatalog : ObservableObject
             var found = new List<LocalModelInfo>();
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var unservable = 0;
+            var truncated = false;
+
+            // Named models first, so one added deliberately is never lost to a duplicate found by
+            // a scan of the folder it happens to sit in.
+            foreach (var path in DirectPaths)
+            {
+                var descriptor = ModelFormatDetector.Describe(path);
+
+                if (!seen.Add(descriptor.Path))
+                {
+                    continue;
+                }
+
+                if (descriptor.IsServable)
+                {
+                    found.Add(new LocalModelInfo(descriptor));
+                }
+                else
+                {
+                    unservable++;
+                }
+            }
 
             foreach (var folder in SearchFolders)
             {
+                truncated |= ModelFormatDetector.WouldExceedScanBudget(folder);
+
                 foreach (var descriptor in EnumerateModels(folder))
                 {
                     if (!seen.Add(descriptor.Path))
@@ -76,6 +117,8 @@ public sealed partial class ModelCatalog : ObservableObject
                 }
             }
 
+            ScanWasTruncated = truncated;
+
             Models.Clear();
             foreach (var model in found.OrderBy(m => m.Name, StringComparer.OrdinalIgnoreCase))
             {
@@ -90,24 +133,92 @@ public sealed partial class ModelCatalog : ObservableObject
         }
     }
 
-    /// <summary>
-    /// Adds a folder to the search set, persists it, and rescans. Returns false when the folder
-    /// is missing or already present.
-    /// </summary>
-    public bool AddFolder(string folder)
+    /// <summary>Adds a folder to the search set, persists it, and rescans.</summary>
+    public CatalogAddition AddFolder(string folder)
     {
         if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder))
         {
-            return false;
+            return CatalogAddition.Refused("There is no folder at that path.");
         }
 
         var full = Path.GetFullPath(folder);
+
         if (SearchFolders.Any(f => string.Equals(Path.GetFullPath(f), full, StringComparison.OrdinalIgnoreCase)))
+        {
+            return CatalogAddition.Refused("That folder is already being scanned.");
+        }
+
+        _config.ExtraModelFolders.Add(full);
+        _config.Save();
+        Refresh();
+
+        var added = Models.Count(m => m.Path.StartsWith(full, StringComparison.OrdinalIgnoreCase));
+
+        return CatalogAddition.Success(added switch
+        {
+            0 => $"Scanning {full}. Nothing in it looks like a model yet.",
+            1 => $"Scanning {full}. Found 1 model.",
+            _ => $"Scanning {full}. Found {added} models."
+        });
+    }
+
+    /// <summary>
+    /// Adds one model by name: a GGUF file, or a folder holding safetensors weights beside a
+    /// config.json. Nothing around it is registered.
+    /// </summary>
+    /// <remarks>
+    /// A refusal here says what is actually wrong with the path, because the alternative is a
+    /// file that was picked deliberately and then silently did not appear. The detector already
+    /// works out the reason; this hands it on.
+    /// </remarks>
+    public CatalogAddition AddModel(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return CatalogAddition.Refused("No path was given.");
+        }
+
+        var descriptor = ModelFormatDetector.Describe(path);
+
+        if (!descriptor.IsServable)
+        {
+            return CatalogAddition.Refused(
+                descriptor.UnsupportedReason ?? $"{descriptor.DisplayName} is not a model this can serve.");
+        }
+
+        var full = Path.GetFullPath(descriptor.Path);
+
+        if (DirectPaths.Any(p => string.Equals(Path.GetFullPath(p), full, StringComparison.OrdinalIgnoreCase)))
+        {
+            return CatalogAddition.Refused($"{descriptor.DisplayName} is already in the list.");
+        }
+
+        _config.ExtraModelPaths.Add(full);
+        _config.Save();
+        Refresh();
+
+        return CatalogAddition.Success($"Added {descriptor.DisplayName} ({descriptor.FormatLabel}).");
+    }
+
+    /// <summary>Stops offering a model that was added by name.</summary>
+    public bool RemoveModel(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
         {
             return false;
         }
 
-        _config.ExtraModelFolders.Add(full);
+        var full = Path.GetFullPath(path);
+
+        var match = _config.ExtraModelPaths
+            .FirstOrDefault(p => string.Equals(Path.GetFullPath(p), full, StringComparison.OrdinalIgnoreCase));
+
+        if (match is null)
+        {
+            return false;
+        }
+
+        _config.ExtraModelPaths.Remove(match);
         _config.Save();
         Refresh();
         return true;

@@ -23,8 +23,19 @@ public static class ModelFormatDetector
     /// </summary>
     private const long MaxSafetensorsHeaderBytes = 100L * 1024 * 1024;
 
-    /// <summary>How far below a search folder the scan looks for models.</summary>
-    private const int MaxScanDepth = 4;
+    /// <summary>
+    /// How many folders one scan will look inside before giving up.
+    /// </summary>
+    /// <remarks>
+    /// There is no depth limit. There used to be one of four levels, and it was the wrong shape
+    /// of guard: people keep models under a organised tree and a model six folders down was
+    /// simply missed, with nothing on screen to say a limit had been reached.
+    ///
+    /// What remains is a budget on the number of folders visited, which is a guard against
+    /// somebody adding the root of a drive rather than against a deep tree. It is reported when
+    /// it is hit, because a scan that quietly stopped early is the thing being fixed here.
+    /// </remarks>
+    public const int MaxScanFolders = 20_000;
 
     /// <summary>
     /// Describes whatever is at the given path. Never throws: an unreadable path is a described
@@ -115,7 +126,7 @@ public static class ModelFormatDetector
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return Unknown(file, name, $"That file could not be read: {ex.Message}");
+            return Unknown(file, name, $"{Path.GetFileName(file)} could not be read: {ex.Message}");
         }
 
         if (StartsWithGgufMagic(head))
@@ -142,7 +153,11 @@ public static class ModelFormatDetector
                 $"This is a single safetensors file rather than a complete model. {hint}");
         }
 
-        return Unknown(file, name, "That file is neither a GGUF nor safetensors weights.");
+        return Unknown(
+            file,
+            name,
+            $"{Path.GetFileName(file)} is not a model this can serve. Its contents are neither a GGUF nor "
+            + "safetensors weights, whatever it is named.");
     }
 
     private static bool StartsWithGgufMagic(byte[] head)
@@ -247,8 +262,8 @@ public static class ModelFormatDetector
         => new(path, ModelFormat.Unknown, name, 0, null, reason);
 
     /// <summary>
-    /// Every folder worth looking inside when scanning for models, to the depth the catalogue
-    /// searches. Kept here so the catalogue and any later caller agree on what a scan covers.
+    /// Every folder worth looking inside when scanning for models, however deep the tree goes.
+    /// Kept here so the catalogue and any later caller agree on what a scan covers.
     /// </summary>
     public static IEnumerable<string> EnumerateCandidateDirectories(string root)
     {
@@ -257,17 +272,20 @@ public static class ModelFormatDetector
             yield break;
         }
 
-        var queue = new Queue<(string Path, int Depth)>();
-        queue.Enqueue((root, 0));
+        var queue = new Queue<string>();
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { Path.GetFullPath(root) };
+
+        queue.Enqueue(root);
+        var seen = 0;
 
         while (queue.Count > 0)
         {
-            var (current, depth) = queue.Dequeue();
+            var current = queue.Dequeue();
             yield return current;
 
-            if (depth >= MaxScanDepth)
+            if (++seen >= MaxScanFolders)
             {
-                continue;
+                yield break;
             }
 
             string[] children;
@@ -282,8 +300,32 @@ public static class ModelFormatDetector
 
             foreach (var child in children)
             {
-                queue.Enqueue((child, depth + 1));
+                // A junction or a symlink can point back up its own tree, and without this a
+                // scan with no depth limit would walk in a circle until the budget stopped it.
+                if (IsReparsePoint(child) || !visited.Add(Path.GetFullPath(child)))
+                {
+                    continue;
+                }
+
+                queue.Enqueue(child);
             }
+        }
+    }
+
+    /// <summary>True when a scan of this folder would visit more than the budget allows.</summary>
+    public static bool WouldExceedScanBudget(string root)
+        => EnumerateCandidateDirectories(root).Take(MaxScanFolders).Count() >= MaxScanFolders;
+
+    private static bool IsReparsePoint(string directory)
+    {
+        try
+        {
+            return new DirectoryInfo(directory).Attributes.HasFlag(FileAttributes.ReparsePoint);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Unreadable is as good as not worth following.
+            return true;
         }
     }
 }

@@ -60,7 +60,7 @@ public sealed partial class AppSettingsViewModel : ObservableObject
             .Select(t => new ThemeChoiceViewModel(t, ApplyTheme, t.Theme == themes.Current))
             .ToList();
 
-        RefreshFolders();
+        RefreshEntries();
     }
 
     /// <summary>The theme picker binds to this directly, so choosing one applies it at once.</summary>
@@ -78,8 +78,19 @@ public sealed partial class AppSettingsViewModel : ObservableObject
     /// <summary>What the project index currently knows.</summary>
     public ProjectIndexService Index => _index;
 
-    /// <summary>Every folder scanned for models, with the ones this panel can remove marked.</summary>
-    public ObservableCollection<ModelFolderViewModel> Folders { get; } = new();
+    /// <summary>
+    /// Everything feeding the catalogue: the folders being scanned and the models added by name.
+    /// </summary>
+    public ObservableCollection<CatalogEntryViewModel> Entries { get; } = new();
+
+    /// <summary>What the last add or rescan did, said in the panel rather than in a dialog.</summary>
+    public string CatalogMessage
+    {
+        get => _catalogMessage;
+        private set => SetProperty(ref _catalogMessage, value);
+    }
+
+    private string _catalogMessage = string.Empty;
 
     /// <summary>Every theme that can be picked, with the one in force marked.</summary>
     public IReadOnlyList<ThemeChoiceViewModel> ThemeChoices { get; }
@@ -161,44 +172,88 @@ public sealed partial class AppSettingsViewModel : ObservableObject
         CandidateLimit = DefaultCandidateLimit
     }.Summary;
 
-    /// <summary>Adds a folder to the catalogue and rescans.</summary>
+    /// <summary>Adds a folder that will be searched, and keeps being searched.</summary>
     [RelayCommand]
     private void AddFolder()
     {
-        var folder = _dialogs.PickFolder("Choose a folder containing models", AppPaths.Models);
-        if (folder is null)
-        {
-            return;
-        }
+        var folder = _dialogs.PickFolder("Choose a folder to search for models", AppPaths.Models);
 
-        if (!_catalog.AddFolder(folder))
+        if (folder is not null)
         {
-            _dialogs.ShowError(
-                "Folder not added",
-                "That folder is already being scanned, or it no longer exists.");
+            Report(_catalog.AddFolder(folder));
         }
-
-        RefreshFolders();
     }
 
-    /// <summary>Stops scanning a folder that was added here.</summary>
+    /// <summary>
+    /// Adds one model file, which is the path a folder picker could never offer.
+    /// </summary>
+    /// <remarks>
+    /// This exists because picking a folder full of models used to be the only way in, and a
+    /// folder picker lists folders, so the models themselves were invisible in it and the whole
+    /// thing looked broken while working exactly as written.
+    /// </remarks>
     [RelayCommand]
-    private void RemoveFolder(ModelFolderViewModel? folder)
+    private void AddModelFile()
     {
-        if (folder is null || !_catalog.RemoveFolder(folder.Path))
+        var file = _dialogs.PickOpenFile(
+            "Choose a model file",
+            "Models (*.gguf;*.safetensors)|*.gguf;*.safetensors|All files (*.*)|*.*",
+            AppPaths.Models);
+
+        if (file is not null)
+        {
+            Report(_catalog.AddModel(file));
+        }
+    }
+
+    /// <summary>
+    /// Adds one safetensors model, which is a folder rather than a file, without registering
+    /// everything that happens to sit beside it.
+    /// </summary>
+    [RelayCommand]
+    private void AddModelFolder()
+    {
+        var folder = _dialogs.PickFolder("Choose a model folder", AppPaths.Models);
+
+        if (folder is not null)
+        {
+            Report(_catalog.AddModel(folder));
+        }
+    }
+
+    /// <summary>Drops a folder from the search set, or stops offering a model added by name.</summary>
+    [RelayCommand]
+    private void RemoveEntry(CatalogEntryViewModel? entry)
+    {
+        if (entry is null)
         {
             return;
         }
 
-        RefreshFolders();
+        var removed = entry.IsFolder
+            ? _catalog.RemoveFolder(entry.Path)
+            : _catalog.RemoveModel(entry.Path);
+
+        if (removed)
+        {
+            CatalogMessage = entry.IsFolder
+                ? $"No longer searching {entry.Path}."
+                : $"No longer offering {entry.Label}.";
+        }
+
+        RefreshEntries();
     }
 
-    /// <summary>Rescans every folder.</summary>
+    /// <summary>Searches every folder again.</summary>
     [RelayCommand]
     private void Rescan()
     {
         _catalog.Refresh();
-        RefreshFolders();
+        RefreshEntries();
+
+        CatalogMessage = _catalog.Models.Count == 1
+            ? "1 model found."
+            : $"{_catalog.Models.Count} models found.";
     }
 
     /// <summary>Opens the file that lists extra folders, one per line.</summary>
@@ -225,21 +280,50 @@ public sealed partial class AppSettingsViewModel : ObservableObject
         _dialogs.OpenFolderInExplorer(AppPaths.Root);
     }
 
-    private void RefreshFolders()
+    /// <summary>Says what happened, and rebuilds the list when something changed.</summary>
+    private void Report(CatalogAddition result)
     {
-        Folders.Clear();
+        CatalogMessage = result.Message;
+
+        if (result.Added)
+        {
+            RefreshEntries();
+        }
+    }
+
+    private void RefreshEntries()
+    {
+        Entries.Clear();
 
         foreach (var folder in _catalog.SearchFolders)
         {
             var removable = _catalog.IsRemovable(folder);
 
             var origin = removable
-                ? "added here"
+                ? "searched, added here"
                 : string.Equals(Path.GetFullPath(folder), Path.GetFullPath(AppPaths.Models), StringComparison.OrdinalIgnoreCase)
-                    ? "the built in folder"
-                    : "listed in model-paths.txt";
+                    ? "searched, built in"
+                    : "searched, listed in model-paths.txt";
 
-            Folders.Add(new ModelFolderViewModel(folder, removable, origin));
+            Entries.Add(new CatalogEntryViewModel(folder, CatalogEntryKind.ScannedFolder, folder, origin, removable));
+        }
+
+        foreach (var path in _catalog.DirectPaths)
+        {
+            var model = _catalog.FindByPath(path);
+
+            // A model added by name and then moved or deleted stays on the list saying so, rather
+            // than disappearing and leaving somebody wondering where their entry went.
+            var detail = model is null
+                ? "added on its own, and no longer at that path"
+                : $"added on its own, {model.Descriptor.SizeLabel}, {model.FormatLabel}";
+
+            Entries.Add(new CatalogEntryViewModel(
+                path,
+                CatalogEntryKind.Model,
+                model?.Name ?? Path.GetFileName(path),
+                detail,
+                CanRemove: true));
         }
 
         OnPropertyChanged(nameof(Catalog));

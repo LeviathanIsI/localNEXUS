@@ -61,8 +61,18 @@ public sealed class AppConfig
     /// <summary>The Unity project folder that was open when the app last closed.</summary>
     public string? LastUnityProjectPath { get; set; }
 
-    /// <summary>Folders added by the user that are scanned for GGUF files alongside the default one.</summary>
+    /// <summary>Folders added by the user that are scanned for models alongside the default one.</summary>
     public List<string> ExtraModelFolders { get; set; } = new();
+
+    /// <summary>
+    /// Individual models added by the user: one GGUF file, or one safetensors folder.
+    /// </summary>
+    /// <remarks>
+    /// Separate from the scanned folders because it means something different. A folder is a
+    /// standing instruction to look inside it and keep looking; this is one model, named, and
+    /// nothing around it is registered by having added it.
+    /// </remarks>
+    public List<string> ExtraModelPaths { get; set; } = new();
 
     /// <summary>The graph file that was last saved or loaded.</summary>
     public string? LastGraphPath { get; set; }

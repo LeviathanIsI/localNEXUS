@@ -36,15 +36,25 @@ public sealed partial class ModelCatalogViewModel : ObservableObject
         get
         {
             var folders = _catalog.SearchFolders.Count();
+            var named = _catalog.DirectPaths.Count();
+
+            var sources = named == 0
+                ? $"{folders} folder(s)"
+                : $"{folders} folder(s) and {named} added on their own";
 
             if (Models.Count == 0)
             {
-                return $"No models found in {folders} folder(s). Add a folder or drop a model into {AppPaths.Models}";
+                return $"No models found in {sources}. Add a model, or drop one into {AppPaths.Models}";
             }
 
             // What was found but cannot be served is reported rather than silently dropped, so a
             // folder of weights with no config beside them does not read as an empty folder.
-            var summary = $"{Models.Count} model(s) across {folders} folder(s)";
+            var summary = $"{Models.Count} model(s) from {sources}";
+
+            if (_catalog.ScanWasTruncated)
+            {
+                summary += $". A folder was too large to search completely, so this may not be all of them";
+            }
 
             return _catalog.UnservableCount == 0
                 ? summary
@@ -62,9 +72,11 @@ public sealed partial class ModelCatalogViewModel : ObservableObject
             return;
         }
 
-        if (!_catalog.AddFolder(folder))
+        var result = _catalog.AddFolder(folder);
+
+        if (!result.Added)
         {
-            _dialogs.ShowError("Folder not added", "That folder is already being scanned, or it no longer exists.");
+            _dialogs.ShowError("Folder not added", result.Message);
         }
 
         NotifySummaryChanged();
