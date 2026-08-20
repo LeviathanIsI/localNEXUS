@@ -75,7 +75,7 @@ public partial class App : Application
         var mesh = new MeshManager(config, feed, Dispatcher, children);
         _mesh = mesh;
 
-        var factory = new NodeFactory(catalog, mesh);
+        var factory = new NodeFactory(catalog, mesh, dialogs);
         var serializer = new GraphSerializer(factory);
 
         // Restoring the node is deliberately not awaited: composition must not block on a

@@ -1,4 +1,5 @@
 using LocalNEXUS.App.Models;
+using LocalNEXUS.App.Services.Dialogs;
 using LocalNEXUS.App.Services.Distributed;
 using LocalNEXUS.App.Services.Persistence;
 
@@ -9,18 +10,20 @@ namespace LocalNEXUS.App.Nodes;
 /// </summary>
 /// <remarks>
 /// Node construction lives here rather than in the view model or the serializer because both of
-/// them need it, and because model nodes need the catalog injected. Registering a new node type
-/// is a single entry in <see cref="Descriptors"/>.
+/// them need it, and because model nodes need their services injected. Registering a new node
+/// type is a single entry in <see cref="Descriptors"/>.
 /// </remarks>
 public sealed class NodeFactory
 {
     private readonly ModelCatalog _catalog;
     private readonly MeshManager _mesh;
+    private readonly IDialogService _dialogs;
 
-    public NodeFactory(ModelCatalog catalog, MeshManager mesh)
+    public NodeFactory(ModelCatalog catalog, MeshManager mesh, IDialogService dialogs)
     {
         _catalog = catalog;
         _mesh = mesh;
+        _dialogs = dialogs;
     }
 
     /// <summary>A node type as offered by the palette.</summary>
@@ -43,7 +46,7 @@ public sealed class NodeFactory
     public NodeBase Create(string typeKey) => typeKey switch
     {
         "Input" => new InputNode(),
-        "Model" => new ModelNode(_catalog, _mesh),
+        "Model" => new ModelNode(_catalog, _mesh, _dialogs),
         "Transform" => new TransformNode(),
         "Output" => new OutputNode(),
         _ => throw new NotSupportedException($"Unknown node type '{typeKey}'.")

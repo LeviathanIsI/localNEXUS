@@ -127,6 +127,15 @@ scanned, so one folder per model is fine), or select a Model node and use **Add 
 in the settings panel to register a folder you already keep models in. **Rescan** picks
 up files added while the application is open.
 
+For a model that simply lives somewhere else, **Browse for a file** on a Model node points
+that one node at a `.gguf` anywhere on disk without registering its folder for the whole
+application. The panel then says the node runs that file rather than the dropdown selection,
+and shows the path. **Use the catalogue** drops it and returns the node to the dropdown, which
+keeps its selection underneath the whole time. Two nodes in one graph can run two models from
+two different drives this way. The choice is saved with the graph; if the file has gone by the
+time the graph is opened again, the panel says so in red and the run refuses with the path
+named rather than quietly running something else.
+
 Pick a model from the dropdown on any Model node. Leave **Base URL** empty and
 LocalNEXUS starts a `llama-server` process for that file on a free loopback port, waits
 for its health endpoint, and reuses it for every later request. The process runs with no

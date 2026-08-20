@@ -81,6 +81,9 @@
     <SolidColorBrush x:Key="Activity.Confirmation.Brush" Color="#FFFFD166" />
     <SolidColorBrush x:Key="Activity.Error.Brush" Color="#FFF87171" />
 
+    <!-- A field level problem in a settings panel, for example a file that is no longer there. -->
+    <SolidColorBrush x:Key="Field.Error.Brush" Color="#FFF87171" />
+
     <!-- Pending wire feedback: green while the drop would be accepted, red while it would not. -->
     <SolidColorBrush x:Key="Wire.True.Brush" Color="#FF7CE38B" />
     <SolidColorBrush x:Key="Wire.False.Brush" Color="#FFF87171" />
