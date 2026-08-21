@@ -1,0 +1,55 @@
+name: Feature request
+description: Suggest something LocalNEXUS should be able to do.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before writing: a few things are deliberately not being designed yet, because they
+        need real use first. Trust scoring and contribution economics are the main two. Peer
+        discovery is provided by the mesh engine and a second one will not be built.
+
+        The README roadmap says what is already planned.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do
+      description: >
+        Describe the problem rather than the solution. What were you doing when you wanted
+        this, and what did you have to do instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you have in mind
+      description: If you have a specific shape in mind, describe it. A rough sketch is fine.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part of the application
+      options:
+        - A new node type
+        - The graph canvas or execution
+        - Models, local or hosted
+        - Working with a project, the index or the compile check
+        - Distributed inference and the network tab
+        - The interface, themes or settings
+        - Something else
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you considered instead
+      description: >
+        Including doing it by hand. If the manual workaround is fine, that is worth saying,
+        because it changes how urgent this is.
+    validations:
+      required: false

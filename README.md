@@ -1,558 +1,177 @@
 # LocalNEXUS
 
-A node graph studio for Windows that orchestrates several language models, local and
-hosted, to write and edit C# for Unity.
-
-You wire model nodes together on a Blueprints style canvas, type what you want into a
-chat box, and watch the models plan, write code, and put files into your Unity project
-while their output streams into a live activity feed.
-
-This repository holds the **vertical slice** plus **distributed inference**: one model run
-across several machines on a Mesh LLM node, with live mesh state, stage coverage tracking and a
-Network tab that browses what the network can serve. It is a real graph execution engine rather
-than a fixed pipeline, so the features on the roadmap drop in without rework.
-
-## What the slice does
-
-- **An IDE shell.** Activity bar, side bar, tabbed editor area, one right hand inspector,
-  tabbed bottom panel and a status bar. The side bar doubles as the live run outline, so a
-  run can be followed without hunting the canvas.
-- **Five themes, switched without a restart.** VS Code Dark+, Deep slate, Warm charcoal,
-  Near black and a Light theme whose state colours were chosen for a light background
-  rather than inverted from a dark one. The choice is remembered.
-- **Node canvas.** Add, drag, wire and delete nodes. Built on
-  [Nodify](https://miroiu.github.io/nodify).
-- **Six node types.** Prompt, Triage, Model, Patch, Compiler check, Output.
-- **Typed pins.** Pins are colour coded by what they carry (`Text` is blue, `Code` is
-  amber). Invalid drops are refused while you drag, and the wire tells you why.
-- **A general graph executor.** Nodes are ordered by their connections using Kahn's
-  algorithm, cycles are rejected with a clear message, and every node reports its state
-  (`Pending`, `Running`, `Completed`, `Faulted`) on the canvas as it goes, with a fault
-  staying on the node that faulted: the nodes before it keep their green, and a node the
-  run never reached reads as a plain grey Skipped rather than inheriting a failure that is
-  not its own.
-- **One request path for every provider.** A local GGUF served by a llama.cpp server, a
-  safetensors model served by a Python sidecar, and a hosted model on OpenRouter are the
-  same code path over the OpenAI compatible chat completions API.
-- **Two local model formats, one list.** GGUF files and safetensors model folders appear
-  together in the model dropdown, and what each one is is decided by reading it rather
-  than by trusting its file extension. Format is shown as a label; nobody is asked to
-  pick an engine.
-- **Live streaming.** Tokens land in the activity feed as they arrive, followed by token
-  counts, throughput and elapsed time.
-- **Project awareness.** The Triage node reads what the open Unity project already contains, ranks
-  its files against the request, and decides per file whether to use it, edit it, or write
-  something new that references it. Creating a type the project already has is refused.
-- **Multi-file generation.** One request produces as many files as it needs, in dependency order,
-  each one shown what the earlier ones actually declared.
-- **Editing existing files.** Changes come back as a line-tagged diff and are applied tolerantly,
-  batched one write per file, and nothing is written unless the whole plan succeeds.
-- **Compile checking and repair.** The Compiler check node compiles generated C# against the
-  open Unity project before anything is written, and when it does not compile it hands the
-  errors back to the model that wrote it and asks for another attempt, up to a retry cap.
-- **File writing.** The Output node writes into the Unity project you opened, optionally
-  asking for confirmation in the feed first.
-- **Save and load.** Graphs round trip through JSON, positions and settings included.
-- **Distributed inference.** A model that does not fit on one machine is run across a mesh of
-  peers, the run is gated on the mesh being able to assemble it, and the Network tab shows which
-  source holds which layer range of the assembled pipeline.
-- **Model browsing.** The Network tab lists every model the mesh knows about, with its metadata,
-  how many sources hold pieces of it, the slack behind the weakest section and a clear verdict:
-  Complete, Starting while it is still coming up, or Blocked when the mesh is known to be unable
-  to assemble it; a Model node on the Network provider picks from that list and refuses anything
-  that is not ready, with the reason.
-- **Contribution.** Any install can serve its GPU to another orchestrator with one
-  toggle; roles are interchangeable, there is no dedicated worker machine.
-
-## Tech stack
-
-| Concern          | Choice                                                                        |
-| ---------------- | ----------------------------------------------------------------------------- |
-| Platform         | Windows 11 desktop, WPF, .NET 8, C#                                           |
-| Node canvas      | [Nodify](https://www.nuget.org/packages/Nodify)                               |
-| MVVM             | [CommunityToolkit.Mvvm](https://www.nuget.org/packages/CommunityToolkit.Mvvm) |
-| Scripting        | Roslyn (`Microsoft.CodeAnalysis.CSharp.Scripting`)                            |
-| Compile checking | Roslyn against the open Unity project's own reference assemblies               |
-| Local inference  | bundled llama.cpp `llama-server`, spawned as a silent child process           |
-| Safetensors      | `transformers serve` in a supervised Python child process, built by bundled `uv` |
-| Distributed      | bundled [Mesh LLM](https://github.com/Mesh-LLM/mesh-llm) node, spawned as a silent child process |
-| Hosted inference | OpenRouter                                                                    |
-| Serialization    | `System.Text.Json`                                                            |
-
-Strict MVVM throughout: views are XAML, code behind is `InitializeComponent` and nothing
-else, and all logic lives in view models and services.
-
-## Prerequisites
-
-- **Windows 11** (Windows 10 works too).
-- **.NET 8 SDK** to build, or the **.NET 8 Desktop Runtime** to run a published build.
-  <https://dotnet.microsoft.com/download/dotnet/8.0>
-- **A llama.cpp server build** in `vendor/llama/`, only if you want local models.
-  See [vendor/llama/README.md](vendor/llama/README.md).
-- **At least one GGUF model file**, only if you want local models.
-- **An OpenRouter API key**, only if you want hosted models.
-
-Local and hosted are independent. You can run the whole application with just an
-OpenRouter key and no llama.cpp build at all, or entirely offline with no key.
-
-## Git
-
-- Commit after each logical unit of work, not one giant commit at the end of a task. A logical unit is something that builds and leaves the app in a working state.
-- Never commit broken code to main. If a change spans multiple commits, each one should build.
-- Write real commit messages: what changed and why, not "update files." Subject line under ~70 characters, body when the change needs explanation.
-- Do not commit build artifacts, binaries, models, or secrets. `dist/`, `bin/`, `obj/`, `vendor/llama/`, `*.gguf`, and any API keys stay out of the repo.
-- Push to main when the task is complete and the exe in `dist/` runs.
-- Report the commit hash and a one-line summary of what landed when a task finishes.
-
-## Setup and run
-
-```powershell
-git clone https://github.com/LeviathanIsI/LocalNEXUS.git
-cd LocalNEXUS
-
-# Optional, for local models: place a llama.cpp build in vendor/llama/
-#   see vendor/llama/README.md
-
-dotnet restore
-dotnet build
-dotnet run --project src/LocalNEXUS.App
-```
-
-## Publishing a build to hand to someone
-
-```powershell
-.\publish.ps1
-```
-
-publishes a self contained single file build to `dist\`, overwriting what is there. The
-person you give it to needs no .NET install: `dist\LocalNEXUS.exe` runs on its own.
-Whatever llama.cpp build sits in `vendor\llama\` is copied to `dist\vendor\llama\`
-automatically so local and distributed inference work from the published folder too. If
-`dist\vendor\llama\` is missing on the target machine, drop a llama.cpp build there;
-the app looks next to its own exe first. The `uv` build in `vendor\uv\` and the Python
-lockfiles in `vendor\python\` are copied the same way, which is what lets the published
-exe build its own Python environment on a machine with no Python on it.
-
-`dist\` is a build artifact and stays out of git.
-
-On first run LocalNEXUS creates its data folder:
-
-```
-%LOCALAPPDATA%\LocalNEXUS\
-  models\           models are discovered here, in either format
-  graphs\           saved graphs
-  logs\             engine output and crash reports
-  runtime\python\   the Python interpreter, environment and wheel cache
-  config.json       last opened Unity project, extra model folders
-  model-paths.txt   extra folders to scan, one per line, editable by hand
-```
-
-Nothing is written inside the repository, so a clone stays clean.
-
-## Adding local models
-
-A local model is one of two things:
-
-- a **GGUF file**, served by llama.cpp, or
-- a **safetensors model folder**, meaning a folder holding a `config.json` beside one or
-  more `.safetensors` files, served by the Python runtime.
-
-Both appear in the same dropdown with their format shown beside them. Which is which is
-worked out by reading the file, not from its name: a GGUF renamed to `model.bin` is still
-found, and a text file named `model.gguf` is not mistaken for one. A `.safetensors` file
-on its own, with no config beside it, is reported as a component of a model rather than
-run and failed.
-
-Either drop a model into `%LOCALAPPDATA%\LocalNEXUS\models\` (subfolders are scanned, so
-one folder per model is fine), or select a Model node and use **Add folder** in the
-settings panel to register a folder you already keep models in. **Rescan** picks up
-anything added while the application is open.
-
-For a folder you would rather keep in a file than click through, **Edit model folders**
-opens `%LOCALAPPDATA%\LocalNEXUS\model-paths.txt`: one folder per line, `#` for comments,
-environment variables expanded. It is scanned for both formats alongside everything else.
-
-For a model that simply lives somewhere else, **Browse for a file** on a Model node points
-that one node at a model file anywhere on disk without registering its folder for the whole
-application, and **Browse for a folder** does the same for a safetensors model, which is a
-folder rather than a file. The panel then says the node runs that file rather than the dropdown selection,
-and shows the path. **Use the catalogue** drops it and returns the node to the dropdown, which
-keeps its selection underneath the whole time. Two nodes in one graph can run two models from
-two different drives this way. The choice is saved with the graph; if the file has gone by the
-time the graph is opened again, the panel says so in red and the run refuses with the path
-named rather than quietly running something else.
-
-Pick a model from the dropdown on any Model node. Leave **Base URL** empty and
-LocalNEXUS starts a server for that model on a free loopback port, waits for its health
-endpoint, and reuses it for every later request. A GGUF gets a `llama-server` process; a
-safetensors folder gets a Python one. Either way the process runs with no console window
-and is killed when the application exits, and its output goes to
-`%LOCALAPPDATA%\LocalNEXUS\logs\`.
-
-## The Python runtime
-
-Safetensors models are served by `transformers serve`, which exposes the same OpenAI
-compatible API everything else here speaks. It runs in an environment LocalNEXUS builds
-and owns, never a Python already on the machine and never anything loaded into the
-application process.
-
-The environment is built in the background on first launch, using the `uv` bundled in
-`vendor\uv` and a standalone CPython that uv downloads. It lands in
-`%LOCALAPPDATA%\LocalNEXUS\runtime\python\`, never inside the install folder. GGUF models
-work throughout, and the **Python runtime** section of a Model node settings panel shows
-the stage, live output, and which build of torch this machine was given.
-
-That last choice matters, because it is most of the download. `nvidia-smi` is asked for
-the driver version: 580 or newer gets the CUDA build of torch, roughly 1.8 GB, and
-anything else gets the processor build, roughly 110 MB. The reason it chose is written to
-the activity feed. The finished environment is about 2.9 GB on a CUDA machine.
-
-Packages are pinned by the lockfiles in `vendor\python`, which are committed and are not
-resolved on your machine. The environment is verified by importing what it needs rather
-than by trusting an install command's exit code, and an interrupted install leaves no
-record behind, so the next launch finishes the job from the cached downloads. **Repair**
-builds whatever is missing, **Set up again** deletes the environment and rebuilds it, and
-neither downloads anything twice.
-
-Servers are started with all layers offloaded to the GPU (`-ngl 999`) and an 8192 token
-context.
-
-If you already run a llama.cpp server yourself, put its URL in **Base URL** and
-LocalNEXUS will use it instead of starting one.
-
-## Using OpenRouter
-
-Select a Model node, switch **Provider** to `OpenRouter`, and fill in:
-
-- **Model slug**, for example `anthropic/claude-sonnet-4` or
-  `meta-llama/llama-3.3-70b-instruct`.
-- **API key**, from <https://openrouter.ai/keys>.
-
-**Base URL** is filled in as `https://openrouter.ai/api/v1` automatically.
-
-> Keys are stored in plain text inside the saved graph file. Strip them before sharing
-> a graph.
-
-## Distributed inference: splitting a model across machines
-
-One model can run across several machines over [Mesh LLM](https://github.com/Mesh-LLM/mesh-llm),
-which LocalNEXUS starts as a silent child process. The mesh pools the GPUs of every machine in
-it behind one OpenAI-compatible API, routes each request to whichever peer can serve the model,
-and splits models too large for one box into contiguous layer stages.
-
-Local single machine inference does not use any of this. A model that fits on one GPU is served
-by llama.cpp exactly as it always was, whether or not a mesh node is running.
-
-**Place the engine.** Put a Mesh LLM Windows build in `vendor\mesh` (see
-`vendor\mesh\README.md` for which flavour and the expected layout). A published `dist\`
-folder already carries it.
-
-**Start your node.** Open the **Network** tab and press **Start mesh node**. With nothing else
-configured this hosts a private mesh on the local network: LAN-scoped discovery only, no public
-relays, joinable only by the invite token shown on the card. Publishing it for public discovery
-is a separate tick box and is the only setting that reaches beyond your network.
-
-**Contribute.** Tick **Offer this machine's compute**, choose which local GGUF this machine
-serves, and press **Apply**. Unlike the previous engine's declared offer, the memory cap here is
-enforced by the mesh planner: a model that does not fit inside it is never placed on this
-machine.
-
-**Add a second machine.** Install LocalNEXUS there, copy the invite token from the first
-machine's Network tab, press **+** next to Sources, paste it, and press **Join**. Both machines
-then appear in each other's source lists with their announced memory and measured latency. The
-first time, allow the node through the Windows firewall.
-
-**Browse what the network can serve.** The Available models list leads the tab: every model the
-mesh knows about, its metadata, how many sources hold pieces of it, and a verdict. Selecting one
-draws its coverage chain: the pipeline of sections in order, which source holds which layer
-range, and how much slack stands behind each.
-
-The verdict is three way, because a model that is still loading has not failed at anything. A
-section still coming up is blue and says what it is waiting on; only a section the mesh is known
-to be unable to serve, because no source holds it or the source holding it reports it stopped,
-is red and named as the reason the model is Blocked. The same distinction runs through the tab:
-before the node has answered, the model and source lists say the mesh is starting rather than
-sitting empty as though the network were bare.
-
-**Run across the mesh.** Set a Model node's provider to **Network** and pick a model from the
-list. Only a Complete model can be picked, and a model that stops being complete between
-selection and run refuses the run, saying whether it is still coming up or blocked outright. Whether the model runs on one peer or as layer stages
-across several is the mesh's decision, made at run time and echoed to the activity feed.
-
-Nothing about sources is configured by hand any more. Membership, placement, liveness and
-recovery all belong to the engine; the Network tab renders what it reports.
-
-Nothing LocalNEXUS starts outlives it. Engine processes are held by the operating system on the
-application's behalf and are stopped when it closes, whether it closes normally or is killed
-outright, and anything a previous session left behind is cleaned up at the next launch. An engine
-you started yourself is never touched.
-
-Four things worth knowing about the layer underneath, all established by testing the bundled
-build rather than by reading its documentation:
-
-- **A splittable model is not the same as a local GGUF.** Stage splits need a published layer
-  package (a repository of per-layer GGUF fragments). A plain local GGUF can be served whole by
-  one machine and routed to across the mesh, but it cannot be split.
-- **The memory cap is real.** `--max-vram` is honoured by the planner, which will refuse to
-  place a model that does not fit rather than trying and failing.
-- **One node can serve many consumers at once.** This is the limitation that ended the previous
-  engine, and it is genuinely gone.
-- **A peer dying mid request no longer takes the pipeline down.** An in-flight streaming request
-  survived its stage peer being killed. Re-convergence afterwards is less certain: on a single
-  GPU loopback topology the mesh replanned onto a replacement node but did not become routable
-  again within the test window. Treat recovery-after-replacement as unproven rather than
-  guaranteed.
-
-## Working against an existing project
-
-Wire the Triage node between the prompt and the model:
-
-```
-Prompt -> Triage -> Model -> Compiler check -> Output
-```
-
-The Triage node reads the project, works out which files the request is about, and emits an ordered
-list of files to write. Everything downstream then runs once per file: the model writes them in
-order, the compile check checks each against the ones before it, and the writer applies them
-together or not at all.
-
-### What it reads, and how much
-
-The project is indexed by parsing every `Assets/**/*.cs`, in parallel, recording what each file
-declares and which type names it mentions. The result is cached per file by write time and
-length, so editing one script re-reads one script. Indexing runs when a project is opened and its
-timing appears in the activity feed.
-
-Ranking is by name and member matches against the request, spread through the reference graph by
-personalized PageRank, so a file the request never names but everything relevant depends on still
-surfaces. Only the files that survive ranking are read from disk at all.
-
-The context budget is a setting on the node and is written to the feed at the start of every run:
-by default about 4,000 characters of project map, 16,000 of candidate detail and 4,000 of
-signatures produced earlier in the same run, which is roughly 6,000 tokens and fits an 8K window
-with room for the reply. Whatever does not fit is dropped in rank order with a note saying so.
-
-### Use, edit, or create
-
-For each candidate the planner must say `USE_AS_IS`, `EDIT`, `CREATE_NEW_REFERENCING <Type>` or
-`IGNORE`, and every decision appears in the feed. A plan that asks to create a type the project
-already declares is refused by the index, not by the model's judgement, and the refusal names the
-existing type and its file so the work becomes an edit or a reference instead.
-
-### Editing
-
-A change to an existing file comes back as a line-tagged diff rather than the whole file: blocks
-introduced by `@@`, lines prefixed with a space to keep, a minus to remove and a plus to add. That
-is the format the research finds smaller models handle best, and local models are the small ones.
-Set **Edits** on a Model node to override it per node.
-
-The applier is deliberately forgiving, because the failure that actually happens is a reproduced
-line with different whitespace rather than a wrong idea. It looks for each block exactly, then
-ignoring trailing whitespace, then ignoring indentation, and only then fails, naming the lines it
-could not find so the repair loop has something to act on. Every change to one file becomes one
-write.
-
-### Unity rules that are refusals
-
-Unity binds a script to scenes and prefabs by the GUID in its `.cs.meta` file, and resolves the
-type inside by namespace and class name. Several ordinary looking edits therefore compile
-perfectly and silently break a scene, so the writer refuses them rather than warning:
-
-- a MonoBehaviour whose file name does not match its class name
-- removing or renaming a type that scenes may reference, without a `[MovedFrom]` shim
-- moving a type into or out of a namespace, without the same
-- renaming or removing a serialized field, without `[FormerlySerializedAs]`
-- taking MonoBehaviour off a type that instances may be attached to
-
-When a new MonoBehaviour is written, the feed says it must be attached to a GameObject to run.
-Nothing here attaches it.
-
-## The window
-
-An activity bar down the left switches between the Workspace and the Network and holds the
-settings gear. The side bar next to it is the explorer, and during a run it is the run
-outline: the same nodes the canvas draws, in graph order, each with its state dot and its
-elapsed time. The editor area holds the graph and the request being executed. One inspector
-on the right serves both sections, always answering the same question: what can I do about
-the thing I just clicked. The bottom panel has Problems, Activity and Output, the chat box
-sits under it, and the status bar carries the run, the mesh node, the Python runtime and the
-open project.
-
-Panels resize with splitters, and the side bar, the inspector and the bottom panel each
-collapse. Nodes are added from the Edit menu or by right clicking the canvas.
-
-### Themes
-
-Settings, Appearance. Themes apply as they are picked and are remembered for the next
-session. A theme is a dictionary of about thirty colours and nothing else; which colour each
-brush takes is a table in `SemanticBrushes`, so a new state is one line rather than five
-edits across five palettes. No literal colour appears anywhere else in the source.
-
-The Appearance section shows the states in the theme being previewed, because the rule the
-whole application follows is that healthy, working and failed have to stay distinct: a mesh
-node still discovering peers and a Python environment mid download are both blue, never red,
-and a node that has not run yet is a quiet grey rather than a warning.
-
-### Settings and per node settings
-
-Settings holds what belongs to this install: the theme, the folders scanned for models, the
-cloud key, the Python runtime and the mesh, and the values a newly added node starts from.
-Anything that belongs to a graph stays on the node and is saved with the graph, which is why
-changing a default here can never reach back into a graph that already exists.
-
-## Checking that generated code compiles
-
-Drop a **Compiler check** node between the model and the Output node:
-
-```
-Prompt -> Model -> Patch -> Compiler check -> Output
-```
-
-It compiles what passes through it and only lets it onward if it compiles. Nothing is written
-until it passes, so a failed run leaves the project exactly as it found it. That ordering is the
-whole of the file writing story: there is no staging folder and no promote step, because the
-check happens before the writer runs at all.
-
-### What it compiles against
-
-The Unity editor version the open project records, or the newest one installed if that version
-is not on the machine, plus the assemblies the project has already compiled into
-`Library\ScriptAssemblies`. That means a misspelled Unity member or a type that does not exist
-is caught exactly as Unity would catch it, and code can use the types the project already
-defines. The panel says which of those it found, because a pass against a partial reference set
-is a weaker claim than a pass against a complete one.
-
-It compiles the one file, not the project. It cannot see another file generated in the same run,
-and it does not run whatever source generators or analyzers the project configures. If no Unity
-install or no open project can be found, the node says the check could not be run and passes the
-code through: code that cannot be checked is not code that is broken, and it is not reported as
-though it were.
-
-### The repair loop
-
-When the code does not compile, the node follows its own incoming wire back to whoever produced
-the code and asks for another attempt, handing over the original request, the failing file and
-the compiler errors. It repeats until the code compiles or the **retry limit** is reached, three
-by default. Every attempt appears in the activity feed with its number and the errors it was
-given, so a loop is never silent.
-
-A Patch node in between is not in the way: it passes the request further upstream and applies
-itself to whatever comes back, so a repaired reply gets its markdown fence stripped exactly as
-the first one did.
-
-If the code still does not compile, the node either faults the run and names the errors that
-remain, or passes the last attempt on with a warning. Faulting is the default, so that a run
-reporting success means the code compiles.
-
-## Opening a Unity project
-
-**File > Open Unity Project or Folder**, and choose the project root, the folder that
-contains `Assets`. The choice is remembered between sessions. Output nodes resolve their
-paths inside this folder and refuse anything that would land outside it.
-
-## Building the demo graph
-
-1. Open your Unity project.
-2. Add **Prompt**, two **Model** nodes, and an **Output** node from the palette.
-3. Wire them: `Prompt.Text` to the first model's `Text`, the first model's `Code` to the
-   second model's `Text`, the second model's `Code` to `Output.Code`.
-4. Configure the first model as the planner. A system prompt along these lines works
-   well:
-
-   > You are a senior Unity gameplay engineer. Given a request, write a short, concrete
-   > implementation plan: the class name, the serialized fields, the methods, and the
-   > Unity lifecycle hooks involved. Do not write the code itself.
-
-5. Leave the second model on its default system prompt, which asks for raw compilable
-   C# with no markdown fences.
-6. On the Output node set **File name** to `PlayerMovement.cs`. **Target subfolder**
-   already defaults to `Assets/Scripts`.
-7. Type into the chat box at the bottom:
-   `Create a Unity C# script for basic player movement with jump and dash`
-8. Press **Run**.
-
-Both models stream into the feed, and the file appears in `Assets/Scripts`.
-
-If a model wraps its reply in a markdown code fence despite the prompt, drop a
-**Patch** node between it and the Output node and leave it in **Script** mode. Its
-default expression removes a surrounding fence and leaves anything else alone.
-
-## Notes on the design
-
-**Pin types.** Connections require the source and target pin types to match, with one
-deliberate exception: a `Code` output may feed a `Text` input. Without it a Model node,
-which takes `Text` and emits `Code`, could only ever be fed by a Prompt node, so chaining
-a planning model into a coding model would be impossible. The exception is one
-directional: a `Text` output still cannot reach a `Code` input, so prose cannot be piped
-straight into a file writer. The rule lives in one place,
-`Models/PinTypeCompatibility.cs`.
-
-**Patch script mode** evaluates a single C# expression through Roslyn with the
-incoming value bound to `input`. `System`, `System.Linq`, `System.Text` and
-`System.Text.RegularExpressions` are imported. Compilation is cached per expression, and
-compile errors surface in the activity feed when the node runs.
-
-**One run at a time.** The slice permits a single active run. Run, Pause and Stop are
-driven by the `RunState` enum rather than by scattered flags. Pausing takes effect
-between nodes, so it never interrupts a model mid stream.
-
-## Project layout
-
-```
-src/LocalNEXUS.App/
-  Models/          NodeBase, Pin, Connection, GraphModel, pin typing and validation
-  Nodes/           PromptNode, TriageNode, ModelNode, PatchNode, CompilerCheckNode,
-                   OutputNode, NodeFactory
-  Services/
-    Execution/     GraphExecutor, RunContext, RunState, topological sort
-    Inference/     IModelClient, OpenAiCompatibleClient, and the local runtimes behind
-                   IModelRuntime: LlamaServerManager, PythonRuntimeManager,
-                   RuntimeResolver, ModelFormatDetector, ModelDescriptor
-    Python/        the supervised Python environment: PythonProvisioner,
-                   AcceleratorProbe, PythonEnvironmentState
-    Compilation/   ICodeCompiler, RoslynUnityCompiler, UnityReferenceResolver,
-                   UnityInstallLocator, CompileDiagnostic, CompileResult
-    ProjectIndex/  ProjectIndexService, SourceFileParser, RelevanceRanker,
-                   ProjectDigest, ContextBudget, ProjectIndexCache
-    Planning/      FilePlan, CodeTask, PlanParser, PlanPrompt, DuplicateTypeGuard
-    Editing/       EditFormat, LineTaggedDiff, CodeEditApplier
-    Distributed/   the mesh and what it reports: MeshManager, MeshStatusReader,
-                   InferenceSource, ModelSection, CoveragePlan, NetworkServedModel
-    Processes/     ChildProcessGroup, JobObject, and the registry of what we started
-    Persistence/   AppPaths, AppConfig, ModelCatalog, ModelPathsFile, GraphSerializer
-    Files/         UnityProjectService, FileWriter, ProjectWriteBatch, UnityScriptRules
-    Dialogs/       IDialogService and its Windows implementation
-  ViewModels/      MainViewModel, ActivityFeedViewModel, NetworkViewModel, and friends
-    Theming/       AppTheme, ThemeDefinition, ThemeService, SemanticBrushes, ThemePalette
-  Views/           XAML only. Theme.xaml and ShellStyles.xaml are the controls, Themes/ is
-                   the five palettes, Shell/ is the activity bar, side bars, editor area,
-                   bottom panel, inspector and status bar
-  Assets/Fonts/    JetBrains Mono, bundled as a compiled resource, with its OFL licence
-  Infrastructure/  ActivityFeed, converters, behaviours
-vendor/llama/      llama.cpp binaries, fetched not committed
-vendor/mesh/       Mesh LLM binaries, fetched not committed
-vendor/uv/         uv, fetched not committed
-vendor/python/     the Python dependency lockfiles, committed
-publish.ps1        self contained single file publish into dist/
-```
-
-## Roadmap
-
-Deliberately not in the slice, planned next:
-
-- **Memory node** and cross run persistence.
-- **Compiler check node** with an automatic repair loop.
-- **Loop node** and automatic iteration over lists.
-- **Breakpoints on wires**, to inspect a value mid graph.
-- **Per node detail tabs** and expandable inline diffs in the feed.
-- **Queued and concurrent runs**.
-- **Export and import of shared graph templates**.
-- **A global settings screen**.
-- **Live Unity Editor control** over MCP.
-- **Edit and delete file modes** on the Output node, alongside write.
-
-## Licence and intent
-
-LocalNEXUS is intended to be open source. Contributions and issues are welcome once the
-slice settles. llama.cpp binaries placed in `vendor/llama/` and any model weights you
-download carry their own licences and are not covered by this repository.
+**Run a team of language models against your own codebase, on your own hardware, and watch
+them work.** You wire models together on a canvas, type what you want in plain English, and
+the graph reads your project, writes the code, checks it compiles, and puts the files where
+they belong.
+
+It is built for people who want the capability of a hosted coding agent without handing over
+their source, their API budget, or their choice of model. Unity C# is the first thing it was
+pointed at, but nothing in the engine knows what Unity is.
+
+![The workspace during a run](docs/images/workspace-mid-run.png)
+
+Above: a three node graph part way through a run. The Prompt node has handed on what was
+typed, the Model node is generating, the Output node is waiting its turn, and the reply is
+streaming into the activity feed as it arrives.
+
+## Why this exists
+
+Point a chat window at a large project and you get confident code that references a class
+that does not exist, or quietly adds a second copy of something you already had. The problem
+is not the model. It is that the model cannot see the project, and nothing checks its answer
+before that answer becomes a file.
+
+LocalNEXUS puts the checks in the pipeline rather than in your review:
+
+- It **indexes the project first** and tells the model what is already there, so a plan can
+  say "edit this" instead of always saying "create this".
+- It **refuses to create a type that already exists**, and names the file holding it.
+- It **compiles the code before writing it**, and hands failures back to the model to fix.
+- It **writes all the files or none of them**, so a half applied change never reaches your
+  project.
+- It **refuses changes that compile but silently break Unity**, such as renaming a
+  MonoBehaviour away from the file name Unity binds it by.
+
+Because a graph is just nodes on a canvas, you can put a small fast model on the routine
+work and a large one on the thinking, run entirely offline, or split one model across
+several machines when it does not fit on yours.
+
+## Status: pre-1.0, and honest about it
+
+This is a working tool that its author uses, not a finished product. Specifically:
+
+- **Solid.** The graph engine, local inference through llama.cpp, the project index, the
+  Unity binding rules, staged all-or-nothing writes, themes and the interface. These are
+  exercised regularly.
+- **Works, lightly exercised.** The safetensors runtime through `transformers serve`, the
+  planning and multi file path, and OpenRouter.
+- **Never run across two physical machines.** The distributed path has only ever run on one
+  machine talking to itself over loopback. Multi consumer routing and surviving a peer being
+  killed mid stream were verified that way. Prompt re-convergence after a peer is replaced
+  was not. Treat the whole feature as unproven on a real network.
+- **Known broken.** The Compiler check node faults the run instead of reporting problems. It
+  updates the Problems panel from the run's background thread without marshalling to the UI
+  thread, which WPF refuses. Until that is fixed, leave the node out of your graph. No other
+  node is affected.
+
+There are no automated tests, and interfaces are still moving. If you build on top of this,
+expect to follow along.
+
+## What you need
+
+| | |
+|---|---|
+| **Operating system** | Windows 11. There is no Linux or macOS build and none is planned yet. |
+| **.NET** | Nothing to install. Releases are self contained. |
+| **GPU** | Strongly recommended, not required. Developed against an NVIDIA RTX 4080 Laptop with 12 GB. llama.cpp also has Vulkan builds for AMD and Intel, and a processor only build that works but is slow. |
+| **Disk** | About 1 GB for the application and its engine binaries, plus whatever your models weigh. |
+| **First launch** | Builds an isolated Python environment in the background so safetensors models can be served. On an NVIDIA machine that is roughly 3 GB, downloaded once, because it includes a CUDA build of torch. Without NVIDIA it is a few hundred megabytes. Nothing else waits for it, and GGUF models do not need it at all. |
+| **A model** | The tool is only as good as what you wire into it. A 7B class coding model is the realistic floor for useful Unity C#. Below that you will mostly be watching the compile check catch things. Any GGUF or safetensors model works, as does any OpenRouter model. |
+
+Nothing is downloaded without you asking for it, apart from that Python environment.
+
+## Install and run
+
+Take a release, unzip it anywhere, run `LocalNEXUS.exe`. It is a single self contained
+executable with its engine binaries beside it, and it writes nothing outside its own folder
+and `%LOCALAPPDATA%\LocalNEXUS`.
+
+To build from source instead, see [CONTRIBUTING.md](CONTRIBUTING.md). It takes one command,
+but the engine binaries are fetched separately and that is what trips everybody up the first
+time.
+
+## Quickstart: from nothing to a generated file
+
+About five minutes, assuming you have a `.gguf` model on disk.
+
+**1. Open a project.** `File > Open Unity project`, and pick a project folder. The status bar
+names it and says how many C# files it found. You can point it at any folder; the Unity
+rules simply have nothing to enforce if it is not one.
+
+**2. Add your model.** Open the Models panel from the activity bar on the left and add the
+folder your `.gguf` lives in, or the file itself. Format is detected by reading the file, so
+nothing asks you which engine to use.
+
+**3. Build the smallest useful graph.** From `Edit > Add node`, add a **Prompt**, a **Model**
+and an **Output**. Drag from the Prompt node's `Text` pin to the Model node's `Text` pin,
+then from the Model node's `Code` pin to the Output node's `Code` pin. Pins only connect
+where the types allow, so a wrong wire is refused while you are still dragging it.
+
+**4. Point the Model node at your model.** Click it, and in the inspector on the right choose
+Local and pick the model you added.
+
+**5. Say where the file goes.** Click the Output node and set the folder and file name, for
+example `Assets/Scripts` and `Spinner.cs`.
+
+**6. Run it.** Type into the box at the bottom:
+
+> Write a MonoBehaviour called Spinner that rotates its transform around the Y axis at a
+> configurable speed, with a serialized field for the speed.
+
+Press **Run**, or Ctrl+Enter. The first run with a model takes a few seconds to load it into
+memory; after that the server is reused. Each node lights up in turn, the reply streams into
+the activity feed, and a final line names the file that was written and how many lines
+changed.
+
+That is the whole loop. Everything else is more nodes in the middle of it.
+
+## Sharing compute, and using someone else's
+
+![The network tab](docs/images/network.png)
+
+A model too large for your machine can be run across several. LocalNEXUS starts a
+[Mesh LLM](https://github.com/Mesh-LLM/mesh-llm) node, which handles discovery, splits a
+model into contiguous layer stages and places them on whoever has room. The Network tab
+lists what the network can serve, how many machines cover each part of a model, and whether
+there is spare cover if one of them drops.
+
+You choose what you offer: a switch for the machine, a tick per model, and a memory limit
+that defaults to leaving a quarter of your card free for your own work. The mesh is private
+and local network only unless you explicitly publish it.
+
+Read the status section above before relying on any of this.
+
+## Where it is going
+
+The long term goal is a network where people pool compute to collectively run large open
+weight models none of them could run alone. That shapes decisions now: sources are
+interchangeable rather than "my machine" and "the remote one", identity is a persistent
+public key so reputation can attach to it later, and coverage is computed properly even when
+there are only two machines and it always passes.
+
+Nearer term:
+
+- Fix the Compiler check threading bug and exercise the repair loop properly.
+- A Loop node, once a node can drive the nodes downstream of it.
+- Breakpoints on wires, to pause a run and edit a value in flight.
+- Memory that survives between runs.
+- Editing and deleting files from the Output node, not only writing.
+- Anything at all across two physical machines.
+
+Trust scoring and any notion of contribution economics are deliberately not designed yet.
+They need real use first.
+
+## Documentation
+
+- [Models](docs/models.md), local and hosted, and the Python runtime
+- [Working with a Unity project](docs/unity-projects.md), the index, the rules, the compile check
+- [Distributed inference](docs/distributed.md)
+- [The window](docs/interface.md), themes and settings
+- [Architecture](docs/architecture.md) and project layout
+- [Contributing](CONTRIBUTING.md), including how to get the engine binaries
+
+## Contributing
+
+Issues and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers building from
+a clean clone, how the pieces fit together, and which parts are deliberately left alone.
+Please read [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) as well. Security problems go through
+[SECURITY.md](SECURITY.md) rather than a public issue.
+
+## Licence
+
+Apache-2.0. Copyright 2026 You Know Its Me Studios. See [LICENSE](LICENSE), and
+[NOTICE](NOTICE) for the third party components and their licences.
+
+Engine binaries you place in `vendor/` and any model weights you download carry their own
+licences and are not covered by this repository.

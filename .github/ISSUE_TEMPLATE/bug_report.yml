@@ -1,0 +1,110 @@
+name: Bug report
+description: Something behaves wrongly, crashes, or produces the wrong result.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Most bugs here come down to which model was running, on what hardware, and through
+        which engine. The questions below are the ones that are needed to reproduce a
+        problem, so please fill them in even where they feel irrelevant.
+
+        Known already, no need to report: the Compiler check node faults the run instead of
+        reporting problems. See the status section of the README.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what you got instead.
+      placeholder: |
+        I wired Prompt to Model to Output, typed a request, and pressed Run.
+        Expected a file to be written. Got a fault on the Model node instead.
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: LocalNEXUS version
+      description: The release you are running, or the commit hash if you built it yourself.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: where-inference-ran
+    attributes:
+      label: Where was the model running
+      options:
+        - Local, GGUF through llama.cpp
+        - Local, safetensors through the Python runtime
+        - Over the network, through the mesh
+        - Hosted, OpenRouter
+        - Not applicable, it failed before any model was reached
+    validations:
+      required: true
+
+  - type: input
+    id: model
+    attributes:
+      label: Which model, and which quantization
+      description: >
+        The exact file or model id. Quantization matters: a lot of odd output turns out to be
+        an aggressive quant rather than a bug.
+      placeholder: qwen2.5-coder-7b-instruct-q4_k_m.gguf, or anthropic/claude-sonnet-4.5
+    validations:
+      required: true
+
+  - type: input
+    id: gpu
+    attributes:
+      label: GPU and VRAM
+      description: The card and how much memory it has. Say "none, processor only" if that applies.
+      placeholder: NVIDIA RTX 4080 Laptop, 12 GB
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: Windows 11 24H2
+    validations:
+      required: true
+
+  - type: dropdown
+    id: unity-open
+    attributes:
+      label: Was the Unity editor open on the project at the time
+      description: >
+        It changes the answer more than you would think. Unity rewrites its generated project
+        files on every recompile and holds locks while it does.
+      options:
+        - "Yes"
+        - "No"
+        - Not working against a Unity project
+    validations:
+      required: true
+
+  - type: textarea
+    id: feed
+    attributes:
+      label: The relevant part of the activity feed
+      description: >
+        Copy the lines around the failure from the Activity tab. If the run faulted, the
+        fault text is the single most useful thing you can paste. Crash reports and engine
+        logs are in %LOCALAPPDATA%\LocalNEXUS\logs.
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: graph
+    attributes:
+      label: The graph, if it matters
+      description: >
+        Which nodes, wired in what order. You can paste the saved .nexusgraph.json, but
+        please delete the apiKey fields first, because they are stored in plain text.
+      render: text
+    validations:
+      required: false

@@ -97,3 +97,35 @@ ehthumbs.db
 desktop.ini
 $RECYCLE.BIN/
 .DS_Store
+
+# ---------------------------------------------------------------------------
+# Saved graphs.
+#
+# A graph stores a model node's API key in plain text, so a graph committed by
+# accident publishes that key permanently. Graphs live in %LOCALAPPDATA% by
+# default and so are already outside the repository; this rule is here for the
+# one saved somewhere else by hand.
+# ---------------------------------------------------------------------------
+*.nexusgraph.json
+
+# ---------------------------------------------------------------------------
+# Application data, for the case where a copy ends up beside the source rather
+# than in %LOCALAPPDATA% where it belongs.
+# ---------------------------------------------------------------------------
+model-paths.txt
+*.log
+logs/
+runtime/
+
+# ---------------------------------------------------------------------------
+# The Python folder holds committed lockfiles and nothing else. An environment
+# built here by hand would be gigabytes.
+# ---------------------------------------------------------------------------
+vendor/python/.venv/
+vendor/python/__pycache__/
+
+# ---------------------------------------------------------------------------
+# Local tooling state
+# ---------------------------------------------------------------------------
+.claude/settings.local.json
+*.tmp

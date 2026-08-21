@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/You-Know-Its-Me-Studios/LocalNEXUS/security/advisories/new
+    about: Report privately instead of opening an issue. LocalNEXUS spawns child processes, opens network ports and writes into your project folder.
+  - name: Questions and ideas
+    url: https://github.com/You-Know-Its-Me-Studios/LocalNEXUS/discussions
+    about: For anything that is not a specific bug or a specific request.

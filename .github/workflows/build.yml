@@ -1,0 +1,63 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    # WPF, so this has to be Windows. There is no cross platform build to fall back on.
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Restore
+        run: dotnet restore LocalNEXUS.sln
+
+      # The project file leaves TreatWarningsAsErrors off so a local build stays workable
+      # while something is half written. The standard for anything landing on main is zero
+      # warnings, and this is where that is enforced.
+      - name: Build, warnings are errors
+        run: dotnet build LocalNEXUS.sln --configuration Release --no-restore -warnaserror
+
+      # Single file publishing behaves differently enough from a normal build to be worth
+      # exercising: content that is not embedded correctly fails only in the published exe,
+      # never under dotnet run. This proves the publish succeeds. It cannot prove the exe
+      # works, because that needs a GPU and a model.
+      - name: Publish
+        run: .\publish.ps1
+        shell: pwsh
+
+      - name: Confirm the exe exists
+        run: |
+          if (-not (Test-Path 'dist\LocalNEXUS.exe')) {
+            Write-Error 'publish.ps1 finished but dist\LocalNEXUS.exe is missing.'
+            exit 1
+          }
+          $size = (Get-Item 'dist\LocalNEXUS.exe').Length / 1MB
+          Write-Host ("dist\LocalNEXUS.exe published, {0:N0} MB" -f $size)
+        shell: pwsh
+
+# What this workflow does not do, and cannot:
+#
+# The inference engines are not in the repository. llama.cpp, Mesh LLM and uv are fetched per
+# machine into vendor/, which is gitignored, because they are large and GPU build specific.
+# publish.ps1 warns about each one it cannot find and carries on, so the build above is a real
+# build of everything this repository contains, but the published folder it produces has no
+# engines in it.
+#
+# That means CI proves the solution compiles clean and publishes. It cannot run a model, cannot
+# reach the mesh, and cannot open a Unity project, so nothing about actual behaviour is
+# verified here. A hosted runner has no GPU and no model weights, and downloading multi
+# gigabyte weights on every pull request would not be a reasonable trade even if it did.
+#
+# Verifying behaviour is therefore a human step. The pull request template asks which model and
+# which engine a change was exercised against, and that answer is the only evidence there is.

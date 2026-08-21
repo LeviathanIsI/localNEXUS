@@ -1,0 +1,103 @@
+LocalNEXUS
+Copyright 2026 You Know Its Me Studios
+
+This product includes software developed by third parties, listed below with
+the license each one is distributed under. Every license here was read from
+the source named beside it rather than assumed from reputation.
+
+
+-------------------------------------------------------------------------------
+Compiled into the application
+-------------------------------------------------------------------------------
+
+Nodify
+  Copyright Miroiu Emanuel
+  MIT License
+  https://github.com/miroiu/nodify
+  Version 7.3.0, verified from the package license expression.
+
+CommunityToolkit.Mvvm
+  Copyright (c) .NET Foundation and Contributors
+  MIT License
+  https://github.com/CommunityToolkit/dotnet
+  Version 8.4.0, verified from the package license expression.
+
+Roslyn (Microsoft.CodeAnalysis.CSharp.Scripting and its dependencies)
+  Copyright (c) Microsoft Corporation
+  MIT License
+  https://github.com/dotnet/roslyn
+  Version 4.11.0, verified from the package license expression.
+
+JetBrains Mono
+  Copyright 2020 The JetBrains Mono Project Authors
+  SIL Open Font License, Version 1.1
+  https://github.com/JetBrains/JetBrainsMono
+  The two font files are compiled in as WPF resources. The full license text
+  travels with them at src/LocalNEXUS.App/Assets/Fonts/OFL.txt, which is what
+  the OFL requires. The font name is not a Reserved Font Name, so a modified
+  build does not have to rename it.
+
+
+-------------------------------------------------------------------------------
+Bundled beside the application, fetched rather than committed
+-------------------------------------------------------------------------------
+
+These are not in this repository. Each is downloaded into its vendor folder by
+whoever builds the application, and each ships beside the executable in a
+release. See vendor/*/README.md for how to place a build.
+
+llama.cpp (llama-server)
+  Copyright (c) 2023-2024 The ggml authors
+  MIT License
+  https://github.com/ggml-org/llama.cpp
+  Serves any model that fits on one machine.
+
+Mesh LLM (mesh-llm)
+  Apache License, Version 2.0
+  https://github.com/Mesh-LLM/mesh-llm
+  Serves models split across more than one machine. Redistributing an
+  Apache-2.0 work means carrying its own LICENSE and NOTICE files along with
+  it; the release bundle keeps the ones in the archive it was extracted from.
+
+uv
+  Copyright (c) Astral Software Inc.
+  Apache License, Version 2.0, or MIT License, at your option
+  https://github.com/astral-sh/uv
+  Builds the isolated Python environment. Same redistribution note as above
+  applies to whichever of the two licenses is chosen.
+
+
+-------------------------------------------------------------------------------
+Downloaded onto the user's machine at first launch
+-------------------------------------------------------------------------------
+
+The Python environment that serves safetensors models is built on the user's
+machine from the lockfiles in vendor/python. None of it is redistributed by
+this project, so none of it carries an obligation here. It is listed because
+someone auditing what a LocalNEXUS install contains will find it on disk.
+
+The set is pinned by vendor/python/requirements-cu132.txt and
+requirements-cpu.txt. The packages it is built around:
+
+  transformers      Apache License 2.0    https://github.com/huggingface/transformers
+  torch             BSD 3-Clause          https://github.com/pytorch/pytorch
+  accelerate        Apache License 2.0    https://github.com/huggingface/accelerate
+  requests          Apache License 2.0    https://github.com/psf/requests
+  fastapi           MIT License           https://github.com/fastapi/fastapi
+  uvicorn           BSD 3-Clause          https://github.com/encode/uvicorn
+
+Everything else in those lockfiles arrives as a dependency of one of the above
+and carries its own license, readable in the installed environment under
+%LOCALAPPDATA%\LocalNEXUS\runtime\python.
+
+
+-------------------------------------------------------------------------------
+Compatibility
+-------------------------------------------------------------------------------
+
+Every license above is compatible with the Apache License 2.0 this project is
+released under. MIT and BSD 3-Clause are permissive and impose only attribution,
+which this file provides. The SIL Open Font License restricts selling the font
+on its own and requires its license text to travel with the font, neither of
+which this project does or omits. Nothing here is copyleft, so no dependency
+reaches back and constrains how LocalNEXUS itself may be licensed.
