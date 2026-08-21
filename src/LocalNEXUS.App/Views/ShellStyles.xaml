@@ -401,11 +401,29 @@
     </Style>
 
     <!-- The dot that carries a state. One shape, every state enum. -->
-    <!-- A state dot, sitting beside the label it belongs to. -->
+    <!--
+        A state dot, sitting beside the label it belongs to.
+
+        Centred on the row, and then a pixel lower again. The row is only as tall as the text,
+        so centring puts the dot on the middle of the ink, and the ink of a mixed case word
+        reaches higher than it looks: ascenders on d, l and a capital pull the top of the band
+        up while nothing pulls the bottom down. The middle of that band therefore sits above
+        the middle the eye reads, and a pixel is the difference at the sizes this is drawn at.
+
+        A render transform rather than a margin, for two reasons. A margin set here loses to
+        the margin nearly every one of these sets for its own spacing, and a render transform
+        takes no part in layout, so the dot moves without anything beside it shifting to
+        follow.
+    -->
     <Style x:Key="StateDot" TargetType="Ellipse">
         <Setter Property="Width" Value="7" />
         <Setter Property="Height" Value="7" />
         <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="RenderTransform">
+            <Setter.Value>
+                <TranslateTransform Y="1" />
+            </Setter.Value>
+        </Setter>
     </Style>
 
 </ResourceDictionary>
