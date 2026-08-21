@@ -41,10 +41,32 @@ public sealed class OpenAiCompatibleClient : IModelClient, IDisposable
     }
 
     /// <inheritdoc />
-    public async Task<ChatCompletionResult> StreamChatAsync(
+    public Task<ChatCompletionResult> StreamChatAsync(
         ModelEndpoint endpoint,
         string systemPrompt,
         string userContent,
+        double temperature,
+        int maxTokens,
+        IProgress<string>? onToken,
+        CancellationToken ct)
+    {
+        var messages = new List<ChatMessage>();
+
+        if (!string.IsNullOrWhiteSpace(systemPrompt))
+        {
+            messages.Add(ChatMessage.System(systemPrompt));
+        }
+
+        messages.Add(ChatMessage.User(userContent));
+
+        return StreamChatAsync(endpoint, messages, null, temperature, maxTokens, onToken, ct);
+    }
+
+    /// <inheritdoc />
+    public async Task<ChatCompletionResult> StreamChatAsync(
+        ModelEndpoint endpoint,
+        IReadOnlyList<ChatMessage> messages,
+        IReadOnlyList<ToolDefinition>? tools,
         double temperature,
         int maxTokens,
         IProgress<string>? onToken,
@@ -62,7 +84,7 @@ public sealed class OpenAiCompatibleClient : IModelClient, IDisposable
             throw new ModelClientException("No model is selected for this node.");
         }
 
-        using var request = BuildRequest(endpoint, systemPrompt, userContent, temperature, maxTokens);
+        using var request = BuildRequest(endpoint, messages, tools, temperature, maxTokens);
 
         var stopwatch = Stopwatch.StartNew();
 
@@ -81,6 +103,7 @@ public sealed class OpenAiCompatibleClient : IModelClient, IDisposable
         using var reader = new StreamReader(stream, Encoding.UTF8);
 
         var accumulated = new StringBuilder();
+        var toolCalls = new SortedDictionary<int, ToolCallBuilder>();
         int? promptTokens = null;
         int? completionTokens = null;
         string? finishReason = null;
@@ -107,7 +130,7 @@ public sealed class OpenAiCompatibleClient : IModelClient, IDisposable
                 break;
             }
 
-            ReadChunk(payload, accumulated, onToken, ref promptTokens, ref completionTokens, ref finishReason);
+            ReadChunk(payload, accumulated, toolCalls, onToken, ref promptTokens, ref completionTokens, ref finishReason);
         }
 
         stopwatch.Stop();
@@ -117,7 +140,16 @@ public sealed class OpenAiCompatibleClient : IModelClient, IDisposable
             promptTokens,
             completionTokens,
             stopwatch.Elapsed,
-            finishReason);
+            finishReason)
+        {
+            ToolCalls = toolCalls.Values
+                .Where(b => !string.IsNullOrWhiteSpace(b.Name))
+                .Select(b => new ToolCall(
+                    string.IsNullOrEmpty(b.Id) ? b.Name : b.Id,
+                    b.Name,
+                    b.Arguments.Length == 0 ? "{}" : b.Arguments.ToString()))
+                .ToList()
+        };
     }
 
     public void Dispose()
@@ -139,12 +171,12 @@ public sealed class OpenAiCompatibleClient : IModelClient, IDisposable
 
     private static HttpRequestMessage BuildRequest(
         ModelEndpoint endpoint,
-        string systemPrompt,
-        string userContent,
+        IReadOnlyList<ChatMessage> messages,
+        IReadOnlyList<ToolDefinition>? tools,
         double temperature,
         int maxTokens)
     {
-        var body = BuildRequestBody(endpoint.ModelId, systemPrompt, userContent, temperature, maxTokens);
+        var body = BuildRequestBody(endpoint.ModelId, messages, tools, temperature, maxTokens);
 
         var request = new HttpRequestMessage(HttpMethod.Post, endpoint.ChatCompletionsUrl)
         {
@@ -165,8 +197,8 @@ public sealed class OpenAiCompatibleClient : IModelClient, IDisposable
 
     private static string BuildRequestBody(
         string modelId,
-        string systemPrompt,
-        string userContent,
+        IReadOnlyList<ChatMessage> messages,
+        IReadOnlyList<ToolDefinition>? tools,
         double temperature,
         int maxTokens)
     {
@@ -178,13 +210,50 @@ public sealed class OpenAiCompatibleClient : IModelClient, IDisposable
 
             writer.WriteStartArray("messages");
 
-            if (!string.IsNullOrWhiteSpace(systemPrompt))
+            foreach (var message in messages)
             {
-                WriteMessage(writer, "system", systemPrompt);
+                WriteMessage(writer, message);
             }
 
-            WriteMessage(writer, "user", userContent);
             writer.WriteEndArray();
+
+            if (tools is { Count: > 0 })
+            {
+                writer.WriteStartArray("tools");
+
+                foreach (var tool in tools)
+                {
+                    writer.WriteStartObject();
+                    writer.WriteString("type", "function");
+                    writer.WriteStartObject("function");
+                    writer.WriteString("name", tool.Name);
+                    writer.WriteString("description", tool.Description);
+
+                    // A tool with no schema still has to declare an object shape, because a
+                    // server given a function with no parameters block will reject the request
+                    // rather than assume one.
+                    writer.WritePropertyName("parameters");
+
+                    if (tool.ParametersSchema is { } schema)
+                    {
+                        schema.WriteTo(writer);
+                    }
+                    else
+                    {
+                        writer.WriteStartObject();
+                        writer.WriteString("type", "object");
+                        writer.WriteStartObject("properties");
+                        writer.WriteEndObject();
+                        writer.WriteEndObject();
+                    }
+
+                    writer.WriteEndObject();
+                    writer.WriteEndObject();
+                }
+
+                writer.WriteEndArray();
+                writer.WriteString("tool_choice", "auto");
+            }
 
             writer.WriteNumber("temperature", temperature);
             writer.WriteNumber("max_tokens", maxTokens);
@@ -201,12 +270,67 @@ public sealed class OpenAiCompatibleClient : IModelClient, IDisposable
         return Encoding.UTF8.GetString(buffer.ToArray());
     }
 
-    private static void WriteMessage(Utf8JsonWriter writer, string role, string content)
+    private static void WriteMessage(Utf8JsonWriter writer, ChatMessage message)
     {
         writer.WriteStartObject();
-        writer.WriteString("role", role);
-        writer.WriteString("content", content);
+        writer.WriteString("role", message.Role);
+
+        // A tool result quotes the id of the call it answers. Without it the model cannot tell
+        // which of several parallel calls came back.
+        if (message.ToolCallId is { } toolCallId)
+        {
+            writer.WriteString("tool_call_id", toolCallId);
+        }
+
+        // An assistant turn that only called tools has no content, and the field still has to be
+        // present and null rather than absent for some servers to accept the turn.
+        if (message.Content is { } content)
+        {
+            writer.WriteString("content", content);
+        }
+        else
+        {
+            writer.WriteNull("content");
+        }
+
+        if (message.ToolCalls is { Count: > 0 } calls)
+        {
+            writer.WriteStartArray("tool_calls");
+
+            foreach (var call in calls)
+            {
+                writer.WriteStartObject();
+                writer.WriteString("id", call.Id);
+                writer.WriteString("type", "function");
+                writer.WriteStartObject("function");
+                writer.WriteString("name", call.Name);
+                writer.WriteString("arguments", call.ArgumentsJson);
+                writer.WriteEndObject();
+                writer.WriteEndObject();
+            }
+
+            writer.WriteEndArray();
+        }
+
         writer.WriteEndObject();
+    }
+
+    /// <summary>
+    /// Accumulates one tool call as it arrives across streamed chunks.
+    /// </summary>
+    /// <remarks>
+    /// Tool calls stream the same way text does: the name arrives once and the arguments arrive
+    /// as fragments that have to be concatenated in order. The index rather than the id is what
+    /// identifies which call a fragment belongs to, because the id itself only appears on the
+    /// first fragment.
+    /// </remarks>
+    private sealed class ToolCallBuilder
+    {
+        public string Id { get; set; } = string.Empty;
+
+        public string Name { get; set; } = string.Empty;
+
+        public StringBuilder Arguments { get; } = new();
     }
 
     /// <summary>
@@ -234,6 +358,7 @@ public sealed class OpenAiCompatibleClient : IModelClient, IDisposable
     private static void ReadChunk(
         string payload,
         StringBuilder accumulated,
+        SortedDictionary<int, ToolCallBuilder> toolCalls,
         IProgress<string>? onToken,
         ref int? promptTokens,
         ref int? completionTokens,
@@ -275,6 +400,16 @@ public sealed class OpenAiCompatibleClient : IModelClient, IDisposable
                         }
                     }
 
+                    if (choice.TryGetProperty("delta", out var toolDelta)
+                        && toolDelta.TryGetProperty("tool_calls", out var calls)
+                        && calls.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var call in calls.EnumerateArray())
+                        {
+                            ReadToolCallDelta(call, toolCalls);
+                        }
+                    }
+
                     if (choice.TryGetProperty("finish_reason", out var reason)
                         && reason.ValueKind == JsonValueKind.String)
                     {
@@ -288,6 +423,44 @@ public sealed class OpenAiCompatibleClient : IModelClient, IDisposable
                 promptTokens = ReadTokenCount(usage, "prompt_tokens") ?? promptTokens;
                 completionTokens = ReadTokenCount(usage, "completion_tokens") ?? completionTokens;
             }
+        }
+    }
+
+    /// <summary>
+    /// Folds one streamed tool call fragment into the call it belongs to.
+    /// </summary>
+    private static void ReadToolCallDelta(JsonElement call, SortedDictionary<int, ToolCallBuilder> toolCalls)
+    {
+        // Servers that send a whole call in one frame omit the index, and zero is the right
+        // answer for them because there is only one.
+        var index = call.TryGetProperty("index", out var indexValue) && indexValue.TryGetInt32(out var parsed)
+            ? parsed
+            : 0;
+
+        if (!toolCalls.TryGetValue(index, out var builder))
+        {
+            builder = new ToolCallBuilder();
+            toolCalls[index] = builder;
+        }
+
+        if (call.TryGetProperty("id", out var id) && id.ValueKind == JsonValueKind.String)
+        {
+            builder.Id = id.GetString() ?? builder.Id;
+        }
+
+        if (!call.TryGetProperty("function", out var function) || function.ValueKind != JsonValueKind.Object)
+        {
+            return;
+        }
+
+        if (function.TryGetProperty("name", out var name) && name.ValueKind == JsonValueKind.String)
+        {
+            builder.Name = name.GetString() ?? builder.Name;
+        }
+
+        if (function.TryGetProperty("arguments", out var arguments) && arguments.ValueKind == JsonValueKind.String)
+        {
+            builder.Arguments.Append(arguments.GetString());
         }
     }
 

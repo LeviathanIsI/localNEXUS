@@ -17,6 +17,9 @@ public enum SettingsSection
     /// <summary>The Python environment and the mesh node.</summary>
     Runtime,
 
+    /// <summary>Extensions registered against the open project.</summary>
+    Extensions,
+
     /// <summary>The values a newly added node starts from.</summary>
     Behaviour
 }

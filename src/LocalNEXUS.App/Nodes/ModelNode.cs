@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.IO;
 using System.Text.Json.Nodes;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -8,6 +9,7 @@ using LocalNEXUS.App.Services.Dialogs;
 using LocalNEXUS.App.Services.Distributed;
 using LocalNEXUS.App.Services.Editing;
 using LocalNEXUS.App.Services.Execution;
+using LocalNEXUS.App.Services.Extensions;
 using LocalNEXUS.App.Services.Inference;
 using LocalNEXUS.App.Services.Persistence;
 using LocalNEXUS.App.Services.Planning;
@@ -143,14 +145,41 @@ public sealed partial class ModelNode : NodeBase, ICodeRepairSource, IPlanningMo
     [ObservableProperty]
     private EditFormat _editFormat = EditFormat.Automatic;
 
-    private readonly IDialogService _dialogs;
+    /// <summary>
+    /// How many tool calls this node will make in one execution before it stops.
+    /// </summary>
+    /// <remarks>
+    /// A model that has misunderstood a tool will call it again with the same arguments, and
+    /// again, and the only thing that ends that is a number. Modest on purpose: a run that hits
+    /// this cap has gone wrong, and the useful behaviour is to stop and say so rather than to
+    /// keep paying for it.
+    /// </remarks>
+    [ObservableProperty]
+    private int _maxToolCalls = 8;
 
-    public ModelNode(ModelCatalog catalog, MeshManager mesh, IDialogService dialogs)
+    private readonly IDialogService _dialogs;
+    private readonly ExtensionToolset? _toolset;
+
+    /// <summary>Extensions whose tools this node may call. Empty means the node offers no tools.</summary>
+    public ObservableCollection<string> SelectedExtensionIds { get; } = new();
+
+    /// <summary>
+    /// Tool names to offer from those extensions, or empty for all of them.
+    /// </summary>
+    /// <remarks>
+    /// Defaulting to all of an extension's tools is deliberate. Filtering is worth having on a
+    /// small context window and is a nuisance to maintain otherwise, so it is available and not
+    /// required.
+    /// </remarks>
+    public ObservableCollection<string> AllowedToolNames { get; } = new();
+
+    public ModelNode(ModelCatalog catalog, MeshManager mesh, IDialogService dialogs, ExtensionToolset? toolset = null)
         : base("Model")
     {
         Catalog = catalog;
         Mesh = mesh;
         _dialogs = dialogs;
+        _toolset = toolset;
 
         Prompt = AddInput("Text", PinType.Text);
         Completion = AddOutput("Code", PinType.Code);
@@ -438,6 +467,60 @@ public sealed partial class ModelNode : NodeBase, ICodeRepairSource, IPlanningMo
         }
     }
 
+    /// <summary>
+    /// Starts the extensions this node selected and collects their tools.
+    /// </summary>
+    /// <remarks>
+    /// Whether the model can use them at all is checked here, before the request rather than
+    /// after a confusing answer. A model with no tool template does not refuse; it ignores the
+    /// tools and writes prose, which looks exactly like a bug in this application.
+    /// </remarks>
+    private async Task<IReadOnlyList<ToolDefinition>> GatherToolsAsync(
+        NodeExecutionContext ctx,
+        ModelEndpoint endpoint,
+        CancellationToken ct)
+    {
+        if (_toolset is null || SelectedExtensionIds.Count == 0)
+        {
+            return Array.Empty<ToolDefinition>();
+        }
+
+        var tools = await _toolset
+            .GatherAsync(
+                SelectedExtensionIds,
+                AllowedToolNames.Count == 0 ? null : AllowedToolNames.ToHashSet(StringComparer.Ordinal),
+                (name, reason) => ctx.Feed.Error($"{Title} could not reach {name}", reason),
+                ct)
+            .ConfigureAwait(false);
+
+        if (tools.Count == 0)
+        {
+            return tools;
+        }
+
+        var (support, detail) = await ctx.Services.ToolSupport
+            .ProbeAsync(endpoint, ct)
+            .ConfigureAwait(false);
+
+        if (support == ToolSupport.Unsupported)
+        {
+            ctx.Feed.Error($"{Title} has {tools.Count} tools it cannot use", detail);
+        }
+        else
+        {
+            ctx.Feed.Info($"{Title} has {tools.Count} tool(s)", detail);
+        }
+
+        return tools;
+    }
+
+    /// <summary>Shortens a payload for the feed, which shows what happened rather than everything.</summary>
+    private static string Summarise(string value)
+    {
+        var flat = value.ReplaceLineEndings(" ").Trim();
+        return flat.Length <= 160 ? flat : flat[..160] + "...";
+    }
+
     /// <inheritdoc />
     public override JsonObject SaveSettings() => new()
     {
@@ -454,7 +537,10 @@ public sealed partial class ModelNode : NodeBase, ICodeRepairSource, IPlanningMo
         ["contextSize"] = ContextSize,
         ["gpuLayers"] = GpuLayers,
         ["baseUrl"] = BaseUrl,
-        ["apiKey"] = ApiKey
+        ["apiKey"] = ApiKey,
+        ["maxToolCalls"] = MaxToolCalls,
+        ["extensions"] = new JsonArray(SelectedExtensionIds.Select(id => (JsonNode?)JsonValue.Create(id)).ToArray()),
+        ["allowedTools"] = new JsonArray(AllowedToolNames.Select(t => (JsonNode?)JsonValue.Create(t)).ToArray())
     };
 
     /// <inheritdoc />
@@ -494,6 +580,27 @@ public sealed partial class ModelNode : NodeBase, ICodeRepairSource, IPlanningMo
         GpuLayers = settings["gpuLayers"]?.GetValue<int>() ?? LlamaLaunchOptions.DefaultGpuLayers;
         BaseUrl = settings["baseUrl"]?.GetValue<string>() ?? DefaultBaseUrlFor(Provider);
         ApiKey = settings["apiKey"]?.GetValue<string>() ?? string.Empty;
+        MaxToolCalls = settings["maxToolCalls"]?.GetValue<int>() ?? 8;
+
+        SelectedExtensionIds.Clear();
+
+        foreach (var id in (settings["extensions"] as JsonArray)?.Select(n => n?.GetValue<string>()) ?? Array.Empty<string>())
+        {
+            if (!string.IsNullOrWhiteSpace(id))
+            {
+                SelectedExtensionIds.Add(id);
+            }
+        }
+
+        AllowedToolNames.Clear();
+
+        foreach (var tool in (settings["allowedTools"] as JsonArray)?.Select(n => n?.GetValue<string>()) ?? Array.Empty<string>())
+        {
+            if (!string.IsNullOrWhiteSpace(tool))
+            {
+                AllowedToolNames.Add(tool);
+            }
+        }
 
         EditFormat = Enum.TryParse<EditFormat>(settings["editFormat"]?.GetValue<string>(), out var editFormat)
             ? editFormat
@@ -587,9 +694,101 @@ public sealed partial class ModelNode : NodeBase, ICodeRepairSource, IPlanningMo
     {
         var onToken = new DelegateProgress<string>(entry.Append);
 
-        var result = await ctx.Services.ModelClient
-            .StreamChatAsync(endpoint, SystemPrompt, userContent, Temperature, MaxTokens, onToken, ct)
-            .ConfigureAwait(false);
+        var messages = new List<ChatMessage>();
+
+        if (!string.IsNullOrWhiteSpace(SystemPrompt))
+        {
+            messages.Add(ChatMessage.System(SystemPrompt));
+        }
+
+        messages.Add(ChatMessage.User(userContent));
+
+        var tools = await GatherToolsAsync(ctx, endpoint, ct).ConfigureAwait(false);
+
+        // The tool loop lives here rather than in the graph, and it has to. A tool call is a
+        // cycle: ask, call, feed the answer back, ask again. The executor sorts a graph
+        // topologically and rejects cycles outright, which is the same constraint that made a
+        // Loop node impossible. So the cycle happens inside one node's execution, where the
+        // executor neither sees it nor needs to.
+        var callsMade = 0;
+        ChatCompletionResult result;
+
+        while (true)
+        {
+            result = await ctx.Services.ModelClient
+                .StreamChatAsync(endpoint, messages, tools, Temperature, MaxTokens, onToken, ct)
+                .ConfigureAwait(false);
+
+            if (!result.WantsTools || tools.Count == 0 || _toolset is null)
+            {
+                break;
+            }
+
+            if (callsMade >= MaxToolCalls)
+            {
+                // Said out loud and handed to the model, so its final answer can acknowledge
+                // that it was cut off rather than pretending it finished.
+                entry.Flush();
+                ctx.Feed.Error(
+                    $"{Title} stopped calling tools",
+                    $"It reached the limit of {MaxToolCalls} calls in one run. Raise the limit on the node " +
+                    "if the work genuinely needs more, or look at whether it is repeating itself.");
+
+                messages.Add(ChatMessage.Assistant(result.Text, result.ToolCalls));
+
+                foreach (var call in result.ToolCalls)
+                {
+                    messages.Add(ChatMessage.Tool(
+                        call.Id,
+                        $"Not run. This node has a limit of {MaxToolCalls} tool calls per run and it has been reached. " +
+                        "Answer with what you already know."));
+                }
+
+                tools = Array.Empty<ToolDefinition>();
+                continue;
+            }
+
+            messages.Add(ChatMessage.Assistant(result.Text, result.ToolCalls));
+
+            foreach (var call in result.ToolCalls)
+            {
+                ct.ThrowIfCancellationRequested();
+                callsMade++;
+
+                var owner = tools.FirstOrDefault(t => string.Equals(t.Name, call.Name, StringComparison.Ordinal));
+
+                if (owner is null)
+                {
+                    messages.Add(ChatMessage.Tool(call.Id, $"There is no tool called '{call.Name}'."));
+                    continue;
+                }
+
+                var extension = ctx.Services.Extensions?.Find(owner.ExtensionId);
+                var extensionName = extension?.Manifest.Name ?? owner.ExtensionId;
+
+                // Every call is visible. A model quietly firing a dozen editor commands with no
+                // trace of what it did is the worst possible version of this feature.
+                var toolEntry = ctx.Feed.Add(
+                    ActivityKind.Info,
+                    $"{Title} called {call.Name} in {extensionName}",
+                    Summarise(call.ArgumentsJson),
+                    Id);
+
+                StatusMessage = $"tool {callsMade} of {MaxToolCalls}: {call.Name}";
+
+                var (text, isError) = await _toolset
+                    .CallAsync(call, owner.ExtensionId, ct)
+                    .ConfigureAwait(false);
+
+                toolEntry.Detail = $"{Summarise(call.ArgumentsJson)} -> {(isError ? "failed: " : string.Empty)}{Summarise(text)}";
+
+                // A failure goes back as a result, not up as a fault. That is what lets the model
+                // correct itself, exactly as the compile repair loop hands diagnostics back.
+                messages.Add(ChatMessage.Tool(call.Id, text));
+            }
+
+            entry.Flush();
+        }
 
         entry.Flush();
         entry.Detail = result.Summary;

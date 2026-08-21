@@ -359,6 +359,229 @@
                 </StackPanel>
 
                 <!-- Behaviour -->
+                <!--
+                    Extensions. Laid out after Unity's package manager: a sources rail on the
+                    left, a list in the middle, details on the right. The details pane shows the
+                    real command, because an extension that will not start is almost always one
+                    whose command is wrong and that is invisible anywhere else.
+                -->
+                <StackPanel Visibility="{Binding Section, Converter={StaticResource EnumToVisibility}, ConverterParameter=Extensions}">
+                    <TextBlock Style="{StaticResource SectionHeader}" FontSize="{StaticResource Font.Size.Title}" Text="Extensions" />
+                    <TextBlock Style="{StaticResource HintText}"
+                               Text="Extensions run as their own processes, so one that misbehaves cannot take the application with it. They belong to the open project, because what they talk to does." />
+
+                    <TextBlock Style="{StaticResource HintText}"
+                               Margin="0,10,0,0"
+                               Foreground="{DynamicResource Status.Warning.Brush}"
+                               Text="{Binding Extensions.EmptyMessage}"
+                               Visibility="{Binding Extensions.HasProject, Converter={StaticResource BooleanToVisibility}, ConverterParameter=Invert}" />
+
+                    <Grid Margin="0,12,0,0" Visibility="{Binding Extensions.HasProject, Converter={StaticResource BooleanToVisibility}}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="1.2*" />
+                        </Grid.ColumnDefinitions>
+
+                        <!-- The sources rail. -->
+                        <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                            <TextBlock Style="{StaticResource SideBarHeader}" Text="SOURCES" />
+                            <RadioButton Content="Presets" Margin="0,6,0,0" GroupName="ExtSource"
+                                         IsChecked="{Binding Extensions.Source, Converter={StaticResource EnumToBoolean}, ConverterParameter=Presets}" />
+                            <RadioButton Content="Installed" Margin="0,4,0,0" GroupName="ExtSource"
+                                         IsChecked="{Binding Extensions.Source, Converter={StaticResource EnumToBoolean}, ConverterParameter=Installed}" />
+                            <RadioButton Content="Add your own" Margin="0,4,0,0" GroupName="ExtSource"
+                                         IsChecked="{Binding Extensions.Source, Converter={StaticResource EnumToBoolean}, ConverterParameter=Add}" />
+
+                            <TextBlock Style="{StaticResource HintText}" Margin="0,14,0,0"
+                                       Text="{Binding Extensions.BusyMessage}"
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
+
+                        <!-- Presets. Nothing here is installed until somebody installs it. -->
+                        <Border Grid.Column="1" Style="{StaticResource Card}"
+                                Visibility="{Binding Extensions.Source, Converter={StaticResource EnumToVisibility}, ConverterParameter=Presets}">
+                            <ItemsControl ItemsSource="{Binding Extensions.Presets}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Margin="0,0,0,14">
+                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                                            <TextBlock Style="{StaticResource HintText}" Text="{Binding Description}" TextWrapping="Wrap" />
+                                            <TextBlock Style="{StaticResource HintText}" Margin="0,4,0,0"
+                                                       Foreground="{DynamicResource Status.Warning.Brush}"
+                                                       TextWrapping="Wrap"
+                                                       Text="{Binding Deprecated}"
+                                                       Visibility="{Binding Deprecated, Converter={StaticResource NullToVisibility}}" />
+                                            <Button Content="Install"
+                                                    Margin="0,6,0,0"
+                                                    HorizontalAlignment="Left"
+                                                    Command="{Binding DataContext.Extensions.InstallPresetCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                    CommandParameter="{Binding}" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Border>
+
+                        <!-- Installed. -->
+                        <Border Grid.Column="1" Style="{StaticResource Card}"
+                                Visibility="{Binding Extensions.Source, Converter={StaticResource EnumToVisibility}, ConverterParameter=Installed}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource HintText}"
+                                           Text="{Binding Extensions.EmptyMessage}"
+                                           TextWrapping="Wrap"
+                                           Visibility="{Binding Extensions.IsEmpty, Converter={StaticResource BooleanToVisibility}}" />
+
+                                <ListBox ItemsSource="{Binding Extensions.Installed}"
+                                         SelectedItem="{Binding Extensions.Selected}"
+                                         BorderThickness="0"
+                                         Background="Transparent"
+                                         ItemContainerStyle="{StaticResource ListRow}"
+                                         MaxHeight="320">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Margin="0,3">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="{Binding Manifest.Name}" FontWeight="SemiBold" />
+                                                    <TextBlock Style="{StaticResource HintText}" Margin="8,0,0,0" Text="{Binding Manifest.Version}" />
+                                                </StackPanel>
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Style="{StaticResource HintText}" Text="{Binding Manifest.ContributionSummary}" />
+                                                    <TextBlock Style="{StaticResource HintText}" Margin="8,0,0,0" Text="{Binding StateText}" />
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- The four ways of adding something that is not a preset. -->
+                        <Border Grid.Column="1" Style="{StaticResource Card}"
+                                Visibility="{Binding Extensions.Source, Converter={StaticResource EnumToVisibility}, ConverterParameter=Add}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource SectionHeader}" Text="From npm" />
+                                <TextBlock Style="{StaticResource HintText}" Text="A package name. This covers most MCP servers." />
+                                <TextBox Text="{Binding Extensions.NpmPackage, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,0" />
+                                <Button Content="Add" Margin="0,6,0,0" HorizontalAlignment="Left" Command="{Binding Extensions.AddNpmCommand}" />
+
+                                <TextBlock Style="{StaticResource SectionHeader}" Margin="0,16,0,0" Text="From git" />
+                                <TextBlock Style="{StaticResource HintText}" Text="Cloned, then started as its manifest says." />
+                                <TextBox Text="{Binding Extensions.GitUrl, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,0" />
+                                <Button Content="Clone and add" Margin="0,6,0,0" HorizontalAlignment="Left" Command="{Binding Extensions.AddGitCommand}" />
+
+                                <TextBlock Style="{StaticResource SectionHeader}" Margin="0,16,0,0" Text="From disk" />
+                                <TextBlock Style="{StaticResource HintText}" Text="A folder holding a manifest." />
+                                <Button Content="Choose a folder" Margin="0,6,0,0" HorizontalAlignment="Left" Command="{Binding Extensions.AddDiskCommand}" />
+
+                                <TextBlock Style="{StaticResource SectionHeader}" Margin="0,16,0,0" Text="By command" />
+                                <TextBlock Style="{StaticResource HintText}"
+                                           TextWrapping="Wrap"
+                                           Text="The raw escape hatch. Anything that speaks one of the contracts works here, whether or not it fits the shortcuts above." />
+                                <TextBox Text="{Binding Extensions.CommandName, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,0" Tag="Name" />
+                                <TextBox Text="{Binding Extensions.CommandPath, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,0" Tag="Command" />
+                                <TextBox Text="{Binding Extensions.CommandArguments, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,0" Tag="Arguments" />
+                                <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                                    <CheckBox Content="Speaks MCP" IsChecked="{Binding Extensions.CommandSpeaksMcp}" />
+                                    <CheckBox Content="Contributes nodes" Margin="12,0,0,0" IsChecked="{Binding Extensions.CommandSpeaksNode}" />
+                                </StackPanel>
+                                <Button Content="Add" Margin="0,6,0,0" HorizontalAlignment="Left" Command="{Binding Extensions.AddCommandCommand}" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Details for whatever is selected. -->
+                        <Border Grid.Column="2" Style="{StaticResource Card}" Margin="12,0,0,0"
+                                DataContext="{Binding Extensions.Selected}"
+                                Visibility="{Binding Converter={StaticResource NullToVisibility}}">
+                            <StackPanel>
+                                <TextBlock Text="{Binding Manifest.Name}" FontWeight="SemiBold" FontSize="{StaticResource Font.Size.Title}" />
+                                <TextBlock Style="{StaticResource HintText}" Text="{Binding Manifest.Description}" TextWrapping="Wrap" Margin="0,4,0,0" />
+
+                                <TextBlock Style="{StaticResource HintText}" Margin="0,8,0,0" Foreground="{DynamicResource Status.Warning.Brush}"
+                                           TextWrapping="Wrap" Text="{Binding Manifest.Deprecated}"
+                                           Visibility="{Binding Manifest.Deprecated, Converter={StaticResource NullToVisibility}}" />
+
+                                <TextBlock Style="{StaticResource SectionHeader}" Margin="0,12,0,0" Text="State" />
+                                <TextBlock Text="{Binding StateText}" />
+                                <TextBlock Style="{StaticResource HintText}" Text="{Binding StateDetail}" TextWrapping="Wrap" />
+
+                                <TextBlock Style="{StaticResource SectionHeader}" Margin="0,12,0,0" Text="Version" />
+                                <TextBlock Text="{Binding Manifest.Version}" />
+                                <TextBlock Style="{StaticResource HintText}" Text="{Binding Manifest.Author}" />
+
+                                <TextBlock Style="{StaticResource SectionHeader}" Margin="0,12,0,0" Text="Contributes" />
+                                <TextBlock Text="{Binding Manifest.ContributionSummary}" />
+
+                                <ItemsControl ItemsSource="{Binding DiscoveredTools}" Margin="0,4,0,0" MaxHeight="140">
+                                    <ItemsControl.Template>
+                                        <ControlTemplate TargetType="ItemsControl">
+                                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                                <ItemsPresenter />
+                                            </ScrollViewer>
+                                        </ControlTemplate>
+                                    </ItemsControl.Template>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Margin="0,0,0,4">
+                                                <TextBlock Text="{Binding Name}" Style="{StaticResource MonoText}" />
+                                                <TextBlock Style="{StaticResource HintText}" Text="{Binding Description}" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <ItemsControl ItemsSource="{Binding Manifest.Nodes}" Margin="0,4,0,0">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Margin="0,0,0,4">
+                                                <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" />
+                                                <TextBlock Style="{StaticResource HintText}" Text="{Binding Description}" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <TextBlock Style="{StaticResource SectionHeader}" Margin="0,12,0,0" Text="Needs" />
+                                <ItemsControl ItemsSource="{Binding Manifest.Prerequisites}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Margin="0,0,0,4">
+                                                <TextBlock Text="{Binding Name}" Style="{StaticResource MonoText}" />
+                                                <TextBlock Style="{StaticResource HintText}" Text="{Binding Reason}" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <TextBlock Style="{StaticResource SectionHeader}" Margin="0,12,0,0" Text="Installed from" />
+                                <TextBlock Text="{Binding OriginDetail}" Style="{StaticResource MonoText}" TextWrapping="Wrap" />
+                                <TextBlock Style="{StaticResource SectionHeader}" Margin="0,12,0,0" Text="Runs" />
+                                <TextBlock Text="{Binding Manifest.Launch.DisplayCommand}" Style="{StaticResource MonoText}" TextWrapping="Wrap" />
+
+                                <WrapPanel Margin="0,14,0,0">
+                                    <Button Content="Test connect" Margin="0,0,6,6"
+                                            Command="{Binding DataContext.Extensions.TestConnectCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            CommandParameter="{Binding}" />
+                                    <Button Content="Disable" Margin="0,0,6,6"
+                                            Command="{Binding DataContext.Extensions.DisableCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            CommandParameter="{Binding}"
+                                            Visibility="{Binding IsEnabled, Converter={StaticResource BooleanToVisibility}}" />
+                                    <Button Content="Enable" Margin="0,0,6,6"
+                                            Command="{Binding DataContext.Extensions.EnableCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            CommandParameter="{Binding}"
+                                            Visibility="{Binding IsEnabled, Converter={StaticResource BooleanToVisibility}, ConverterParameter=Invert}" />
+                                    <Button Content="View logs" Margin="0,0,6,6"
+                                            Command="{Binding DataContext.Extensions.ViewLogsCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            CommandParameter="{Binding}" />
+                                    <Button Content="Remove" Margin="0,0,6,6"
+                                            Command="{Binding DataContext.Extensions.RemoveCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            CommandParameter="{Binding}" />
+                                </WrapPanel>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </StackPanel>
+
                 <StackPanel Visibility="{Binding Section, Converter={StaticResource EnumToVisibility}, ConverterParameter=Behaviour}">
                     <TextBlock Style="{StaticResource SectionHeader}" FontSize="{StaticResource Font.Size.Title}" Text="Behaviour" />
                     <TextBlock Style="{StaticResource HintText}"

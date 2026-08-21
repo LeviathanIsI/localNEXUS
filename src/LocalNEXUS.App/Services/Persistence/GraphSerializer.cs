@@ -172,8 +172,17 @@ public sealed class GraphSerializer
             }
             catch (NotSupportedException)
             {
-                warnings.Add($"Skipped a node of unknown type '{typeKey}'.");
-                continue;
+                // Not skipped. A type key nobody owns almost always means an extension that is
+                // not installed here, and dropping the node would take its wires with it and
+                // then write the hole back out on the next save. The placeholder keeps
+                // everything and refuses to run, so installing the extension restores the graph.
+                var placeholder = NodeFactory.CreateUnavailable(typeKey);
+                placeholder.AdoptSavedPins(element["inputs"] as JsonArray, element["outputs"] as JsonArray);
+                node = placeholder;
+
+                warnings.Add(
+                    $"'{typeKey}' is not installed for this project, so that node is being held as a placeholder. " +
+                    "Its settings and wires are kept.");
             }
 
             if (Guid.TryParse(element["id"]?.GetValue<string>(), out var id))

@@ -41,12 +41,14 @@ public sealed partial class AppSettingsViewModel : ObservableObject
         ModelCatalogViewModel catalogCommands,
         PythonEnvironmentViewModel python,
         NetworkViewModel network,
+        ExtensionsViewModel extensions,
         ProjectIndexService index,
         IDialogService dialogs,
         Func<Task> reindex)
     {
         _config = config;
         _catalog = catalog;
+        Extensions = extensions;
         _index = index;
         _dialogs = dialogs;
         _reindex = reindex;
@@ -74,6 +76,9 @@ public sealed partial class AppSettingsViewModel : ObservableObject
 
     /// <summary>Mesh membership and contribution.</summary>
     public NetworkViewModel Network { get; }
+
+    /// <summary>The extensions registered against the open project.</summary>
+    public ExtensionsViewModel Extensions { get; }
 
     /// <summary>What the project index currently knows.</summary>
     public ProjectIndexService Index => _index;

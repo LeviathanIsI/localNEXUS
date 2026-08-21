@@ -15,6 +15,19 @@ public sealed record ChatCompletionResult(
     TimeSpan Elapsed,
     string? FinishReason)
 {
+    /// <summary>
+    /// Tool calls the model asked for, empty unless tools were offered.
+    /// </summary>
+    /// <remarks>
+    /// An init only property with a default rather than another positional parameter, so every
+    /// place that already constructs one of these keeps compiling and keeps meaning the same
+    /// thing.
+    /// </remarks>
+    public IReadOnlyList<ToolCall> ToolCalls { get; init; } = Array.Empty<ToolCall>();
+
+    /// <summary>True when the model stopped in order to call something.</summary>
+    public bool WantsTools => ToolCalls.Count > 0;
+
     /// <summary>A short summary suitable for the activity feed, for example "412 tokens in 6.2 s (66 tok/s)".</summary>
     public string Summary
     {

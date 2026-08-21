@@ -1,6 +1,7 @@
 using LocalNEXUS.App.Models;
 using LocalNEXUS.App.Services.Dialogs;
 using LocalNEXUS.App.Services.Distributed;
+using LocalNEXUS.App.Services.Extensions;
 using LocalNEXUS.App.Services.Persistence;
 
 namespace LocalNEXUS.App.Nodes;
@@ -19,13 +20,76 @@ public sealed class NodeFactory
     private readonly MeshManager _mesh;
     private readonly IDialogService _dialogs;
     private readonly AppConfig _config;
+    private readonly ExtensionRegistry _extensions;
+    private readonly ExtensionHost _host;
+    private readonly ExtensionToolset _toolset;
 
-    public NodeFactory(ModelCatalog catalog, MeshManager mesh, IDialogService dialogs, AppConfig config)
+    public NodeFactory(
+        ModelCatalog catalog,
+        MeshManager mesh,
+        IDialogService dialogs,
+        AppConfig config,
+        ExtensionRegistry extensions,
+        ExtensionHost host)
     {
         _catalog = catalog;
         _mesh = mesh;
         _dialogs = dialogs;
         _config = config;
+        _extensions = extensions;
+        _host = host;
+        _toolset = new ExtensionToolset(extensions, host);
+    }
+
+    /// <summary>
+    /// The palette, which is the built in types plus whatever the open project's extensions
+    /// contribute right now.
+    /// </summary>
+    /// <remarks>
+    /// Extension nodes appear here and nowhere else that matters. Everything downstream, the
+    /// canvas, the serializer and above all the executor, sees a node and not a category of node.
+    /// </remarks>
+    public IReadOnlyList<NodeDescriptor> AvailableDescriptors()
+    {
+        var available = new List<NodeDescriptor>(Descriptors);
+
+        foreach (var (extension, node) in _extensions.UsableNodes())
+        {
+            available.Add(new NodeDescriptor(
+                node.TypeKey,
+                node.DisplayName,
+                string.IsNullOrWhiteSpace(node.Description)
+                    ? $"Contributed by {extension.Manifest.Name}."
+                    : node.Description));
+        }
+
+        return available;
+    }
+
+    /// <summary>
+    /// Creates a placeholder for a node whose extension is not installed here, so that opening a
+    /// graph on a machine missing an extension does not discard the node and its wires.
+    /// </summary>
+    public static UnavailableNode CreateUnavailable(string typeKey) => new(typeKey);
+
+    /// <summary>
+    /// Creates a node contributed by one of the open project's extensions.
+    /// </summary>
+    /// <remarks>
+    /// The built in switch is tried first, so an extension can never shadow a built in type by
+    /// claiming its key. Anything left over is looked up among the extensions, and only a key
+    /// that belongs to nobody is refused.
+    /// </remarks>
+    /// <exception cref="NotSupportedException">No built in type and no installed extension owns this key.</exception>
+    private NodeBase CreateContributed(string typeKey)
+    {
+        var extension = _extensions.FindByNodeType(typeKey)
+            ?? throw new NotSupportedException($"Unknown node type '{typeKey}'.");
+
+        var contribution = extension.Manifest.Nodes
+            .First(n => string.Equals(n.TypeKey, typeKey, StringComparison.OrdinalIgnoreCase));
+
+        return new ExtensionNode(_host, _extensions, extension, contribution);
     }
 
     /// <summary>A node type as offered by the palette.</summary>
@@ -68,14 +132,14 @@ public sealed class NodeFactory
             EmittedCharacters = _config.DefaultEmittedCharacters,
             CandidateLimit = _config.DefaultCandidateLimit
         },
-        "Model" => new ModelNode(_catalog, _mesh, _dialogs)
+        "Model" => new ModelNode(_catalog, _mesh, _dialogs, _toolset)
         {
             ApiKey = _config.CloudApiKey ?? string.Empty
         },
         "Patch" or "Transform" => new PatchNode(),
         "CompilerCheck" or "CompileCheck" or "Compile" => new CompilerCheckNode { RetryLimit = _config.DefaultRetryLimit },
         "Output" => new OutputNode(),
-        _ => throw new NotSupportedException($"Unknown node type '{typeKey}'.")
+        _ => CreateContributed(typeKey)
     };
 
     /// <summary>Creates a node of the given type at a canvas position.</summary>

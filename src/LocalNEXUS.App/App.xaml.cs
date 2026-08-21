@@ -8,6 +8,7 @@ using LocalNEXUS.App.Nodes;
 using LocalNEXUS.App.Services.Compilation;
 using LocalNEXUS.App.Services.Dialogs;
 using LocalNEXUS.App.Services.Distributed;
+using LocalNEXUS.App.Services.Extensions;
 using LocalNEXUS.App.Services.Execution;
 using LocalNEXUS.App.Services.Files;
 using LocalNEXUS.App.Services.Inference;
@@ -35,6 +36,7 @@ public partial class App : Application
     private CancellationTokenSource? _provisioning;
     private CancellationTokenSource? _indexing;
     private ViewModels.NetworkViewModel? _network;
+    private Services.Extensions.ExtensionHost? _extensionHost;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -92,7 +94,22 @@ public partial class App : Application
         var mesh = new MeshManager(config, feed, Dispatcher, children);
         _mesh = mesh;
 
-        var factory = new NodeFactory(catalog, mesh, dialogs, config);
+        // Extensions are per project, so the registry starts empty and is pointed at a project
+        // when one is opened. The host starts nothing here: extension processes are lazy, and an
+        // install with a dozen of them has to cost nothing at launch.
+        var extensions = new ExtensionRegistry(feed);
+        extensions.OpenProject(unityProject.ProjectPath);
+        unityProject.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(UnityProjectService.ProjectPath))
+            {
+                extensions.OpenProject(unityProject.ProjectPath);
+            }
+        };
+        var extensionHost = new ExtensionHost(children, feed);
+        _extensionHost = extensionHost;
+
+        var factory = new NodeFactory(catalog, mesh, dialogs, config, extensions, extensionHost);
         var serializer = new GraphSerializer(factory);
 
         // Restoring the node is deliberately not awaited: composition must not block on a
@@ -128,7 +145,9 @@ public partial class App : Application
             projectIndex,
             unityProject,
             new FileWriter(),
-            feed);
+            feed,
+            extensions,
+            new ToolSupportProbe(OpenAiCompatibleClient.CreateDefaultHttpClient()));
         var executor = new GraphExecutor(services);
 
         var feedViewModel = new ActivityFeedViewModel(executor, graph, feed, Dispatcher);
@@ -143,6 +162,14 @@ public partial class App : Application
         var indexing = new CancellationTokenSource();
         _indexing = indexing;
 
+        var extensionsViewModel = new ExtensionsViewModel(
+            extensions,
+            extensionHost,
+            new ExtensionInstaller(children),
+            new PrerequisiteChecker(),
+            dialogs,
+            feed);
+
         var settingsViewModel = new AppSettingsViewModel(
             config,
             themes,
@@ -150,6 +177,7 @@ public partial class App : Application
             catalogViewModel,
             pythonViewModel,
             networkViewModel,
+            extensionsViewModel,
             projectIndex,
             dialogs,
             () => IndexProjectAsync(projectIndex, unityProject.ProjectPath, feed, indexing.Token));
@@ -219,6 +247,9 @@ public partial class App : Application
         _indexing?.Cancel();
         (MainWindow?.DataContext as MainViewModel)?.Dispose();
         _network?.Dispose();
+        // Before the group, so each extension is asked to stop and its connection closed rather
+        // than every one of them being terminated cold.
+        _extensionHost?.Dispose();
         _mesh?.Dispose();
         _llamaServers?.Dispose();
         _pythonRuntime?.Dispose();

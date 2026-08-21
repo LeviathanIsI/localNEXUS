@@ -1,6 +1,7 @@
 using LocalNEXUS.App.Infrastructure;
 using LocalNEXUS.App.Services.Compilation;
 using LocalNEXUS.App.Services.Distributed;
+using LocalNEXUS.App.Services.Extensions;
 using LocalNEXUS.App.Services.Files;
 using LocalNEXUS.App.Services.Inference;
 using LocalNEXUS.App.Services.ProjectIndex;
@@ -22,8 +23,12 @@ public sealed class ExecutionServices
         ProjectIndexService projectIndex,
         UnityProjectService unityProject,
         FileWriter fileWriter,
-        IActivityFeed feed)
+        IActivityFeed feed,
+        ExtensionRegistry? extensions = null,
+        ToolSupportProbe? toolSupport = null)
     {
+        Extensions = extensions;
+        ToolSupport = toolSupport ?? new ToolSupportProbe(new System.Net.Http.HttpClient());
         ModelClient = modelClient;
         Runtimes = runtimes;
         Mesh = mesh;
@@ -57,6 +62,12 @@ public sealed class ExecutionServices
 
     /// <summary>Writes generated files to disk.</summary>
     public FileWriter FileWriter { get; }
+
+    /// <summary>The extensions registered against the open project, or null when none is open.</summary>
+    public ExtensionRegistry? Extensions { get; }
+
+    /// <summary>Answers whether a model behind an endpoint can call tools.</summary>
+    public ToolSupportProbe ToolSupport { get; }
 
     /// <summary>The live transcript of the run.</summary>
     public IActivityFeed Feed { get; }

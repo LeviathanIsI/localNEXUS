@@ -34,6 +34,13 @@ is not a sandbox and was never meant to be one.
 you is running a program they sent you. There is no warning in the interface about this, which
 is itself worth fixing.
 
+**Installing an extension is running a program somebody else wrote.** An extension is a
+process started with your privileges. It is out of process, so it cannot corrupt this
+application's memory or crash it, and it is held in a job object so it cannot outlive it. That
+is isolation from failure, not from intent: nothing sandboxes what it does to your machine. The
+manifest declares what it contributes and you see that before installing, which is the point at
+which to decide whether you trust it.
+
 **API keys are plain text.** In `config.json` and inside any saved graph with a hosted Model
 node. Share or commit a graph and the key goes with it. Strip the `apiKey` fields first.
 
@@ -51,6 +58,7 @@ which refuses anything landing outside the opened project. Escaping that is a vu
 ## In scope
 
 - Escaping the project folder when writing files.
+- An extension reaching anything the host did not hand it, or surviving the job object.
 - Reaching the local inference server or mesh node from outside the machine when it should not
   be reachable.
 - Anything making it more dangerous to open a graph, project or model file than described
@@ -64,7 +72,8 @@ which refuses anything landing outside the opened project. Escaping that is a vu
 - A model producing bad or malicious code. That is what the compile check and your review are
   for.
 - Anything requiring an attacker to already have code execution on your machine.
-- Vulnerabilities in llama.cpp, Mesh LLM, uv, torch or transformers. Report upstream. Tell us
+- An extension you installed doing what its manifest said it would. That is the feature.
+- Vulnerabilities in llama.cpp, Mesh LLM, uv, transformers, torch or any extension. Report upstream. Tell us
   anyway if we ship an affected version.
 - Peers on a mesh you joined behaving badly. A private mesh is joined by invitation, so every
   peer was let in deliberately. Trust scoring does not exist yet, on purpose.

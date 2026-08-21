@@ -1,0 +1,472 @@
+using System.Collections.ObjectModel;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using LocalNEXUS.App.Infrastructure;
+using LocalNEXUS.App.Models.Extensions;
+using LocalNEXUS.App.Services.Dialogs;
+using LocalNEXUS.App.Services.Extensions;
+
+namespace LocalNEXUS.App.ViewModels;
+
+/// <summary>Which shelf of the extensions panel is being looked at.</summary>
+public enum ExtensionSource
+{
+    /// <summary>The curated entries, none of which are installed until somebody installs one.</summary>
+    Presets,
+
+    /// <summary>What this project has registered.</summary>
+    Installed,
+
+    /// <summary>The ways of adding something that is not a preset.</summary>
+    Add
+}
+
+/// <summary>
+/// The extensions panel: a sources rail, a list, and a details pane.
+/// </summary>
+/// <remarks>
+/// Laid out after Unity's package manager, which is the right shape because it already works for
+/// this audience and because it scales past Unity, which is where this is going.
+/// <para>
+/// The details pane exists to make a misconfigured extension diagnosable without digging. Showing
+/// the real command and arguments is the single most useful thing on it: an extension that will
+/// not start is almost always one whose command is wrong, and that is invisible everywhere else.
+/// </para>
+/// </remarks>
+public sealed partial class ExtensionsViewModel : ObservableObject
+{
+    private readonly ExtensionRegistry _registry;
+    private readonly ExtensionHost _host;
+    private readonly ExtensionInstaller _installer;
+    private readonly PrerequisiteChecker _prerequisites;
+    private readonly IDialogService _dialogs;
+    private readonly IActivityFeed _feed;
+
+    /// <summary>Which shelf is showing.</summary>
+    [ObservableProperty]
+    private ExtensionSource _source = ExtensionSource.Installed;
+
+    /// <summary>The extension whose details are showing.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSelection))]
+    [NotifyPropertyChangedFor(nameof(SelectedPrerequisites))]
+    private InstalledExtension? _selected;
+
+    /// <summary>The preset whose details are showing, when the presets shelf is up.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSelectedPreset))]
+    private ExtensionManifest? _selectedPreset;
+
+    /// <summary>What a long running operation is doing right now.</summary>
+    [ObservableProperty]
+    private string? _busyMessage;
+
+    /// <summary>Package name for the npm route.</summary>
+    [ObservableProperty]
+    private string _npmPackage = string.Empty;
+
+    /// <summary>Repository url for the git route.</summary>
+    [ObservableProperty]
+    private string _gitUrl = string.Empty;
+
+    /// <summary>Name for the raw command route.</summary>
+    [ObservableProperty]
+    private string _commandName = string.Empty;
+
+    /// <summary>Executable for the raw command route.</summary>
+    [ObservableProperty]
+    private string _commandPath = string.Empty;
+
+    /// <summary>Arguments for the raw command route, split on spaces.</summary>
+    [ObservableProperty]
+    private string _commandArguments = string.Empty;
+
+    /// <summary>Whether the raw command speaks MCP.</summary>
+    [ObservableProperty]
+    private bool _commandSpeaksMcp = true;
+
+    /// <summary>Whether the raw command contributes nodes.</summary>
+    [ObservableProperty]
+    private bool _commandSpeaksNode;
+
+    public ExtensionsViewModel(
+        ExtensionRegistry registry,
+        ExtensionHost host,
+        ExtensionInstaller installer,
+        PrerequisiteChecker prerequisites,
+        IDialogService dialogs,
+        IActivityFeed feed)
+    {
+        _registry = registry;
+        _host = host;
+        _installer = installer;
+        _prerequisites = prerequisites;
+        _dialogs = dialogs;
+        _feed = feed;
+
+        Presets = new ObservableCollection<ExtensionManifest>(ExtensionPresets.All);
+
+        _registry.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(ExtensionRegistry.ProjectPath))
+            {
+                OnPropertyChanged(nameof(HasProject));
+                OnPropertyChanged(nameof(EmptyMessage));
+                Selected = null;
+            }
+        };
+
+        _registry.Extensions.CollectionChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(EmptyMessage));
+            OnPropertyChanged(nameof(IsEmpty));
+        };
+    }
+
+    /// <summary>The curated entries. None of them are installed until somebody installs one.</summary>
+    public ObservableCollection<ExtensionManifest> Presets { get; }
+
+    /// <summary>What this project has registered.</summary>
+    public ObservableCollection<InstalledExtension> Installed => _registry.Extensions;
+
+    /// <summary>True when a project is open, which is what extensions are registered against.</summary>
+    public bool HasProject => _registry.HasProject;
+
+    /// <summary>True when the installed list is empty, which is an ordinary state.</summary>
+    public bool IsEmpty => _registry.Extensions.Count == 0;
+
+    /// <summary>True when something is selected in the installed list.</summary>
+    public bool HasSelection => Selected is not null;
+
+    /// <summary>True when a preset is selected.</summary>
+    public bool HasSelectedPreset => SelectedPreset is not null;
+
+    /// <summary>Whether the prerequisites of the selection are met, checked when it is shown.</summary>
+    public IReadOnlyList<PrerequisiteResult> SelectedPrerequisites => Selected is null
+        ? Array.Empty<PrerequisiteResult>()
+        : _prerequisites.Check(Selected.Manifest, _registry.ProjectPath);
+
+    /// <summary>What to say when there is nothing in the list.</summary>
+    public string EmptyMessage => HasProject
+        ? "No extensions for this project yet. Install one from Presets, or add your own."
+        : "Open a Unity project first. Extensions belong to a project, because what they talk to does.";
+
+    /// <summary>Installs one of the curated entries.</summary>
+    [RelayCommand]
+    private async Task InstallPresetAsync(ExtensionManifest? manifest)
+    {
+        if (manifest is null)
+        {
+            return;
+        }
+
+        await AddAsync(() => Task.FromResult(_installer.FromPreset(manifest)));
+    }
+
+    /// <summary>Adds an npm package.</summary>
+    [RelayCommand]
+    private async Task AddNpmAsync()
+    {
+        var package = NpmPackage;
+        await AddAsync(() => Task.FromResult(_installer.FromNpm(package)));
+        NpmPackage = string.Empty;
+    }
+
+    /// <summary>Clones a repository and reads the manifest it carries.</summary>
+    [RelayCommand]
+    private async Task AddGitAsync()
+    {
+        var url = GitUrl;
+        await AddAsync(ct => _installer.FromGitAsync(url, new DelegateProgress<string>(m => BusyMessage = m), ct));
+        GitUrl = string.Empty;
+    }
+
+    /// <summary>Adds a folder containing a manifest.</summary>
+    [RelayCommand]
+    private async Task AddDiskAsync()
+    {
+        var folder = _dialogs.PickFolder("Choose the extension folder");
+
+        if (folder is null)
+        {
+            return;
+        }
+
+        await AddAsync(() => Task.FromResult(_installer.FromDisk(folder)));
+    }
+
+    /// <summary>Adds a raw command line, which is the route that always works.</summary>
+    [RelayCommand]
+    private async Task AddCommandAsync()
+    {
+        var contracts = new List<ExtensionContract>();
+
+        if (CommandSpeaksMcp)
+        {
+            contracts.Add(ExtensionContract.Mcp);
+        }
+
+        if (CommandSpeaksNode)
+        {
+            contracts.Add(ExtensionContract.Node);
+        }
+
+        var name = CommandName;
+        var path = CommandPath;
+        var arguments = CommandArguments
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToList();
+
+        await AddAsync(() => Task.FromResult(
+            _installer.FromCommand(name, path, arguments, null, null, contracts)));
+
+        CommandName = string.Empty;
+        CommandPath = string.Empty;
+        CommandArguments = string.Empty;
+    }
+
+    /// <summary>
+    /// Starts an extension, reads what it can do, and shuts it down again.
+    /// </summary>
+    /// <remarks>
+    /// The point of this is to move the moment a bad configuration is discovered from the middle
+    /// of a run to the moment it is configured.
+    /// </remarks>
+    [RelayCommand]
+    private async Task TestConnectAsync(InstalledExtension? extension)
+    {
+        if (extension is null)
+        {
+            return;
+        }
+
+        BusyMessage = $"Starting {extension.Manifest.Name}";
+
+        try
+        {
+            if (extension.Manifest.ProvidesTools)
+            {
+                var session = await _host
+                    .EnsureRunningAsync(extension, ExtensionContract.Mcp, CancellationToken.None)
+                    .ConfigureAwait(true);
+
+                var tools = await new McpToolClient(session).ListToolsAsync(CancellationToken.None).ConfigureAwait(true);
+
+                extension.DiscoveredTools.Clear();
+
+                foreach (var tool in tools)
+                {
+                    extension.DiscoveredTools.Add(tool);
+                }
+
+                _feed.Info($"{extension.Manifest.Name} answered", $"{tools.Count} tool(s).");
+            }
+
+            if (extension.Manifest.ProvidesNodes)
+            {
+                var session = await _host
+                    .EnsureRunningAsync(extension, ExtensionContract.Node, CancellationToken.None)
+                    .ConfigureAwait(true);
+
+                var described = await new NodeWorkerClient(session)
+                    .DescribeAsync(CancellationToken.None)
+                    .ConfigureAwait(true);
+
+                _feed.Info($"{extension.Manifest.Name} answered", $"{described.Count} node type(s).");
+            }
+
+            extension.State = ExtensionState.Running;
+            extension.StateDetail = null;
+        }
+        catch (ExtensionException ex)
+        {
+            extension.State = ExtensionState.Unreachable;
+            extension.StateDetail = ex.Message;
+            _feed.Error($"{extension.Manifest.Name} did not answer", ex.Message);
+        }
+        finally
+        {
+            // Started only to ask. Leaving it running would be a process nobody asked for.
+            _host.Stop(extension.Manifest.Id);
+            _registry.Save();
+            BusyMessage = null;
+        }
+    }
+
+    /// <summary>Switches an extension off without removing it.</summary>
+    [RelayCommand]
+    private void Disable(InstalledExtension? extension)
+    {
+        if (extension is null)
+        {
+            return;
+        }
+
+        extension.IsEnabled = false;
+        _host.Stop(extension.Manifest.Id);
+        _registry.Save();
+    }
+
+    /// <summary>Switches an extension back on.</summary>
+    [RelayCommand]
+    private void Enable(InstalledExtension? extension)
+    {
+        if (extension is null)
+        {
+            return;
+        }
+
+        extension.IsEnabled = true;
+
+        if (extension.State == ExtensionState.Failed)
+        {
+            // Enabling does not un-break it. It is still failed until it answers.
+            extension.StateDetail += " Still failed. Fix the configuration and test connect.";
+        }
+
+        _registry.Save();
+    }
+
+    /// <summary>Removes an extension from this project.</summary>
+    [RelayCommand]
+    private void Remove(InstalledExtension? extension)
+    {
+        if (extension is null)
+        {
+            return;
+        }
+
+        _host.Stop(extension.Manifest.Id);
+        _registry.Remove(extension);
+
+        if (ReferenceEquals(Selected, extension))
+        {
+            Selected = null;
+        }
+    }
+
+    /// <summary>Opens this extension's stderr log.</summary>
+    [RelayCommand]
+    private void ViewLogs(InstalledExtension? extension)
+    {
+        if (extension?.LogPath is { } path)
+        {
+            _dialogs.OpenFileInEditor(path);
+            return;
+        }
+
+        _dialogs.ShowError(
+            "No log yet",
+            "This extension has not been started in this session, so it has not written anything.");
+    }
+
+    private Task AddAsync(Func<Task<InstalledExtension>> create)
+        => AddAsync(_ => create());
+
+    private async Task AddAsync(Func<CancellationToken, Task<InstalledExtension>> create)
+    {
+        if (!HasProject)
+        {
+            _dialogs.ShowError(
+                "No project open",
+                "Extensions are registered against a project, so open one first.");
+            return;
+        }
+
+        try
+        {
+            var extension = await create(CancellationToken.None).ConfigureAwait(true);
+
+            // Checked before anything is registered. An extension that is added and then found
+            // to be unusable is a thing somebody has to debug later; this is the whole reason
+            // the check happens here rather than at first use.
+            var results = _prerequisites.Check(extension.Manifest, _registry.ProjectPath);
+            var missing = results.Where(r => !r.Met).ToList();
+
+            if (missing.Count > 0 && !await ResolveAsync(extension, missing).ConfigureAwait(true))
+            {
+                return;
+            }
+
+            extension.State = ExtensionState.Unreachable;
+            extension.StateDetail = "Not started yet.";
+
+            _registry.Add(extension);
+            Selected = extension;
+            Source = ExtensionSource.Installed;
+
+            _feed.Info($"{extension.Manifest.Name} added", extension.Manifest.Launch.DisplayCommand);
+        }
+        catch (ExtensionException ex)
+        {
+            _dialogs.ShowError("Extension not added", ex.Message);
+        }
+        finally
+        {
+            BusyMessage = null;
+        }
+    }
+
+    /// <summary>
+    /// Offers to install what is missing. Declining installs nothing and adds nothing.
+    /// </summary>
+    private async Task<bool> ResolveAsync(InstalledExtension extension, IReadOnlyList<PrerequisiteResult> missing)
+    {
+        var installable = missing.Where(m => m.Prerequisite.CanInstall).ToList();
+        var manual = missing.Where(m => !m.Prerequisite.CanInstall).ToList();
+
+        if (manual.Count > 0)
+        {
+            // Nothing here can be installed from this application, so the honest thing is to say
+            // what has to happen rather than offer a button that would not work.
+            _dialogs.ShowError(
+                $"{extension.Manifest.Name} needs something first",
+                string.Join(
+                    Environment.NewLine + Environment.NewLine,
+                    manual.Select(m => $"{m.Prerequisite.Name}{Environment.NewLine}{m.Prerequisite.Reason}{Environment.NewLine}{m.Detail}")));
+            return false;
+        }
+
+        var summary = string.Join(
+            Environment.NewLine + Environment.NewLine,
+            installable.Select(m => $"{m.Prerequisite.Name}{Environment.NewLine}{m.Prerequisite.Reason}"));
+
+        var approved = await _feed
+            .RequestConfirmationAsync(
+                $"{extension.Manifest.Name} needs {(installable.Count == 1 ? "one thing" : $"{installable.Count} things")} installed",
+                summary + Environment.NewLine + Environment.NewLine +
+                "Install it now and add the extension, or cancel and nothing is changed.",
+                CancellationToken.None)
+            .ConfigureAwait(true);
+
+        if (!approved)
+        {
+            _feed.Info(
+                $"{extension.Manifest.Name} was not added",
+                "Its prerequisites were declined, so nothing was installed and nothing was registered.");
+            return false;
+        }
+
+        foreach (var result in installable)
+        {
+            BusyMessage = $"Installing {result.Prerequisite.Name}";
+
+            try
+            {
+                await _installer
+                    .InstallPrerequisiteAsync(
+                        result.Prerequisite,
+                        new DelegateProgress<string>(m => BusyMessage = m),
+                        CancellationToken.None)
+                    .ConfigureAwait(true);
+            }
+            catch (ExtensionException ex)
+            {
+                _dialogs.ShowError($"{result.Prerequisite.Name} was not installed", ex.Message);
+                return false;
+            }
+        }
+
+        return true;
+    }
+}
