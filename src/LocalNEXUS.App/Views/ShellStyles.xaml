@@ -407,8 +407,10 @@
         The nudge downward is the whole of it. Centring the dot on the line box puts it visibly
         high, because a line box is sized for ascenders and descenders while the text next to it is
         mostly lowercase, so the mass the eye reads as the middle of the label sits below the
-        middle of its box. A tenth of the type size is the usual correction and one pixel is that
-        at every size this dot is drawn.
+        middle of its box. Half a pixel, which is small on purpose: a whole one was tried and
+        overshoots, reading as clearly low where centring the box read as slightly high. The
+        point the eye wants is much nearer the box centre than the usual tenth of the type size
+        would put it at this size.
 
         It is a render transform rather than a margin for two reasons. A margin set here is
         overridden by the margin nearly every one of these sets for its own spacing, and a render
@@ -421,7 +423,7 @@
         <Setter Property="VerticalAlignment" Value="Center" />
         <Setter Property="RenderTransform">
             <Setter.Value>
-                <TranslateTransform Y="1" />
+                <TranslateTransform Y="0.5" />
             </Setter.Value>
         </Setter>
     </Style>
