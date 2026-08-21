@@ -5,8 +5,9 @@ namespace LocalNEXUS.App.Services.Theming;
 /// </summary>
 /// <remarks>
 /// The names are written to the configuration file, so they are part of its format. A value this
-/// build does not recognise falls back to <see cref="EditorDark"/> rather than leaving the window
-/// unpainted, and <see cref="Persistence.AppConfig"/> carries the one rename this enum has had.
+/// build does not recognise falls back to <see cref="ThemeService.DefaultTheme"/> rather than
+/// leaving the window unpainted, and <see cref="Persistence.AppConfig"/> carries the one rename
+/// this enum has had.
 /// </remarks>
 public enum AppTheme
 {

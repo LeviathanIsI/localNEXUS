@@ -1,7 +1,6 @@
 using System.Windows;
 using System.Windows.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
-using LocalNEXUS.App.Infrastructure;
 using LocalNEXUS.App.Services.Persistence;
 
 namespace LocalNEXUS.App.Services.Theming;
@@ -43,11 +42,20 @@ public sealed partial class ThemeService : ObservableObject
     /// </remarks>
     public const double MinimumWindowOpacity = 0.55d;
 
+    /// <summary>
+    /// The theme an install with no configuration file gets.
+    /// </summary>
+    /// <remarks>
+    /// Named here rather than written into <see cref="Persistence.AppConfig"/> as a literal,
+    /// because two other things need to agree with it: the picker marks this one as the default,
+    /// and a value this build does not recognise falls back to it.
+    /// </remarks>
+    public const AppTheme DefaultTheme = AppTheme.Mystic;
+
     /// <summary>The theme currently applied.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CurrentDefinition))]
     [NotifyPropertyChangedFor(nameof(IsTransparencyAvailable))]
-    [NotifyPropertyChangedFor(nameof(IsWindowTranslucent))]
     [NotifyPropertyChangedFor(nameof(EffectiveWindowOpacity))]
     [NotifyPropertyChangedFor(nameof(TransparencySummary))]
     private AppTheme _current;
@@ -62,6 +70,12 @@ public sealed partial class ThemeService : ObservableObject
     /// <summary>Every theme that can be picked, in the order the picker shows them.</summary>
     public static IReadOnlyList<ThemeDefinition> Available { get; } = new[]
     {
+        new ThemeDefinition(
+            AppTheme.Mystic,
+            "Mystic",
+            "Violet wash, and the only one you can see through.",
+            "Views/Themes/Mystic.xaml",
+            ThemeCapabilities.GradientSurface | ThemeCapabilities.WindowTransparency),
         new ThemeDefinition(
             AppTheme.EditorDark,
             "Editor dark",
@@ -86,13 +100,7 @@ public sealed partial class ThemeService : ObservableObject
             AppTheme.Light,
             "Light",
             "For bright rooms.",
-            "Views/Themes/Light.xaml"),
-        new ThemeDefinition(
-            AppTheme.Mystic,
-            "Mystic",
-            "Violet wash, and the only one you can see through.",
-            "Views/Themes/Mystic.xaml",
-            ThemeCapabilities.GradientSurface | ThemeCapabilities.WindowTransparency)
+            "Views/Themes/Light.xaml")
     };
 
     /// <summary>The definition of the theme currently applied.</summary>
@@ -102,12 +110,11 @@ public sealed partial class ThemeService : ObservableObject
     /// True when the transparency control has anything to offer.
     /// </summary>
     /// <remarks>
-    /// Two questions, and neither of them is which theme this is. The theme has to declare the
-    /// capability, and the machine has to be able to honour it, which is a real question because
-    /// the backdrop arrived part way through Windows 11.
+    /// One question, and it is not which theme this is. The window is a layered one for every
+    /// theme, so there is nothing further to ask of the machine: what remains is whether the theme
+    /// in force declares that it can be seen through.
     /// </remarks>
-    public bool IsTransparencyAvailable
-        => CurrentDefinition.SupportsTransparency && WindowBackdrop.IsSupported;
+    public bool IsTransparencyAvailable => CurrentDefinition.SupportsTransparency;
 
     /// <summary>What the appearance panel says about transparency under this theme.</summary>
     public string TransparencySummary
@@ -119,9 +126,7 @@ public sealed partial class ThemeService : ObservableObject
                 return $"{CurrentDefinition.DisplayName} is opaque. Pick a theme that can be seen through to set this.";
             }
 
-            return WindowBackdrop.IsSupported
-                ? "How solid the window is. What is behind the application shows through the base layer, and the panels stay opaque."
-                : "This needs Windows 11 22H2 or later, which this machine does not have. The window stays opaque.";
+            return "How solid the window is. What is behind the application shows through the base layer, and every panel, card and node stays opaque.";
         }
     }
 
@@ -145,7 +150,6 @@ public sealed partial class ThemeService : ObservableObject
 
             OnPropertyChanged();
             OnPropertyChanged(nameof(EffectiveWindowOpacity));
-            OnPropertyChanged(nameof(IsWindowTranslucent));
         }
     }
 
@@ -155,16 +159,10 @@ public sealed partial class ThemeService : ObservableObject
     /// </summary>
     public double EffectiveWindowOpacity => IsTransparencyAvailable ? WindowOpacity : 1d;
 
-    /// <summary>True when the window should be asking the compositor for a backdrop.</summary>
-    /// <remarks>
-    /// Not the same question as whether transparency is available: a theme that offers it, set to
-    /// fully solid, has nothing to show through and should not be paying for a live blur.
-    /// </remarks>
-    public bool IsWindowTranslucent => IsTransparencyAvailable && WindowOpacity < 1d;
-
-    /// <summary>Looks up a definition, falling back to the reference theme for a value this build does not know.</summary>
+    /// <summary>Looks up a definition, falling back to the default for a value this build does not know.</summary>
     public static ThemeDefinition Definition(AppTheme theme)
-        => Available.FirstOrDefault(t => t.Theme == theme) ?? Available[0];
+        => Available.FirstOrDefault(t => t.Theme == theme)
+           ?? Available.First(t => t.Theme == DefaultTheme);
 
     /// <summary>Applies a theme and remembers it for the next session.</summary>
     public void Apply(AppTheme theme)

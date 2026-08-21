@@ -15,12 +15,14 @@
         MinHeight="620"
         MinWidth="1040"
         WindowStartupLocation="CenterScreen"
+        WindowStyle="None"
+        AllowsTransparency="True"
         Background="Transparent"
         Foreground="{DynamicResource Text.Primary.Brush}"
         FontFamily="{StaticResource Font.Sans}"
         TextOptions.TextFormattingMode="Ideal"
         behaviors:WindowCommandsBehavior.IsEnabled="True"
-        behaviors:WindowBackdropBehavior.IsTranslucent="{Binding Themes.IsWindowTranslucent}">
+        behaviors:WindowMaximiseBoundsBehavior.IsEnabled="True">
 
     <!--
         The shell: title bar with the menus, activity bar, side bar, editor area, inspector,
@@ -29,6 +31,14 @@
         The window draws its own title bar, which is the only way the menu bar can be part of it
         and the only way the caption can be themed. The caption buttons get their handlers from an
         attached behaviour so that the code behind stays a call to InitializeComponent.
+
+        AllowsTransparency is what lets a theme be seen through, and it is the installer's
+        mechanism rather than a second one invented here. The alternative, a Windows 11 system
+        backdrop, was tried and measured and does not work on this window: DwmSetWindowAttribute
+        accepts the request and reads it back, but WindowChrome with no glass frame leaves the
+        window with non client rendering disabled, and the backdrop is drawn into a frame that no
+        longer exists. A layered window costs the surface its cheapest presentation path, which is
+        the price of the feature and is paid whatever theme is in force.
     -->
 
     <WindowChrome.WindowChrome>
@@ -53,18 +63,13 @@
         <KeyBinding Key="Escape" Command="{Binding CloseSettingsCommand}" />
     </Window.InputBindings>
 
-    <!-- A maximised window with custom chrome overhangs the work area by the resize border. -->
+    <!--
+        No inset when maximised. There used to be one, compensating for the overhang a framed
+        window has, and WindowMaximiseBoundsBehavior now answers WM_GETMINMAXINFO with the work
+        area so there is no overhang left to compensate for. Keeping both would show a strip of
+        desktop down every edge, which a window that can be seen through would make obvious.
+    -->
     <Border x:Name="Root">
-        <Border.Style>
-            <Style TargetType="Border">
-                <Setter Property="Margin" Value="0" />
-                <Style.Triggers>
-                    <DataTrigger Binding="{Binding WindowState, RelativeSource={RelativeSource AncestorType=Window}}" Value="Maximized">
-                        <Setter Property="Margin" Value="7" />
-                    </DataTrigger>
-                </Style.Triggers>
-            </Style>
-        </Border.Style>
 
         <Grid>
 

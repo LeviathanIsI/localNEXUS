@@ -24,7 +24,7 @@ public sealed class AppConfig
     /// A file that exists has this property in it, whether or not anybody ever opened the picker,
     /// so moving the default cannot reach back and repaint a machine that has already run.
     /// </remarks>
-    public Theming.AppTheme Theme { get; set; } = Theming.AppTheme.Mystic;
+    public Theming.AppTheme Theme { get; set; } = Theming.ThemeService.DefaultTheme;
 
     /// <summary>
     /// How opaque the window's base layer is, from the readability floor to fully solid.

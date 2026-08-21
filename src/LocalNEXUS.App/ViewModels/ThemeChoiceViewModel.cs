@@ -28,8 +28,19 @@ public sealed class ThemeChoiceViewModel : ObservableObject
     /// <summary>The theme itself.</summary>
     public ThemeDefinition Definition { get; }
 
-    /// <summary>What the picker calls it.</summary>
-    public string DisplayName => Definition.DisplayName;
+    /// <summary>
+    /// What the picker calls it, with the default one said out loud.
+    /// </summary>
+    /// <remarks>
+    /// The marker is put on here rather than into the theme's own name, because the name is what
+    /// the theme is called and which one happens to be the default is a fact about this build.
+    /// </remarks>
+    public string DisplayName => IsDefault
+        ? $"{Definition.DisplayName} (Default)"
+        : Definition.DisplayName;
+
+    /// <summary>True when this is the theme a fresh install starts on.</summary>
+    public bool IsDefault => Definition.Theme == ThemeService.DefaultTheme;
 
     /// <summary>One line explaining when somebody would pick it.</summary>
     public string Description => Definition.Description;
