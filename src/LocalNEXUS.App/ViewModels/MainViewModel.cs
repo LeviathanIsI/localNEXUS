@@ -43,6 +43,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private readonly IDialogService _dialogs;
     private readonly ActivityFeed _feed;
     private readonly AppConfig _config;
+    private readonly Services.Compilation.ICodeCompiler _compiler;
     private readonly IExtensionsWindow _extensionsWindow;
 
     /// <summary>Nodes whose selection state this view model is currently following.</summary>
@@ -134,8 +135,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         AppSettingsViewModel settings,
         IExtensionsWindow extensionsWindow,
         AppConfig config,
-        Dispatcher dispatcher)
+        Dispatcher dispatcher,
+        Services.Compilation.ICodeCompiler compiler)
     {
+        _compiler = compiler;
         _extensionsWindow = extensionsWindow;
         Graph = graph;
         _factory = factory;
@@ -170,6 +173,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         // The graph handed in is normally empty, but it does not have to be.
         ResyncNodeSubscriptions();
+        RefreshCompilerReachability();
     }
 
     /// <summary>The document on the canvas.</summary>
@@ -594,11 +598,30 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         SelectedNode = node;
     }
 
+    /// <summary>
+    /// Asks every compile check node what it can reach right now.
+    /// </summary>
+    /// <remarks>
+    /// Here rather than in the node because the node has no services outside a run, and this is
+    /// the question that has to be answered before one. It names a node type, which the executor
+    /// may not do and a view model may: this is the shell deciding what to show, not the engine
+    /// deciding what to execute.
+    /// </remarks>
+    private void RefreshCompilerReachability()
+    {
+        foreach (var node in Graph.Nodes.OfType<CompilerCheckNode>())
+        {
+            node.RefreshReachability(_compiler, UnityProject.ProjectPath);
+        }
+    }
+
     private void OnNodesChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         // A reset carries no item lists, which is what clearing the canvas raises. Rebuilding the
         // subscription set from the collection covers that case as well as ordinary add and
         // remove, and stops nodes from a discarded graph holding this view model alive.
+        RefreshCompilerReachability();
+
         if (e.Action == NotifyCollectionChangedAction.Reset)
         {
             ResyncNodeSubscriptions();
@@ -665,6 +688,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             OnPropertyChanged(nameof(WindowTitle));
             OnPropertyChanged(nameof(TitleText));
+
+            // What a check can reach depends entirely on which project is open, so the answer the
+            // nodes are showing is stale the moment that changes. So is the staged work, which
+            // belongs to a project rather than to this install: opening another project must not
+            // offer somebody the unfinished work of the one they just left.
+            RefreshCompilerReachability();
+            Feed.Staging.OpenProject(UnityProject.ProjectPath);
         }
     }
 

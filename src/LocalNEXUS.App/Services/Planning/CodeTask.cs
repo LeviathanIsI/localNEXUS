@@ -118,6 +118,29 @@ public sealed class FilePlan
         => Tasks.Count == 0 ? Summary : string.Join(Environment.NewLine, Tasks.Select(t => t.ToString()));
 }
 
+/// <summary>How a compile check left a file it was given.</summary>
+/// <remarks>
+/// Four states rather than a pass and a fail, following the discipline the rest of the application
+/// uses. Never checked and checked but not judgeable are not failures and must not be drawn as
+/// them: the first means nothing looked, and the second means what looked had no way to tell.
+/// </remarks>
+public enum FileCheckState
+{
+    /// <summary>Nothing checked it.</summary>
+    NotChecked,
+
+    /// <summary>It compiles.</summary>
+    Compiled,
+
+    /// <summary>
+    /// It did not compile, and every complaint could have been a reference the check did not have.
+    /// </summary>
+    Inconclusive,
+
+    /// <summary>It does not compile, for reasons the reference set does not explain.</summary>
+    DidNotCompile
+}
+
 /// <summary>
 /// A file the coder produced, on its way to the compile check and then to disk.
 /// </summary>
@@ -126,6 +149,20 @@ public sealed class FilePlan
 /// <param name="Types">What it declares, parsed back out so later steps can be shown it.</param>
 public sealed record GeneratedFile(CodeTask Task, string Content, IReadOnlyList<IndexedType> Types)
 {
+    /// <summary>
+    /// How the compile check left this file.
+    /// </summary>
+    /// <remarks>
+    /// Carried on the file rather than reported separately, because the thing that has to act on
+    /// it is whatever writes the file, and the two are already travelling together. A plain string
+    /// and an enum rather than the compiler's own types, so the planning layer does not learn what
+    /// a compiler is.
+    /// </remarks>
+    public FileCheckState Check { get; init; } = FileCheckState.NotChecked;
+
+    /// <summary>What the check said, when it said anything worth carrying.</summary>
+    public string CheckDetail { get; init; } = string.Empty;
+
     /// <summary>Where it goes, relative to the project root.</summary>
     public string RelativePath => Task.RelativePath;
 

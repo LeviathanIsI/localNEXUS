@@ -57,7 +57,7 @@ public sealed partial class CompilerCheckNode : NodeBase
     /// <summary>What happens to the run when the code still does not compile.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(FaultsTheRun))]
-    private CompileFailureBehaviour _failureBehaviour = CompileFailureBehaviour.FaultTheRun;
+    private CompileFailureBehaviour _failureBehaviour = CompileFailureBehaviour.StageForLater;
 
     /// <summary>How the last check ended. Drives the badge in the settings panel.</summary>
     [ObservableProperty]
@@ -85,6 +85,27 @@ public sealed partial class CompilerCheckNode : NodeBase
     [ObservableProperty]
     private string _referenceSummary = string.Empty;
 
+    /// <summary>
+    /// What this node can reach, asked before anything runs.
+    /// </summary>
+    /// <remarks>
+    /// Visible on the node on purpose. Under a partial set a type the project defines reads as a
+    /// type that does not exist, and somebody who does not know that spends three repair attempts
+    /// and a good deal of patience on errors that were never in the code. Knowing beforehand is
+    /// the difference between a weaker check and a misleading one.
+    /// </remarks>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ReachabilityIsPartial))]
+    private CompileReferenceState _reachability = CompileReferenceState.Unknown;
+
+    /// <summary>The one line form of what it can reach, for the node and the panel.</summary>
+    [ObservableProperty]
+    private string _reachabilityText = "Not checked yet";
+
+    /// <summary>What it would be compiling against right now, in full.</summary>
+    [ObservableProperty]
+    private string _reachabilityDetail = string.Empty;
+
     public CompilerCheckNode()
         : base("Compiler check")
     {
@@ -111,9 +132,34 @@ public sealed partial class CompilerCheckNode : NodeBase
         CompileOutcome.Compiled => "Compiled",
         CompileOutcome.Repaired => "Repaired, then compiled",
         CompileOutcome.Failed => "Did not compile",
+        CompileOutcome.Inconclusive => "Could not tell, references incomplete",
         CompileOutcome.Unavailable => "Could not be checked",
         _ => "Not run yet"
     };
+
+    /// <summary>True when what it can reach is short of what the code may legitimately use.</summary>
+    public bool ReachabilityIsPartial
+        => Reachability is CompileReferenceState.ProjectNotCompiled or CompileReferenceState.FrameworkOnly;
+
+    /// <summary>
+    /// Asks the compiler what it can reach and records the answer, without compiling anything.
+    /// </summary>
+    /// <remarks>
+    /// Called when a project is opened or closed and when the node is added, so the node is
+    /// telling the truth before a run rather than after one. It is a real probe: it builds the
+    /// reference set, so a Unity install that is present but unreadable answers unreadable rather
+    /// than answering from the fact that a folder exists.
+    /// </remarks>
+    public void RefreshReachability(ICodeCompiler compiler, string? projectPath)
+    {
+        ArgumentNullException.ThrowIfNull(compiler);
+
+        var set = compiler.DescribeReferences(projectPath);
+
+        Reachability = set.State;
+        ReachabilityText = set.Reachability;
+        ReachabilityDetail = set.Summary;
+    }
 
     /// <inheritdoc />
     public override async Task<NodeResult> ExecuteAsync(NodeExecutionContext ctx, CancellationToken ct)
@@ -157,6 +203,11 @@ public sealed partial class CompilerCheckNode : NodeBase
             Outcome = CompileOutcome.Compiled;
             StatusMessage = $"{fileName} compiled in {result.Elapsed.TotalMilliseconds:0} ms";
             return NodeResult.FromPin(Checked, source);
+        }
+
+        if (result.IsInconclusive)
+        {
+            return Inconclusive(ctx, source, fileName, result);
         }
 
         var repaired = await TryRepairAsync(ctx, source, fileName, result, ct).ConfigureAwait(false);
@@ -211,10 +262,24 @@ public sealed partial class CompilerCheckNode : NodeBase
             settled.Add(checkedFile.File);
         }
 
-        Outcome = repairs > 0 ? CompileOutcome.Repaired : CompileOutcome.Compiled;
-        StatusMessage = repairs > 0
-            ? $"{settled.Count} file(s) compiled after {repairs} repair attempt(s)"
-            : $"{settled.Count} file(s) compiled";
+        var failed = settled.Count(f => f.Check == FileCheckState.DidNotCompile);
+        var unjudged = settled.Count(f => f.Check == FileCheckState.Inconclusive);
+
+        Outcome = failed > 0
+            ? CompileOutcome.Failed
+            : unjudged > 0
+                ? CompileOutcome.Inconclusive
+                : repairs > 0
+                    ? CompileOutcome.Repaired
+                    : CompileOutcome.Compiled;
+
+        var compiled = settled.Count - failed - unjudged;
+
+        StatusMessage = failed > 0
+            ? $"{compiled} of {settled.Count} file(s) compiled, {failed} left for later"
+            : repairs > 0
+                ? $"{settled.Count} file(s) compiled after {repairs} repair attempt(s)"
+                : $"{settled.Count} file(s) compiled";
 
         return NodeResult.FromPin(Checked, settled);
     }
@@ -253,7 +318,20 @@ public sealed partial class CompilerCheckNode : NodeBase
 
         if (result.Succeeded)
         {
-            return new CheckedFile(file, 0);
+            return new CheckedFile(file with { Check = FileCheckState.Compiled }, 0);
+        }
+
+        if (result.IsInconclusive)
+        {
+            ReportInconclusive(ctx, label, result);
+
+            return new CheckedFile(
+                file with
+                {
+                    Check = FileCheckState.Inconclusive,
+                    CheckDetail = result.FormatDiagnostics(DiagnosticsShown)
+                },
+                0);
         }
 
         var current = file.Content;
@@ -320,15 +398,31 @@ public sealed partial class CompilerCheckNode : NodeBase
 
                 if (result.Succeeded)
                 {
-                    return new CheckedFile(file with { Content = current }, attempts);
+                    return new CheckedFile(
+                        file with { Content = current, Check = FileCheckState.Compiled },
+                        attempts);
                 }
             }
+        }
+
+        if (result.IsInconclusive)
+        {
+            ReportInconclusive(ctx, label, result);
+
+            return new CheckedFile(
+                file with
+                {
+                    Content = current,
+                    Check = FileCheckState.Inconclusive,
+                    CheckDetail = result.FormatDiagnostics(DiagnosticsShown)
+                },
+                attempts);
         }
 
         Outcome = CompileOutcome.Failed;
 
         var listing = result.FormatDiagnostics(DiagnosticsShown);
-        StatusMessage = $"{result.Errors.Count} error(s) remain in {file.RelativePath}";
+        StatusMessage = $"{result.TrustedErrors.Count} error(s) remain in {file.RelativePath}";
 
         if (FailureBehaviour == CompileFailureBehaviour.FaultTheRun)
         {
@@ -338,11 +432,22 @@ public sealed partial class CompilerCheckNode : NodeBase
                 + $"Nothing has been written.{Environment.NewLine}{listing}");
         }
 
+        // The rest of the plan still runs. Stopping here would throw away every file that would
+        // have worked and every step that had not run yet, to no one's benefit.
         ctx.Feed.Info(
-            $"{Title}: continuing with {file.RelativePath}, which does not compile",
-            $"{result.Errors.Count} error(s) remain. This node is set to continue anyway.");
+            $"{Title}: {file.RelativePath} is left for later",
+            $"{result.TrustedErrors.Count} error(s) remain after "
+            + $"{(attempts == 0 ? "no repair attempt" : $"{attempts} repair attempt(s)")}. "
+            + "The rest of the plan carries on and this file is staged rather than written.");
 
-        return new CheckedFile(file with { Content = current }, attempts);
+        return new CheckedFile(
+            file with
+            {
+                Content = current,
+                Check = FileCheckState.DidNotCompile,
+                CheckDetail = listing
+            },
+            attempts);
     }
 
     /// <summary>
@@ -377,7 +482,7 @@ public sealed partial class CompilerCheckNode : NodeBase
             settings["failureBehaviour"]?.GetValue<string>(),
             out var behaviour)
             ? behaviour
-            : CompileFailureBehaviour.FaultTheRun;
+            : CompileFailureBehaviour.StageForLater;
     }
 
     partial void OnRetryLimitChanged(int value)
@@ -520,6 +625,32 @@ public sealed partial class CompilerCheckNode : NodeBase
     }
 
     /// <summary>
+    /// Reports a check whose every complaint could be a reference it did not have.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately not a failure and deliberately not a pass. Spending the repair limit here
+    /// would ask a model to fix a name that is not wrong, and reporting it as a failure would tell
+    /// somebody their code is broken when the truth is that their project has not been compiled.
+    /// </remarks>
+    private NodeResult Inconclusive(NodeExecutionContext ctx, string source, string fileName, CompileResult result)
+    {
+        ReportInconclusive(ctx, fileName, result);
+        return NodeResult.FromPin(Checked, source);
+    }
+
+    private void ReportInconclusive(NodeExecutionContext ctx, string label, CompileResult result)
+    {
+        Outcome = CompileOutcome.Inconclusive;
+        StatusMessage = $"{label}: could not tell, references incomplete";
+
+        ctx.Feed.Info(
+            $"{Title}: {label} could not be judged",
+            $"{result.Errors.Count} error(s), and every one of them names something this check had no reference for. "
+            + $"{result.ReferenceSummary} Nothing was repaired, because there is no reason to believe the code is wrong."
+            + $"{Environment.NewLine}{result.FormatDiagnostics(DiagnosticsShown)}");
+    }
+
+    /// <summary>
     /// Reports a check that could not be run. Not a compile failure, and deliberately not treated
     /// as one: the code passes through untouched and the run continues.
     /// </summary>
@@ -539,9 +670,15 @@ public sealed partial class CompilerCheckNode : NodeBase
     {
         ct.ThrowIfCancellationRequested();
 
+        if (repaired.Result.IsInconclusive)
+        {
+            ReportInconclusive(ctx, fileName, repaired.Result);
+            return NodeResult.FromPin(Checked, repaired.Code);
+        }
+
         Outcome = CompileOutcome.Failed;
 
-        var errors = repaired.Result.Errors.Count;
+        var errors = repaired.Result.TrustedErrors.Count;
         var attempted = repaired.Attempts == 0
             ? "no repair was attempted"
             : $"{repaired.Attempts} repair attempt(s) did not fix it";

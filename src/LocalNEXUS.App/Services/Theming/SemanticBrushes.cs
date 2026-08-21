@@ -136,6 +136,7 @@ public static class SemanticBrushes
         ("CompileOutcome.Compiled.Brush", "Status.SuccessColor"),
         ("CompileOutcome.Repaired.Brush", "Status.SuccessColor"),
         ("CompileOutcome.Failed.Brush", "Status.DangerColor"),
+        ("CompileOutcome.Inconclusive.Brush", "Status.WarningColor"),
         ("CompileOutcome.Unavailable.Brush", "Status.WarningColor"),
 
         // Severity of one diagnostic in the Problems list.
@@ -148,6 +149,7 @@ public static class SemanticBrushes
         ("RunState.Running.Brush", "Status.InfoColor"),
         ("RunState.Paused.Brush", "Status.WarningColor"),
         ("RunState.Completed.Brush", "Status.SuccessColor"),
+        ("RunState.Unresolved.Brush", "Status.WarningColor"),
         ("RunState.Faulted.Brush", "Status.DangerColor"),
 
         // Kinds of activity feed entry.

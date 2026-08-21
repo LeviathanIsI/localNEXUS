@@ -25,6 +25,7 @@ public sealed partial class ActivityFeedViewModel : ObservableObject
     private readonly ActivityFeed _feed;
     private readonly Dispatcher _dispatcher;
     private readonly RunCostTracker _cost;
+    private readonly Services.Files.StagingStore _staging;
 
     private CancellationTokenSource? _runCancellation;
     private RunContext? _run;
@@ -69,8 +70,13 @@ public sealed partial class ActivityFeedViewModel : ObservableObject
         GraphModel graph,
         ActivityFeed feed,
         Dispatcher dispatcher,
-        RunCostTracker? cost = null)
+        RunCostTracker? cost = null,
+        Services.Files.StagingStore? staging = null)
     {
+        // The same store the output node writes to, so the box below is describing the files that
+        // are actually waiting rather than a second copy of the idea.
+        _staging = staging ?? new Services.Files.StagingStore(dispatcher);
+
         _executor = executor;
         _graph = graph;
         _feed = feed;
@@ -95,11 +101,54 @@ public sealed partial class ActivityFeedViewModel : ObservableObject
     /// <summary>Label for the pause and resume button.</summary>
     public string PauseButtonText => IsPaused ? "Resume" : "Pause";
 
+    /// <summary>The work the last run left behind, for the box to show and the next run to read.</summary>
+    public Services.Files.StagingStore Staging => _staging;
+
+    /// <summary>
+    /// The request the run is given: what was typed, and what is still waiting.
+    /// </summary>
+    /// <remarks>
+    /// This is how staged work is resolved from the chat box rather than by starting the whole
+    /// request over. Somebody types what to do about the file that did not compile, and the run
+    /// begins knowing which file that is, what it was for and what the compiler said, without
+    /// anyone having to repeat it.
+    ///
+    /// Appended rather than substituted, and clearly labelled, so the typed request stays the
+    /// request. Nothing is added when nothing is waiting.
+    /// </remarks>
+    private string ComposeRequest()
+    {
+        var typed = RequestText;
+
+        if (!_staging.HasPending)
+        {
+            return typed;
+        }
+
+        return $"{typed}{Environment.NewLine}{Environment.NewLine}"
+               + $"Work left unfinished by an earlier run, still waiting:{Environment.NewLine}"
+               + _staging.Describe();
+    }
+
+    /// <summary>Forgets a staged file, because it is no longer wanted.</summary>
+    [RelayCommand]
+    private void DiscardStaged(Services.Files.StagedFile? file)
+    {
+        if (file is not null)
+        {
+            _staging.Resolve(file.RelativePath);
+        }
+    }
+
+    /// <summary>Forgets everything that is waiting.</summary>
+    [RelayCommand]
+    private void DiscardAllStaged() => _staging.Clear();
+
     /// <summary>Runs the graph with the text currently in the chat box.</summary>
     [RelayCommand(CanExecute = nameof(CanRun))]
     private async Task RunAsync()
     {
-        var request = RequestText;
+        var request = ComposeRequest();
 
         _runCancellation?.Dispose();
         _runCancellation = new CancellationTokenSource();

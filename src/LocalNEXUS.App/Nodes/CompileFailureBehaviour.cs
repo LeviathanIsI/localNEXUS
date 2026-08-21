@@ -10,6 +10,18 @@ namespace LocalNEXUS.App.Nodes;
 /// </remarks>
 public enum CompileFailureBehaviour
 {
+    /// <summary>
+    /// The file is marked as not compiling and the run carries on to the rest of the plan.
+    /// </summary>
+    /// <remarks>
+    /// The default, and what makes a run recoverable. Stopping at the third file of eight throws
+    /// away the four that would have worked and every step that had not run yet, and with a local
+    /// model one file out of eight failing is an ordinary afternoon rather than an emergency. The
+    /// retry limit is still spent on the file before it is given up on; what changes is that
+    /// giving up on one file is not giving up on the run.
+    /// </remarks>
+    StageForLater,
+
     /// <summary>The run stops and reports the remaining errors.</summary>
     FaultTheRun,
 

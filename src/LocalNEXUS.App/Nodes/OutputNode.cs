@@ -16,9 +16,10 @@ namespace LocalNEXUS.App.Nodes;
 /// The path is always resolved through <see cref="Services.Files.UnityProjectService"/>, which
 /// refuses anything that would land outside the project folder.
 ///
-/// When a whole plan arrives rather than one file, every file is staged and the batch is written
-/// together or not at all. A half applied change is worse than none: three of five scripts land,
-/// the project does not compile, and undoing it has become the person's problem.
+/// When a whole plan arrives rather than one file, each file is written on its own as soon as it
+/// is ready. A file that will not compile, or that the project rules refuse, is kept with its
+/// reason instead of being written, and the rest of the plan carries on. Holding four finished
+/// files hostage to a fifth protects nobody and throws away work that was correct.
 ///
 /// Before anything is written, each file is put through the Unity rules. Those are refusals
 /// rather than warnings, because every one of them describes a change that compiles cleanly and
@@ -113,8 +114,23 @@ public sealed partial class OutputNode : NodeBase
     }
 
     /// <summary>
-    /// Writes every file of a plan, or none of them.
+    /// Writes every file of a plan that is ready, and stages the ones that are not.
     /// </summary>
+    /// <remarks>
+    /// This used to write the whole plan or none of it, and that was the right instinct applied to
+    /// the wrong unit. Holding four good files hostage to a fifth that will not compile does not
+    /// protect anybody; it throws away work that was finished and correct, and with a local model
+    /// one file of five failing is ordinary rather than exceptional.
+    ///
+    /// So the unit is the file. Each one is written on its own, in place, and either it lands or it
+    /// is kept with its reason. Nothing about the guardrails is relaxed: a file is checked against
+    /// them before it is written, exactly as before, and a refusal is a refusal. What changes is
+    /// that a refusal stops that file rather than the run.
+    ///
+    /// A staged file is not a failure and is not written as one. It is work that has not finished,
+    /// and it sits with what it was for and what stopped it so that somebody can say what to do
+    /// about it from the chat box instead of starting the request again.
+    /// </remarks>
     private async Task<NodeResult> WritePlanAsync(
         NodeExecutionContext ctx,
         IReadOnlyList<GeneratedFile> files,
@@ -127,23 +143,7 @@ public sealed partial class OutputNode : NodeBase
 
         var project = ctx.Services.UnityProject;
         var index = ctx.Services.ProjectIndex;
-        var batch = new ProjectWriteBatch(ctx.Services.FileWriter);
-
-        // Staging is what makes the guardrails useful. Every file is checked before any of them
-        // is written, so a plan whose fourth file would break a prefab writes none of the first
-        // three either.
-        foreach (var file in files)
-        {
-            ct.ThrowIfCancellationRequested();
-
-            var folder = Path.GetDirectoryName(file.RelativePath)?.Replace('\\', '/') ?? string.Empty;
-            var absolute = project.ResolveTargetPath(folder, Path.GetFileName(file.RelativePath));
-
-            batch.EnforceExpectedExistence(absolute, file.Operation == FileOperation.Edit);
-            UnityScriptRules.Enforce(file.RelativePath, file.Content, index.FindFile(file.RelativePath), file.Types);
-
-            batch.Stage(absolute, file.Content);
-        }
+        var staging = ctx.Services.Staging;
 
         if (AskBeforeWriting)
         {
@@ -160,16 +160,75 @@ public sealed partial class OutputNode : NodeBase
             }
         }
 
-        var written = await batch.CommitAsync(ct).ConfigureAwait(false);
-
-        // Matched back by path rather than by position, because the batch writes one entry per
-        // distinct path and a plan is allowed to name the same file twice.
-        var changes = written.ToDictionary(w => w.Path, w => w.Change, StringComparer.OrdinalIgnoreCase);
+        var written = 0;
+        var staged = 0;
+        var bytes = 0L;
 
         foreach (var file in files)
         {
+            ct.ThrowIfCancellationRequested();
+
+            // A file the check could not get to compile is kept rather than written. Inconclusive
+            // is not that: nothing was established about it, so it is treated as it would have been
+            // before there was a check at all.
+            if (file.Check == FileCheckState.DidNotCompile)
+            {
+                staging.Stage(Stage(file, StagedReason.DidNotCompile, file.CheckDetail));
+                staged++;
+
+                ctx.Feed.Info(
+                    $"{file.RelativePath} is waiting",
+                    $"It does not compile yet, so it was kept rather than written.{Environment.NewLine}{file.CheckDetail}");
+
+                continue;
+            }
+
             var folder = Path.GetDirectoryName(file.RelativePath)?.Replace('\\', '/') ?? string.Empty;
             var absolute = project.ResolveTargetPath(folder, Path.GetFileName(file.RelativePath));
+
+            // One batch per file, so a write that fails part way puts that file back and leaves
+            // every file already written alone. The guardrails run inside it, before anything
+            // touches disk.
+            var batch = new ProjectWriteBatch(ctx.Services.FileWriter);
+
+            try
+            {
+                batch.EnforceExpectedExistence(absolute, file.Operation == FileOperation.Edit);
+                UnityScriptRules.Enforce(file.RelativePath, file.Content, index.FindFile(file.RelativePath), file.Types);
+            }
+            catch (UnityScriptRuleException ex)
+            {
+                staging.Stage(Stage(file, StagedReason.RefusedByProjectRules, ex.Message));
+                staged++;
+
+                // Deliberately not an error entry. This file compiles; it was refused, which is a
+                // different thing and a different fix, and drawing it as a failure would send
+                // somebody looking at the code rather than at the rename they meant to make.
+                ctx.Feed.Info($"{file.RelativePath} was refused", ex.Message);
+                continue;
+            }
+
+            batch.Stage(absolute, file.Content);
+
+            IReadOnlyList<WrittenFile> result;
+            try
+            {
+                result = await batch.CommitAsync(ct).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                staging.Stage(Stage(file, StagedReason.WriteFailed, ex.Message));
+                staged++;
+
+                ctx.Feed.Error($"{file.RelativePath} could not be written", ex.Message);
+                continue;
+            }
+
+            // It landed, so anything this project was still holding about it is now answered.
+            staging.Resolve(file.RelativePath);
+
+            written++;
+            bytes += result.Sum(w => w.Bytes);
 
             var entry = ctx.Feed.Add(
                 ActivityKind.FileWritten,
@@ -178,9 +237,9 @@ public sealed partial class OutputNode : NodeBase
                 Id);
 
             // How much changed, so that a three line fix and a rewrite do not read the same.
-            if (changes.TryGetValue(Path.GetFullPath(absolute), out var change) && change.HasChange)
+            if (result.Count > 0 && result[0].Change.HasChange)
             {
-                entry.Detail = change.Text;
+                entry.Detail = result[0].Change.Text;
             }
 
             if (UnityScriptRules.DescribeAttachmentNeeded(file.Types) is { } note)
@@ -189,13 +248,32 @@ public sealed partial class OutputNode : NodeBase
             }
         }
 
-        // The index is now out of date by exactly the files just written, and the cheapest correct
-        // answer is to let the next run notice their timestamps changed.
-        var bytes = written.Sum(w => w.Bytes);
-        StatusMessage = $"{written.Count} file(s), {bytes} bytes";
+        StatusMessage = staged == 0
+            ? $"{written} file(s), {bytes} bytes"
+            : $"{written} file(s) written, {staged} waiting";
+
+        if (staged > 0)
+        {
+            ctx.Feed.Info(
+                $"{staged} file(s) waiting to be resolved",
+                $"{written} file(s) are on disk. Say what to do about the rest in the box below; "
+                + "they are kept with the project, so closing the application does not lose them.");
+        }
 
         return NodeResult.Empty;
     }
+
+    /// <summary>Turns a file the run could not finish into the record that outlives the run.</summary>
+    private static StagedFile Stage(GeneratedFile file, StagedReason reason, string detail)
+        => new(
+            file.RelativePath,
+            file.Task.TypeName,
+            file.Operation == FileOperation.Create,
+            file.Task.Intent,
+            file.Content,
+            reason,
+            detail,
+            DateTimeOffset.Now);
 
     /// <inheritdoc />
     public override JsonObject SaveSettings() => new()

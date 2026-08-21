@@ -9,13 +9,42 @@
 
     <StackPanel>
         <TextBlock Style="{StaticResource SectionHeader}" Text="Mode" />
+        <TextBlock Style="{StaticResource HintText}"
+                   TextWrapping="Wrap"
+                   Text="How a rule is expressed. It applies to the rule typed below and to one arriving on the Rule pin, which is read as this form unless it says otherwise." />
         <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+            <RadioButton Content="Pattern"
+                         GroupName="PatchMode"
+                         IsChecked="{Binding Mode, Converter={StaticResource EnumToBoolean}, ConverterParameter=Regex}" />
             <RadioButton Content="Template"
                          GroupName="PatchMode"
+                         Margin="12,0,0,0"
                          IsChecked="{Binding Mode, Converter={StaticResource EnumToBoolean}, ConverterParameter=Template}" />
             <RadioButton Content="Script"
                          GroupName="PatchMode"
+                         Margin="12,0,0,0"
                          IsChecked="{Binding Mode, Converter={StaticResource EnumToBoolean}, ConverterParameter=Script}" />
+        </StackPanel>
+
+        <!--
+            Pattern mode, and the default. It needs nothing but the regular expression engine,
+            which is what makes it the one that survives a single file build.
+        -->
+        <StackPanel Visibility="{Binding IsRegexMode, Converter={StaticResource BooleanToVisibility}}">
+            <TextBlock Style="{StaticResource FieldLabel}" Text="Pattern" />
+            <TextBox Style="{StaticResource MonoTextBox}"
+                     AcceptsReturn="True"
+                     TextWrapping="Wrap"
+                     MinHeight="60"
+                     Text="{Binding RegexPattern, UpdateSourceTrigger=LostFocus}" />
+
+            <TextBlock Style="{StaticResource FieldLabel}" Text="Replace with" />
+            <TextBox Style="{StaticResource MonoTextBox}"
+                     Text="{Binding RegexReplacement, UpdateSourceTrigger=LostFocus}" />
+
+            <TextBlock Style="{StaticResource HintText}"
+                       TextWrapping="Wrap"
+                       Text="The default strips a markdown code fence off a model reply and leaves anything else alone. A pattern that matches nothing passes the code through; one that will not compile fails the node." />
         </StackPanel>
 
         <!-- Template mode -->

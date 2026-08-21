@@ -161,6 +161,10 @@ public partial class App : Application
         // behind this and rebuilt only when the project's compiled assemblies change.
         var compiler = new RoslynUnityCompiler(new UnityReferenceResolver());
 
+        // Work a previous run left unfinished, read back from whichever project is open.
+        var staging = new Services.Files.StagingStore(Dispatcher);
+        staging.OpenProject(unityProject.ProjectPath);
+
         // What the open project already contains. Built on demand rather than at startup, so a
         // session that never runs a graph never reads a project it was not asked about.
         var projectIndex = new ProjectIndexService();
@@ -174,6 +178,7 @@ public partial class App : Application
             unityProject,
             new FileWriter(),
             feed,
+            staging,
             extensions,
             new ToolSupportProbe(OpenAiCompatibleClient.CreateDefaultHttpClient()),
             credentials,
@@ -183,7 +188,7 @@ public partial class App : Application
         };
         var executor = new GraphExecutor(services);
 
-        var feedViewModel = new ActivityFeedViewModel(executor, graph, feed, Dispatcher, cost);
+        var feedViewModel = new ActivityFeedViewModel(executor, graph, feed, Dispatcher, cost, staging);
         var catalogViewModel = new ModelCatalogViewModel(catalog, dialogs);
         var pythonViewModel = new PythonEnvironmentViewModel(pythonEnvironment, dialogs);
         var networkViewModel = new NetworkViewModel(mesh, catalog, config, feed, dialogs);
@@ -236,7 +241,8 @@ public partial class App : Application
             settingsViewModel,
             extensionsWindow,
             config,
-            Dispatcher);
+            Dispatcher,
+            compiler);
 
         ReportEnvironment(feed, catalog);
 

@@ -63,6 +63,22 @@
                            Text="{Binding PythonEnvironment.Environment.State}" />
             </StackPanel>
 
+            <!--
+                What the last run left behind. Hidden when there is nothing, because a count of
+                zero waiting files is not news and a status bar that always says something is a
+                status bar nobody reads.
+            -->
+            <StackPanel Orientation="Horizontal"
+                        Margin="0,0,16,0"
+                        ToolTip="Files an earlier run could not finish. Say what to do about them in the box below."
+                        Visibility="{Binding Feed.Staging.HasPending, Converter={StaticResource BooleanToVisibility}}">
+                <Ellipse Style="{StaticResource StateDot}"
+                         Width="6" Height="6"
+                         Margin="0,0,6,0"
+                         Fill="{DynamicResource Status.Warning.Brush}" />
+                <TextBlock FontSize="{StaticResource Font.Size.Micro}" Text="{Binding Feed.Staging.Summary}" />
+            </StackPanel>
+
             <StackPanel Orientation="Horizontal"
                         Margin="0,0,16,0"
                         ToolTip="{Binding UnityProject.StatusText}">

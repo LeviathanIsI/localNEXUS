@@ -25,6 +25,7 @@ public sealed class ExecutionServices
         UnityProjectService unityProject,
         FileWriter fileWriter,
         IActivityFeed feed,
+        StagingStore? staging = null,
         ExtensionRegistry? extensions = null,
         ToolSupportProbe? toolSupport = null,
         ICredentialStore? credentials = null,
@@ -41,6 +42,7 @@ public sealed class ExecutionServices
         ProjectIndex = projectIndex;
         UnityProject = unityProject;
         FileWriter = fileWriter;
+        Staging = staging ?? new StagingStore();
         Feed = feed;
     }
 
@@ -67,6 +69,15 @@ public sealed class ExecutionServices
 
     /// <summary>Writes generated files to disk.</summary>
     public FileWriter FileWriter { get; }
+
+    /// <summary>
+    /// The work a run left unfinished, kept with the project.
+    /// </summary>
+    /// <remarks>
+    /// A service rather than a node, which is what lets the executor ask whether a run ended with
+    /// anything outstanding without learning that a node called Output exists.
+    /// </remarks>
+    public StagingStore Staging { get; }
 
     /// <summary>The extensions registered against the open project, or null when none is open.</summary>
     public ExtensionRegistry? Extensions { get; }

@@ -43,6 +43,25 @@ public sealed class CompileResult
     public IReadOnlyList<CompileDiagnostic> Errors
         => Diagnostics.Where(d => d.IsError).ToList();
 
+    /// <summary>The errors that a reference this check did not have cannot explain away.</summary>
+    public IReadOnlyList<CompileDiagnostic> TrustedErrors
+        => Diagnostics.Where(d => d.IsTrustedError).ToList();
+
+    /// <summary>
+    /// True when the compile failed and every reason it gave could be a reference it did not have.
+    /// </summary>
+    /// <remarks>
+    /// The state that keeps the v1.0 rule honest under a partial reference set. Code that cannot
+    /// be checked is not code that is broken, and a check whose every complaint is a name it was
+    /// never given the means to resolve has not checked the code. Reporting that as a failure
+    /// spends the repair limit asking a model to fix something that is not wrong, and then tells
+    /// the user their code is broken when the truth is that the project has not been compiled.
+    ///
+    /// One error that references cannot explain is enough to make the result a real one. A missing
+    /// brace is a missing brace whatever the set contained.
+    /// </remarks>
+    public bool IsInconclusive => !Succeeded && Errors.Count > 0 && TrustedErrors.Count == 0;
+
     /// <summary>One line for the node footer.</summary>
     public string Summary
     {

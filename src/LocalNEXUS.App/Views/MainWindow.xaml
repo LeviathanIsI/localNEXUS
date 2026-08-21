@@ -354,7 +354,66 @@
                             BorderThickness="0,1,0,0"
                             Padding="16,10"
                             Visibility="{Binding IsChatShowing, Converter={StaticResource BooleanToVisibility}}">
-                        <Grid>
+                        <StackPanel>
+
+                            <!--
+                                What the last run could not finish, above the box that resolves it.
+                                Here rather than in a dialog because the answer is typed, and the
+                                thing being answered should be readable while it is being typed.
+                            -->
+                            <Border Margin="0,0,0,10"
+                                    Padding="12,9"
+                                    CornerRadius="4"
+                                    Background="{DynamicResource Surface.Card.Brush}"
+                                    BorderThickness="1"
+                                    BorderBrush="{DynamicResource Surface.Border.Brush}"
+                                    Visibility="{Binding Feed.Staging.HasPending, Converter={StaticResource BooleanToVisibility}}">
+                                <StackPanel>
+                                    <DockPanel>
+                                        <Button DockPanel.Dock="Right"
+                                                Style="{StaticResource SmallButton}"
+                                                Content="Discard all"
+                                                Command="{Binding Feed.DiscardAllStagedCommand}" />
+
+                                        <TextBlock FontWeight="SemiBold"
+                                                   VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource Status.Warning.Brush}"
+                                                   Text="{Binding Feed.Staging.Summary}" />
+                                    </DockPanel>
+
+                                    <TextBlock Style="{StaticResource HintText}"
+                                               Margin="0,4,0,0"
+                                               TextWrapping="Wrap"
+                                               Text="Everything that compiled is already written. Say what to do about these below and run again; they are kept with the project, so closing the application does not lose them." />
+
+                                    <ItemsControl ItemsSource="{Binding Feed.Staging.Pending}" Margin="0,8,0,0">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <DockPanel Margin="0,0,0,5">
+                                                    <Button DockPanel.Dock="Right"
+                                                            Style="{StaticResource IconButton}"
+                                                            Content="&#xE711;"
+                                                            ToolTip="Discard this one"
+                                                            AutomationProperties.Name="Discard this file"
+                                                            Command="{Binding DataContext.Feed.DiscardStagedCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                            CommandParameter="{Binding}" />
+
+                                                    <StackPanel>
+                                                        <TextBlock Style="{StaticResource MonoText}"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   Text="{Binding Summary}" />
+                                                        <TextBlock Style="{StaticResource HintText}"
+                                                                   TextWrapping="Wrap"
+                                                                   Text="{Binding ReasonText}" />
+                                                    </StackPanel>
+                                                </DockPanel>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </Border>
+
+                            <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="10" />
@@ -376,7 +435,8 @@
                                     VerticalAlignment="Stretch"
                                     Content="Run"
                                     Command="{Binding Feed.RunCommand}" />
-                        </Grid>
+                                </Grid>
+                            </StackPanel>
                     </Border>
 
                     <!--

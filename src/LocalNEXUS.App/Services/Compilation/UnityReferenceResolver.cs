@@ -17,15 +17,30 @@ namespace LocalNEXUS.App.Services.Compilation;
 /// loading it costs more than the compile and a repair loop compiles several times in a row.
 /// Nothing here is written to; the project folder is only read, which is what lets a check run
 /// while the Unity editor has the same project open.
+///
+/// Every way of not finding Unity falls through to
+/// <see cref="FrameworkReferenceResolver"/> rather than refusing to compile. No project open, no
+/// editor installed, an editor whose assemblies will not read: in all three the check still runs
+/// against the framework and still catches every syntax error and every misuse of the standard
+/// library. What changes is the reference state, which is what stops a pass being read as more
+/// than it is and stops a missing type being read as a mistake.
 /// </remarks>
 public sealed class UnityReferenceResolver
 {
     private readonly object _sync = new();
+    private readonly FrameworkReferenceResolver _framework;
 
     private CompileReferenceSet? _cached;
     private string? _cachedProject;
     private string? _cachedDataPath;
     private DateTime _cachedStamp;
+
+    public UnityReferenceResolver()
+        : this(new FrameworkReferenceResolver())
+    {
+    }
+
+    public UnityReferenceResolver(FrameworkReferenceResolver framework) => _framework = framework;
 
     /// <summary>
     /// Returns the reference set for a project, building it if the cached one is stale.
@@ -35,21 +50,17 @@ public sealed class UnityReferenceResolver
     {
         if (string.IsNullOrWhiteSpace(projectPath))
         {
-            return CompileReferenceSet.Unavailable(
-                CompileReferenceState.NoProject,
-                "No Unity project is open, so there is nothing to compile against. Open one from the File menu.");
+            // No project is not nothing to check against. The framework alone still catches every
+            // syntax error and every misuse of the standard library, which is the difference
+            // between this being a Unity tool and being a tool that Unity is one target of.
+            return _framework.Resolve();
         }
 
         var install = UnityInstallLocator.Resolve(projectPath, out var exactVersion);
 
         if (install is not { } editor)
         {
-            var wanted = UnityInstallLocator.ReadProjectVersion(projectPath);
-            var detail = wanted is null ? string.Empty : $" This project was made with {wanted}.";
-
-            return CompileReferenceSet.Unavailable(
-                CompileReferenceState.NoUnityInstall,
-                $"No Unity installation was found on this machine, so code cannot be checked against the Unity API.{detail}");
+            return _framework.Resolve();
         }
 
         var scriptAssemblies = Path.Combine(projectPath, "Library", "ScriptAssemblies");
@@ -88,7 +99,7 @@ public sealed class UnityReferenceResolver
         }
     }
 
-    private static CompileReferenceSet Build(
+    private CompileReferenceSet Build(
         string projectPath,
         UnityInstallLocator.UnityInstall editor,
         bool exactVersion,
@@ -117,9 +128,12 @@ public sealed class UnityReferenceResolver
 
         if (unityCount == 0 || frameworkCount == 0)
         {
-            return CompileReferenceSet.Unavailable(
-                CompileReferenceState.NoUnityInstall,
-                $"The Unity installation at {editor.DataPath} does not have the assemblies a compile needs.");
+            // Believing there is Unity and then not being able to read it is exactly the state
+            // worth surfacing rather than papering over. The check still runs, against the
+            // framework, and the summary leads with why it is not running against Unity.
+            return _framework.Resolve().WithNote(
+                $"The Unity installation at {editor.DataPath} was found but its assemblies could not be read, "
+                + "so there is no Unity API to check against.");
         }
 
         var state = projectCount > 0

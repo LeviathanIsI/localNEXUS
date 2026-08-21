@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
+using System.Windows;
+using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using LocalNEXUS.App.Models;
 using LocalNEXUS.App.Nodes;
@@ -17,17 +19,30 @@ namespace LocalNEXUS.App.ViewModels;
 /// successfully clears its own diagnostics, and this list empties with it, which is the behaviour
 /// worth having: the panel says what is wrong now, not what was wrong at some point during the
 /// run.
+///
+/// A compile check runs on the run's thread, not on the dispatcher, and publishes its diagnostics
+/// from there. The binding engine marshals a property change on our behalf but not a change to a
+/// collection it is bound to, so rebuilding this list where the notification arrived threw and
+/// faulted the node every single run. It goes through the dispatcher for the same reason and in
+/// the same shape as <see cref="Infrastructure.ActivityFeed"/>.
 /// </remarks>
 public sealed partial class ProblemsViewModel : ObservableObject, IDisposable
 {
     private readonly GraphModel _graph;
+    private readonly Dispatcher _dispatcher;
     private readonly HashSet<CompilerCheckNode> _observed = new();
 
     private bool _disposed;
 
     public ProblemsViewModel(GraphModel graph)
+        : this(graph, Application.Current?.Dispatcher ?? Dispatcher.CurrentDispatcher)
+    {
+    }
+
+    public ProblemsViewModel(GraphModel graph, Dispatcher dispatcher)
     {
         _graph = graph;
+        _dispatcher = dispatcher;
         graph.Nodes.CollectionChanged += OnNodesChanged;
 
         Resubscribe();
@@ -91,6 +106,12 @@ public sealed partial class ProblemsViewModel : ObservableObject, IDisposable
 
     private void Rebuild()
     {
+        if (!_dispatcher.CheckAccess())
+        {
+            _dispatcher.Invoke(Rebuild);
+            return;
+        }
+
         Problems.Clear();
 
         var rows = _graph.Nodes

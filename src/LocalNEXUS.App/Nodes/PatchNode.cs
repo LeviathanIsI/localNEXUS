@@ -15,9 +15,21 @@ namespace LocalNEXUS.App.Nodes;
 /// expression.
 /// </summary>
 /// <remarks>
-/// Template mode covers the common case of wrapping or lightly editing a value. Script mode
-/// exists for everything else and is compiled through Roslyn. Compilation is cached against the
-/// expression text, so a graph that runs the same transform repeatedly pays for it once.
+/// Two inputs: the code to change, and the rule describing the change. The rule input is optional,
+/// and with nothing wired the rule typed on the node is used, which is what keeps the default path
+/// free: stripping a markdown fence must not require a prompt and a model in front of it, because
+/// the repair loop depends on it.
+///
+/// When something is wired to the rule pin, whatever arrives is the rule. That is the shape worth
+/// having: a prompt describing a change in plain English, a model turning it into a pattern, and
+/// this node applying it. The model authors the rule and the node executes it. Nothing here calls
+/// a model, so a patch is fast and repeatable and the code never leaves the machine to be
+/// reformatted.
+///
+/// Regex mode is the default and the one that has to work everywhere. Template mode covers
+/// wrapping or lightly editing a value. Script mode exists for everything else and is compiled
+/// through Roslyn; compilation is cached against the expression text, so a graph that runs the
+/// same transform repeatedly pays for it once.
 ///
 /// It passes repair requests through rather than answering them, because it did not write the
 /// code and cannot fix it. Its own upstream is asked, and whatever comes back is put through this
@@ -31,9 +43,38 @@ public sealed partial class PatchNode : NodeBase, ICodeRepairSource
     public const string InputPlaceholder = "{{input}}";
 
     /// <summary>
-    /// The starting expression. Model replies often arrive wrapped in a markdown code fence even
-    /// when the prompt asks otherwise, and a fenced reply is not a valid C# file, so the default
-    /// unwraps one when it is present and leaves anything else untouched.
+    /// The starting pattern. Model replies often arrive wrapped in a markdown code fence even when
+    /// the prompt asks otherwise, and a fenced reply is not a valid C# file, so the default unwraps
+    /// one when it is present and leaves anything else untouched.
+    /// </summary>
+    /// <remarks>
+    /// A pattern rather than a script, and that is the fix for a real failure. This same rule used
+    /// to be a Roslyn expression, and the script compiler cannot be built inside a single file
+    /// executable, so every published build shipped a Patch node that quietly did nothing and a
+    /// repair loop that handed fenced replies to a compiler. The regular expression engine needs
+    /// nothing but itself and is there in every build.
+    ///
+    /// The surrounding whitespace is absorbed by the pattern rather than trimmed afterwards, so a
+    /// rule meant to preserve whitespace is never quietly overruled.
+    /// </remarks>
+    public const string DefaultRegexPattern =
+        @"(?s)\A\s*```[A-Za-z0-9#+_-]*[ \t]*\r?\n(.*?)\r?\n?```\s*\z";
+
+    /// <summary>What the default pattern puts back: the contents of the fence and nothing else.</summary>
+    public const string DefaultRegexReplacement = "$1";
+
+    /// <summary>
+    /// How long a pattern may run before it is abandoned.
+    /// </summary>
+    /// <remarks>
+    /// A rule can now be written by a model, and a model can write a pattern that backtracks for
+    /// the rest of the afternoon on input it did not anticipate. A bounded failure naming the rule
+    /// beats a run that never ends.
+    /// </remarks>
+    private static readonly TimeSpan PatternTimeout = TimeSpan.FromSeconds(2);
+
+    /// <summary>
+    /// The starting expression for script mode, kept for a graph that already chose it.
     /// </summary>
     public const string DefaultScriptExpression =
         "Regex.Replace(input.Trim(), @\"(?s)^```[A-Za-z0-9#+_-]*\\s*\\r?\\n(.*?)\\r?\\n?```$\", \"$1\").Trim()";
@@ -87,9 +128,18 @@ public sealed partial class PatchNode : NodeBase, ICodeRepairSource
 
     /// <summary>Which transform is applied.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsRegexMode))]
     [NotifyPropertyChangedFor(nameof(IsTemplateMode))]
     [NotifyPropertyChangedFor(nameof(IsScriptMode))]
-    private PatchMode _mode = PatchMode.Template;
+    private PatchMode _mode = PatchMode.Regex;
+
+    /// <summary>The pattern matched in regex mode.</summary>
+    [ObservableProperty]
+    private string _regexPattern = DefaultRegexPattern;
+
+    /// <summary>What a match is replaced with in regex mode.</summary>
+    [ObservableProperty]
+    private string _regexReplacement = DefaultRegexReplacement;
 
     /// <summary>The template applied in template mode. Occurrences of <c>{{input}}</c> are substituted.</summary>
     [ObservableProperty]
@@ -106,11 +156,17 @@ public sealed partial class PatchNode : NodeBase, ICodeRepairSource
         : base("Patch")
     {
         Source = AddInput("Code", PinType.Code);
+        Rule = AddInput("Rule", PinType.Text);
         Result = AddOutput("Code", PinType.Code);
     }
 
     /// <summary>Receives the value to rewrite.</summary>
     public Pin Source { get; }
+
+    /// <summary>
+    /// Receives the rule to apply. Optional: with nothing wired, the rule on the node is used.
+    /// </summary>
+    public Pin Rule { get; }
 
     /// <summary>Carries the rewritten value onwards.</summary>
     public Pin Result { get; }
@@ -120,6 +176,9 @@ public sealed partial class PatchNode : NodeBase, ICodeRepairSource
 
     /// <inheritdoc />
     public override string TypeKey => "Patch";
+
+    /// <summary>True when regex mode is selected. Drives which editor is shown.</summary>
+    public bool IsRegexMode => Mode == PatchMode.Regex;
 
     /// <summary>True when template mode is selected. Drives which editor is shown.</summary>
     public bool IsTemplateMode => Mode == PatchMode.Template;
@@ -131,15 +190,13 @@ public sealed partial class PatchNode : NodeBase, ICodeRepairSource
     public override async Task<NodeResult> ExecuteAsync(NodeExecutionContext ctx, CancellationToken ct)
     {
         var input = ctx.GetText(Source);
+        var rule = ResolveRule(ctx, out var wired);
 
-        var output = Mode switch
-        {
-            PatchMode.Template => ApplyTemplate(input),
-            PatchMode.Script => await RunScriptAsync(input, ct).ConfigureAwait(false),
-            _ => input
-        };
+        var output = await ApplyAsync(rule, input, ct).ConfigureAwait(false);
 
-        StatusMessage = $"{Mode}: {input.Length} to {output.Length} characters";
+        StatusMessage = $"{rule.Kind}{(wired ? " from the rule pin" : string.Empty)}: "
+                        + $"{input.Length} to {output.Length} characters";
+
         return NodeResult.FromPin(Result, output);
     }
 
@@ -159,6 +216,8 @@ public sealed partial class PatchNode : NodeBase, ICodeRepairSource
         return new JsonObject
         {
             ["mode"] = Mode.ToString(),
+            ["regexPattern"] = RegexPattern,
+            ["regexReplacement"] = RegexReplacement,
             ["template"] = Template,
             ["scriptExpression"] = ScriptExpression,
             ["replacements"] = replacements
@@ -173,6 +232,8 @@ public sealed partial class PatchNode : NodeBase, ICodeRepairSource
             Mode = mode;
         }
 
+        RegexPattern = settings["regexPattern"]?.GetValue<string>() ?? DefaultRegexPattern;
+        RegexReplacement = settings["regexReplacement"]?.GetValue<string>() ?? DefaultRegexReplacement;
         Template = settings["template"]?.GetValue<string>() ?? InputPlaceholder;
         ScriptExpression = settings["scriptExpression"]?.GetValue<string>() ?? DefaultScriptExpression;
 
@@ -231,12 +292,75 @@ public sealed partial class PatchNode : NodeBase, ICodeRepairSource
 
         // The revised reply goes through this transform exactly as the first one did, so whatever
         // this node is for, unwrapping a fence or renaming a symbol, still applies to the fix.
-        return Mode switch
+        return await ApplyAsync(ResolveRule(ctx, out _), revised, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The rule in force: whatever arrived on the pin, or the one typed on the node.
+    /// </summary>
+    /// <param name="wired">True when the rule came from the pin rather than from the node.</param>
+    /// <remarks>
+    /// A pin with nothing connected reads as absent rather than as an empty rule, which is what
+    /// keeps the default path working with no prompt and no model in front of it. A pin that is
+    /// connected and produced nothing is a different thing and is refused, because that is a
+    /// wiring mistake and silently patching nothing would hide it.
+    /// </remarks>
+    private PatchRule ResolveRule(NodeExecutionContext ctx, out bool wired)
+    {
+        wired = ctx.GetSourceNode(Rule) is not null;
+
+        if (!wired)
         {
-            PatchMode.Template => ApplyTemplate(revised),
-            PatchMode.Script => await RunScriptAsync(revised, ct).ConfigureAwait(false),
-            _ => revised
+            return new PatchRule(Mode, Mode switch
+            {
+                PatchMode.Template => Template ?? string.Empty,
+                PatchMode.Script => ScriptExpression ?? string.Empty,
+                _ => RegexPattern ?? string.Empty
+            }, RegexReplacement ?? string.Empty);
+        }
+
+        return PatchRule.Parse(ctx.GetText(Rule), Mode, RegexReplacement ?? string.Empty);
+    }
+
+    /// <summary>Applies a rule to a value, mechanically and without asking anything.</summary>
+    private async Task<string> ApplyAsync(PatchRule rule, string input, CancellationToken ct)
+        => rule.Kind switch
+        {
+            PatchMode.Template => ApplyTemplate(rule.Primary, input),
+            PatchMode.Script => await RunScriptAsync(rule.Primary, input, ct).ConfigureAwait(false),
+            _ => ApplyPattern(rule, input)
         };
+
+    /// <summary>
+    /// Matches the pattern and replaces what it finds.
+    /// </summary>
+    /// <remarks>
+    /// A pattern that matches nothing is not a failure: that is a rule with nothing to say about
+    /// this particular input, and the code passes through. A pattern that will not compile, or one
+    /// that runs away, is a failure, because neither can be what anybody meant.
+    /// </remarks>
+    private string ApplyPattern(PatchRule rule, string input)
+    {
+        if (string.IsNullOrEmpty(rule.Primary))
+        {
+            throw new PatchRuleException($"{Title} has no pattern to apply. Type one, or wire a rule into it.");
+        }
+
+        try
+        {
+            return Regex.Replace(input, rule.Primary, rule.Replacement ?? string.Empty, RegexOptions.None, PatternTimeout);
+        }
+        catch (ArgumentException ex)
+        {
+            throw new PatchRuleException(
+                $"{Title} could not read its pattern: {ex.Message}{Environment.NewLine}{rule.Primary}", ex);
+        }
+        catch (RegexMatchTimeoutException ex)
+        {
+            throw new PatchRuleException(
+                $"{Title} gave up on its pattern after {PatternTimeout.TotalSeconds:0} seconds. "
+                + $"It matches this input too slowly to use:{Environment.NewLine}{rule.Primary}", ex);
+        }
     }
 
     /// <summary>Adds an empty substitution row, used by the settings panel.</summary>
@@ -253,9 +377,9 @@ public sealed partial class PatchNode : NodeBase, ICodeRepairSource
         }
     }
 
-    private string ApplyTemplate(string input)
+    private string ApplyTemplate(string template, string input)
     {
-        var output = (Template ?? string.Empty).Replace(InputPlaceholder, input, StringComparison.Ordinal);
+        var output = (template ?? string.Empty).Replace(InputPlaceholder, input, StringComparison.Ordinal);
 
         foreach (var pair in Replacements)
         {
@@ -268,14 +392,14 @@ public sealed partial class PatchNode : NodeBase, ICodeRepairSource
         return output;
     }
 
-    private async Task<string> RunScriptAsync(string input, CancellationToken ct)
+    private async Task<string> RunScriptAsync(string expression, string input, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(ScriptExpression))
+        if (string.IsNullOrWhiteSpace(expression))
         {
             return input;
         }
 
-        var runner = GetOrCompileRunner();
+        var runner = GetOrCompileRunner(expression);
 
         object? value;
         try
@@ -294,9 +418,9 @@ public sealed partial class PatchNode : NodeBase, ICodeRepairSource
         return value?.ToString() ?? string.Empty;
     }
 
-    private ScriptRunner<object> GetOrCompileRunner()
+    private ScriptRunner<object> GetOrCompileRunner(string expression)
     {
-        if (_compiled is not null && string.Equals(_compiledFor, ScriptExpression, StringComparison.Ordinal))
+        if (_compiled is not null && string.Equals(_compiledFor, expression, StringComparison.Ordinal))
         {
             return _compiled;
         }
@@ -311,9 +435,9 @@ public sealed partial class PatchNode : NodeBase, ICodeRepairSource
 
         try
         {
-            var script = CSharpScript.Create<object>(ScriptExpression, options, typeof(PatchScriptGlobals));
+            var script = CSharpScript.Create<object>(expression, options, typeof(PatchScriptGlobals));
             _compiled = script.CreateDelegate();
-            _compiledFor = ScriptExpression;
+            _compiledFor = expression;
             return _compiled;
         }
         catch (CompilationErrorException ex)

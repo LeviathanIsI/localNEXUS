@@ -29,6 +29,17 @@ public enum CompileOutcome
     Failed,
 
     /// <summary>
+    /// The check ran, complained, and every complaint could be a reference it did not have.
+    /// </summary>
+    /// <remarks>
+    /// Not a failure and not a pass. Under a partial reference set a type the project defines and
+    /// a type the model invented come back as the same diagnostic, so a result made entirely of
+    /// those has not told anyone anything about the code. No repair is spent on it and the run
+    /// carries on.
+    /// </remarks>
+    Inconclusive,
+
+    /// <summary>
     /// Nothing was wrong with the code as far as anyone knows, because the check could not be
     /// run. No Unity install, or no project open.
     /// </summary>

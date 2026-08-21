@@ -23,9 +23,26 @@ public enum CompileReferenceState
     /// </summary>
     ProjectNotCompiled,
 
+    /// <summary>
+    /// No Unity was involved at all, so the check ran against the framework alone.
+    /// </summary>
+    /// <remarks>
+    /// The floor rather than a failure. Syntax and standard library mistakes are caught, and any
+    /// type the surrounding project defines is unknown, which is why an error blaming a missing
+    /// type is not trusted under this state.
+    /// </remarks>
+    FrameworkOnly,
+
     /// <summary>No Unity project is open, so there is nothing to compile against.</summary>
     NoProject,
 
     /// <summary>No Unity installation could be found on this machine.</summary>
-    NoUnityInstall
+    NoUnityInstall,
+
+    /// <summary>
+    /// Not even this build's own framework assemblies could be reached, so no compile of any kind
+    /// is possible. The last resort has a resort of its own only because a single file build can
+    /// legitimately be in this position.
+    /// </summary>
+    NoFrameworkReferences
 }

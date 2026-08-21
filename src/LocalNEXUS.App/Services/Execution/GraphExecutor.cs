@@ -124,11 +124,20 @@ public sealed class GraphExecutor
         }
 
         stopwatch.Stop();
-        run.State = RunState.Completed;
+
+        // The one thing this asks about what a run produced, and it asks a service rather than
+        // looking for a node type. A run that left files waiting has not failed and has not
+        // finished, and the difference is worth a word of its own.
+        var outstanding = _services.Staging.HasPending;
+
+        run.State = outstanding ? RunState.Unresolved : RunState.Completed;
+
         _feed.Add(
-            ActivityKind.RunCompleted,
-            "Run completed",
-            $"{sort.Ordered.Count} nodes in {stopwatch.Elapsed.TotalSeconds:0.0} s");
+            outstanding ? ActivityKind.Confirmation : ActivityKind.RunCompleted,
+            outstanding ? "Run finished with work left over" : "Run completed",
+            outstanding
+                ? $"{sort.Ordered.Count} nodes in {stopwatch.Elapsed.TotalSeconds:0.0} s. {_services.Staging.Summary}."
+                : $"{sort.Ordered.Count} nodes in {stopwatch.Elapsed.TotalSeconds:0.0} s");
 
         return run;
     }

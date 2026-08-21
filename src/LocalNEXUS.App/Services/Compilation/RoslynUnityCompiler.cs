@@ -131,7 +131,7 @@ public sealed class RoslynUnityCompiler : ICodeCompiler
 
         var diagnostics = emitted.Diagnostics
             .Where(d => d.Severity >= DiagnosticSeverity.Warning)
-            .Select(d => Translate(d, fileName))
+            .Select(d => Translate(d, fileName, referenceSet.IsPartial))
             .ToList();
 
         return new CompileResult(
@@ -142,7 +142,7 @@ public sealed class RoslynUnityCompiler : ICodeCompiler
             referenceSet.Summary);
     }
 
-    private static CompileDiagnostic Translate(Diagnostic diagnostic, string fileName)
+    private static CompileDiagnostic Translate(Diagnostic diagnostic, string fileName, bool referencesArePartial)
     {
         var span = diagnostic.Location.GetLineSpan();
         var located = diagnostic.Location.IsInSource;
@@ -158,6 +158,7 @@ public sealed class RoslynUnityCompiler : ICodeCompiler
             located && span.Path.Length > 0 ? span.Path : fileName,
             located ? span.StartLinePosition.Line + 1 : 0,
             located ? span.StartLinePosition.Character + 1 : 0,
-            diagnostic.GetMessage());
+            diagnostic.GetMessage(),
+            referencesArePartial && CompileDiagnostic.IsReferenceCode(diagnostic.Id));
     }
 }

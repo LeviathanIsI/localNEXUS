@@ -8,7 +8,42 @@
              mc:Ignorable="d">
 
     <StackPanel>
-        <TextBlock Style="{StaticResource SectionHeader}" Text="Repair" />
+
+        <!--
+            What it can reach, before anything runs. Under a partial set a type the project defines
+            reads as a type that does not exist, and somebody who does not know that spends the
+            whole retry limit on errors that were never in the code.
+        -->
+        <TextBlock Style="{StaticResource SectionHeader}" Text="What it can check against" />
+
+        <Border Margin="0,6,0,0"
+                Padding="10,8"
+                CornerRadius="4"
+                Background="{DynamicResource Surface.Window.Brush}"
+                BorderThickness="1"
+                BorderBrush="{DynamicResource Surface.Border.Brush}">
+            <StackPanel>
+                <TextBlock FontWeight="SemiBold"
+                           TextWrapping="Wrap"
+                           FontSize="{StaticResource Font.Size.Small}"
+                           Text="{Binding ReachabilityText}" />
+
+                <TextBlock Margin="0,4,0,0"
+                           TextWrapping="Wrap"
+                           FontSize="{StaticResource Font.Size.Small}"
+                           Foreground="{DynamicResource Text.Secondary.Brush}"
+                           Text="{Binding ReachabilityDetail}" />
+
+                <TextBlock Margin="0,6,0,0"
+                           TextWrapping="Wrap"
+                           FontSize="{StaticResource Font.Size.Small}"
+                           Foreground="{DynamicResource Status.Warning.Brush}"
+                           Visibility="{Binding ReachabilityIsPartial, Converter={StaticResource BooleanToVisibility}}"
+                           Text="The set is incomplete, so a type this project defines will read as a type that does not exist. Errors that a missing reference could explain are marked, and a check whose every error is one of those is reported as inconclusive rather than failed. Nothing is repaired on the strength of them." />
+            </StackPanel>
+        </Border>
+
+        <TextBlock Style="{StaticResource SectionHeader}" Margin="0,20,0,0" Text="Repair" />
 
         <TextBlock Style="{StaticResource FieldLabel}" Text="Retry limit" />
         <TextBox Text="{Binding RetryLimit, UpdateSourceTrigger=LostFocus}" />
@@ -18,6 +53,10 @@
         <TextBlock Style="{StaticResource SectionHeader}" Margin="0,20,0,0" Text="When it still does not compile" />
 
         <StackPanel Margin="0,6,0,0">
+            <RadioButton Content="Leave it for later and carry on"
+                         GroupName="CompileFailure"
+                         Margin="0,0,0,4"
+                         IsChecked="{Binding FailureBehaviour, Converter={StaticResource EnumToBoolean}, ConverterParameter=StageForLater}" />
             <RadioButton Content="Fault the run"
                          GroupName="CompileFailure"
                          Margin="0,0,0,4"
@@ -28,7 +67,8 @@
         </StackPanel>
 
         <TextBlock Style="{StaticResource HintText}"
-                   Text="Fault stops the run, so success means the code compiled. Continue sends the broken code on anyway." />
+                   TextWrapping="Wrap"
+                   Text="Leaving it for later stages the file with its errors, writes the ones that did compile, and runs the rest of the plan. Fault stops the run and writes nothing further. Continue sends the broken code on to be written anyway." />
 
         <TextBlock Style="{StaticResource SectionHeader}" Margin="0,20,0,0" Text="Last check" />
 
