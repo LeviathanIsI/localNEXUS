@@ -1,10 +1,6 @@
-<p align="center">
-  <img src="assets/brand/concept-1-letterform/localnexus-concept-1-letterform-128.png" width="96" height="96" alt="LocalNEXUS">
-</p>
+![LocalNEXUS](assets/brand/localnexus-banner.png)
 
 <h1 align="center">LocalNEXUS</h1>
-
-![The workspace during a run](docs/images/workspace-mid-run.png)
 
 LocalNEXUS wires language models together on a canvas and points them at your codebase. You
 type what you want, the graph reads your project, writes the code, compiles it, and writes
@@ -12,6 +8,8 @@ the files. Models run on your hardware, or across several machines, or through O
 you want them to.
 
 Unity C# is what it was built for. The engine does not know what Unity is.
+
+![The workspace during a run](docs/images/workspace-mid-run.png)
 
 ## Quick start
 
@@ -28,13 +26,13 @@ install needed, and you place the engine binaries yourself as described in `vend
 Five minutes to a generated file, assuming a `.gguf` on disk:
 
 1. `File > Open Unity project`. The status bar reports how many C# files it indexed.
-2. Models panel in the activity bar, add the folder your model lives in or the file itself.
-   Format is detected by reading the file.
+2. `File > Settings`, Models section. Drop a `.gguf` into the `models\gguf` folder it names,
+   or point it at a folder of your own. Format is detected by reading the file, not the name.
 3. `Edit > Add node`. Add a Prompt, a Model and an Output. Wire Prompt `Text` to Model
    `Text`, Model `Code` to Output `Code`. Pins refuse connections that do not typecheck.
 4. Click the Model node, choose Local, pick your model.
 5. Click the Output node, set folder and filename. `Assets/Scripts`, `Spinner.cs`.
-6. Type into the box at the bottom and press Ctrl+Enter:
+6. Type into the box under the canvas and press Ctrl+Enter:
 
 > Write a MonoBehaviour called Spinner that rotates its transform around the Y axis at a
 > configurable speed, with a serialized field for the speed.
@@ -61,20 +59,22 @@ The checks are in the pipeline, not in your review.
 
 - The project is indexed first, so a plan can say edit this rather than always create this.
 - Creating a type that already exists is refused, and the file holding the original is named.
-- Code is compiled before it is written, and failures go back to the model.
+- Code is compiled before it is written, and failures go back to the model to be fixed.
 - Changes that compile but break Unity are refused. Renaming a MonoBehaviour away from the
   filename Unity binds it by, for one.
+- Files that pass are written as they pass. One that will not compile is kept with its errors
+  and the rest of the plan carries on, rather than the whole run being thrown away.
+- Every run is recorded, and the files a run wrote can be put back.
 
 ## Status
 
 Pre-1.0. No automated tests. Interfaces still move.
 
-|                   |                                                                                                                                                                  |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Solid             | Graph engine, llama.cpp inference, project index, Unity rules, staged writes, interface                                                                          |
-| Lightly exercised | safetensors through `transformers serve`, the planning and multi file path, OpenRouter                                                                           |
-| Unproven          | Everything distributed. It has only run on one machine over loopback, never across two physical machines                                                         |
-| Broken            | Compiler check faults the run instead of reporting. It touches the Problems panel from a background thread and WPF refuses. Leave the node out until it is fixed |
+|                   |                                                                                                                                                     |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Solid             | Graph engine, llama.cpp inference, project index, Unity rules, per file writes and staging, run history and undo, interface                          |
+| Lightly exercised | safetensors through `transformers serve`, the planning and multi file path, hosted providers, the compiler check, elicitation, Debate and Judge      |
+| Unproven          | Everything distributed. It has only run on one machine over loopback, never across two physical machines                                             |
 
 ## Requirements
 
@@ -130,10 +130,11 @@ download. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Roadmap
 
-Fix the Compiler check threading bug. A Loop node, once a node can drive the nodes
-downstream of it. Breakpoints on wires. Memory that survives between runs. Editing and
-deleting from the Output node, not only writing. Running this across two physical machines,
-which is embarrassing to still have on the list.
+A test suite. Breakpoints on wires, so a run can be stopped between nodes and a value
+inspected. A Loop node, once a node can drive the nodes downstream of it. Deleting files from
+the Output node, which writes and edits but cannot remove. Semantic search over the run
+history, which is keyword matching today. Running this across two physical machines, which is
+embarrassing to still have on the list.
 
 The longer goal is a network where people pool compute to run models none of them could run
 alone. That shapes decisions now. Sources are interchangeable rather than mine and theirs,

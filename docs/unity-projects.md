@@ -102,12 +102,15 @@ by default. Every attempt appears in the activity feed with its number and the e
 given, so a loop is never silent.
 
 A Reshape node in between is not in the way: it passes the request further upstream and applies
-itself to whatever comes back, so a repaired reply gets its markdown fence stripped exactly as
-the first one did.
+itself to whatever comes back, so a repaired reply is reshaped exactly as the first one was.
+Stripping a markdown fence is no longer one of the things it has to do, because a Model node
+takes its own fence off unless you tell it not to.
 
-If the code still does not compile, the node either faults the run and names the errors that
-remain, or passes the last attempt on with a warning. Faulting is the default, so that a run
-reporting success means the code compiles.
+If the code still does not compile, the file is kept with its errors and the rest of the plan
+carries on. Everything that did compile is written, and what did not sits waiting to be
+resolved from the box under the canvas. The node can also be set to fault the run, or to pass
+the last attempt on with a warning, but leaving it for later is the default: stopping at the
+third file of eight throws away the four that would have worked.
 
 ## Opening a Unity project
 

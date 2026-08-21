@@ -35,7 +35,30 @@ public static class GraphMigrations
 
         var notes = new List<string>();
         ConnectPlanningModels(graph, notes);
+        ReportRetiredReplacements(graph, notes);
         return notes;
+    }
+
+    /// <summary>
+    /// Names the literal find and replace pairs a graph is no longer carrying.
+    /// </summary>
+    /// <remarks>
+    /// They used to apply after a template was filled, and the editor for them went with the mode
+    /// that hosted it, leaving them changing text with nothing on screen to say so. Removing them
+    /// changes what such a graph does, so it is said out loud with the pairs named: everything they
+    /// did, replace mode does with a pattern, and rebuilding one deliberately is a minute's work
+    /// where finding an invisible substitution is an afternoon's.
+    /// </remarks>
+    private static void ReportRetiredReplacements(GraphModel graph, List<string> notes)
+    {
+        foreach (var node in graph.Nodes.OfType<ReshapeNode>().Where(n => n.RetiredReplacements.Count > 0))
+        {
+            notes.Add(
+                $"{node.Title} was carrying {node.RetiredReplacements.Count} find and replace pair(s) that no "
+                + "longer have an editor and are no longer applied: "
+                + string.Join(", ", node.RetiredReplacements)
+                + ". Replace mode does the same thing with a pattern.");
+        }
     }
 
     /// <summary>

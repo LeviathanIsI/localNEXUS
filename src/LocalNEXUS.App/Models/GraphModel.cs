@@ -13,7 +13,23 @@ namespace LocalNEXUS.App.Models;
 /// </remarks>
 public sealed partial class GraphModel : ObservableObject
 {
-    /// <summary>Every node currently on the canvas.</summary>
+    /// <summary>
+    /// What this graph is called.
+    /// </summary>
+    /// <remarks>
+    /// On the graph rather than only on the view model that draws it, because a run records which
+    /// graph it ran and a run has no view models. Every row of the history said the literal word
+    /// graph until this existed, which makes a list of runs impossible to tell apart and is worth
+    /// fixing before anything starts reading that list.
+    ///
+    /// The file name when there is a file, and untitled before there is one. Saving under a new
+    /// name renames the graph, which is what somebody would expect and means there is no second
+    /// name to keep in step.
+    /// </remarks>
+    [ObservableProperty]
+    private string _name = "untitled";
+
+    /// <summary>Every node on the canvas.</summary>
     public ObservableCollection<NodeBase> Nodes { get; } = new();
 
     /// <summary>Every wire currently on the canvas.</summary>
@@ -89,6 +105,8 @@ public sealed partial class GraphModel : ObservableObject
     /// <summary>Empties the graph.</summary>
     public void Clear()
     {
+        Name = "untitled";
+
         Connections.Clear();
         Nodes.Clear();
     }

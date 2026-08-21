@@ -64,9 +64,11 @@ public sealed partial class GraphDocumentViewModel : ObservableObject, IDisposab
     public ObservableCollection<NodeViewModel> Nodes { get; } = new();
 
     /// <summary>What the editor tab and the title bar call this graph.</summary>
-    public string Name => Path is null
-        ? "untitled" + GraphSerializer.FileExtension
-        : System.IO.Path.GetFileName(Path);
+    /// <remarks>
+    /// Read from the graph rather than kept beside it, so that what a run records and what the tab
+    /// says cannot drift apart.
+    /// </remarks>
+    public string Name => _graph.Name;
 
     /// <summary>The full path, or a note that there is not one yet.</summary>
     public string PathText => Path ?? "not saved to disk yet";
@@ -87,6 +89,13 @@ public sealed partial class GraphDocumentViewModel : ObservableObject, IDisposab
     public void MarkSaved(string? path)
     {
         Path = path;
+
+        // Saving under a new name renames the graph. There is one name and this is where it is set.
+        _graph.Name = path is null
+            ? "untitled" + GraphSerializer.FileExtension
+            : System.IO.Path.GetFileName(path);
+
+        OnPropertyChanged(nameof(Name));
         IsDirty = false;
     }
 

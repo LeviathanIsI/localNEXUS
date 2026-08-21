@@ -6,9 +6,10 @@ settings gear. The side bar next to it is the explorer, and during a run it is t
 outline: the same nodes the canvas draws, in graph order, each with its state dot and its
 elapsed time. The editor area holds the graph and the request being executed. One inspector
 on the right serves both sections, always answering the same question: what can I do about
-the thing I just clicked. The bottom panel has Problems, Activity and Output, the chat box
-sits under it, and the status bar carries the run, the mesh node, the Python runtime and the
-open project.
+the thing I just clicked. The bottom panel is output only, Problems and Activity and Output,
+and the conversation and its box sit under the canvas rather than under that panel, so the
+input stays on screen when the output is collapsed. The status bar carries the run, any work
+left waiting, the mesh node, the Python runtime and the open project.
 
 Panels resize with splitters, and the side bar, the inspector and the bottom panel each
 collapse. Nodes are added from the Edit menu or by right clicking the canvas.

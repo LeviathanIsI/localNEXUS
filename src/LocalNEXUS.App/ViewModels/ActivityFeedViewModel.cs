@@ -239,7 +239,7 @@ public sealed partial class ActivityFeedViewModel : ObservableObject
         // Begun before the first entry, so everything the run says lands under it. What is
         // recorded as the request is what the person actually typed, not the assembled prompt:
         // the history list is a list of things somebody asked for.
-        var runId = _recorder?.BeginRun(typed, "graph", _graph.Nodes.Count, _graph.Connections.Count);
+        var runId = _recorder?.BeginRun(typed, _graph.Name, _graph.Nodes.Count, _graph.Connections.Count);
 
         // Said before the context is assembled, because the assembly reads the thread and this
         // message is the newest thing in it.

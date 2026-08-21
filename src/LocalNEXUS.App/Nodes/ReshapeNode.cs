@@ -189,8 +189,20 @@ public sealed partial class ReshapeNode : NodeBase, ICodeRepairSource
     /// <summary>Carries the rewritten value onwards.</summary>
     public Pin Result { get; }
 
-    /// <summary>Literal substitutions applied after a template is filled.</summary>
-    public ObservableCollection<FindReplacePair> Replacements { get; } = new();
+    /// <summary>
+    /// Literal pairs a graph saved before the presets may still carry, kept only to be reported.
+    /// </summary>
+    /// <remarks>
+    /// These were part of the old template mode: substitutions applied to the whole text after the
+    /// template was filled. The presets replaced that editor and left them applying invisibly, with
+    /// no way to see or change them, which is worse than either keeping or removing them.
+    ///
+    /// Removed rather than given an editor. Everything they did, replace mode does with a pattern,
+    /// so an editor would be a second way to say the same thing, and a transform nobody can see
+    /// silently changing text is exactly the failure this application refuses everywhere else. A
+    /// graph carrying any is named on load so the pairs can be rebuilt deliberately.
+    /// </remarks>
+    public IReadOnlyList<string> RetiredReplacements { get; private set; } = Array.Empty<string>();
 
     /// <inheritdoc />
     public override string TypeKey => "Reshape";
@@ -227,18 +239,7 @@ public sealed partial class ReshapeNode : NodeBase, ICodeRepairSource
 
     /// <inheritdoc />
     public override JsonObject SaveSettings()
-    {
-        var replacements = new JsonArray();
-        foreach (var pair in Replacements)
-        {
-            replacements.Add(new JsonObject
-            {
-                ["find"] = pair.Find,
-                ["replace"] = pair.Replace
-            });
-        }
-
-        return new JsonObject
+        => new JsonObject
         {
             ["mode"] = Mode.ToString(),
             ["injectBefore"] = InjectBefore,
@@ -249,10 +250,8 @@ public sealed partial class ReshapeNode : NodeBase, ICodeRepairSource
             ["maximumCharacters"] = MaximumCharacters,
             ["trimFrom"] = TrimFrom.ToString(),
             ["template"] = Template,
-            ["scriptExpression"] = ScriptExpression,
-            ["replacements"] = replacements
+            ["scriptExpression"] = ScriptExpression
         };
-    }
 
     /// <inheritdoc />
     public override void LoadSettings(JsonObject settings)
@@ -272,16 +271,14 @@ public sealed partial class ReshapeNode : NodeBase, ICodeRepairSource
             ? from
             : TrimFrom.End;
 
-        Replacements.Clear();
-        if (settings["replacements"] is JsonArray array)
-        {
-            foreach (var element in array.OfType<JsonObject>())
-            {
-                Replacements.Add(new FindReplacePair(
-                    element["find"]?.GetValue<string>() ?? string.Empty,
-                    element["replace"]?.GetValue<string>() ?? string.Empty));
-            }
-        }
+        // Read only so a graph that carried them can be told what it lost. They are not applied
+        // and they are not written back, so the next save is clean.
+        RetiredReplacements = settings["replacements"] is JsonArray array
+            ? array.OfType<JsonObject>()
+                .Select(e => $"{e["find"]?.GetValue<string>()} to {e["replace"]?.GetValue<string>()}")
+                .Where(p => !p.StartsWith(" to", StringComparison.Ordinal))
+                .ToList()
+            : Array.Empty<string>();
     }
 
     /// <inheritdoc />
@@ -492,34 +489,8 @@ public sealed partial class ReshapeNode : NodeBase, ICodeRepairSource
         }
     }
 
-    /// <summary>Adds an empty substitution row, used by the settings panel.</summary>
-    [RelayCommand]
-    private void AddReplacement() => Replacements.Add(new FindReplacePair());
-
-    /// <summary>Removes a substitution row.</summary>
-    [RelayCommand]
-    private void RemoveReplacement(FindReplacePair? pair)
-    {
-        if (pair is not null)
-        {
-            Replacements.Remove(pair);
-        }
-    }
-
     private string ApplyTemplate(string template, string input)
-    {
-        var output = (template ?? string.Empty).Replace(InputPlaceholder, input, StringComparison.Ordinal);
-
-        foreach (var pair in Replacements)
-        {
-            if (!string.IsNullOrEmpty(pair.Find))
-            {
-                output = output.Replace(pair.Find, pair.Replace ?? string.Empty, StringComparison.Ordinal);
-            }
-        }
-
-        return output;
-    }
+        => (template ?? string.Empty).Replace(InputPlaceholder, input, StringComparison.Ordinal);
 
     private async Task<string> RunScriptAsync(string expression, string input, CancellationToken ct)
     {
