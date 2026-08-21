@@ -80,12 +80,15 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
 
-                    <Border Grid.Column="0"
-                            Width="14" Height="14"
-                            Margin="10,0,8,0"
-                            CornerRadius="3"
-                            BorderThickness="1.5"
-                            BorderBrush="{DynamicResource Accent.Primary.Brush}" />
+                    <!--
+                        The brand mark. Linked in by Directory.Build.props under a fixed name, so
+                        changing which concept the product wears never touches this file.
+                    -->
+                    <Image Grid.Column="0"
+                           Width="18" Height="18"
+                           Margin="8,0,6,0"
+                           RenderOptions.BitmapScalingMode="HighQuality"
+                           Source="/Assets/Brand/Mark.png" />
 
                     <Menu Grid.Column="1"
                           Background="Transparent"

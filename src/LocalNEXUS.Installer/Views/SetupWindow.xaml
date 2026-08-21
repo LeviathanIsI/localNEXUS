@@ -69,14 +69,10 @@
             <!-- Title bar. -->
             <Grid Grid.Row="1">
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0">
-                    <Border Width="22" Height="22" CornerRadius="6" Background="{StaticResource Accent.Gradient.Brush}">
-                        <TextBlock Text="N"
-                                   FontSize="12"
-                                   FontWeight="Bold"
-                                   Foreground="{StaticResource Text.Inverse.Brush}"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" />
-                    </Border>
+                    <Image Width="22"
+                           Height="22"
+                           RenderOptions.BitmapScalingMode="HighQuality"
+                           Source="/Assets/Brand/Mark.png" />
                     <TextBlock Text="LocalNEXUS Setup"
                                Margin="10,0,0,0"
                                VerticalAlignment="Center"

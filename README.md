@@ -1,4 +1,8 @@
-# LocalNEXUS
+<p align="center">
+  <img src="assets/brand/concept-1-letterform/localnexus-concept-1-letterform-128.png" width="96" height="96" alt="LocalNEXUS">
+</p>
+
+<h1 align="center">LocalNEXUS</h1>
 
 ![The workspace during a run](docs/images/workspace-mid-run.png)
 

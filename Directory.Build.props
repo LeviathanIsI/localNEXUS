@@ -1,0 +1,23 @@
+<Project>
+
+  <!--
+      The brand mark, chosen in one place.
+
+      Three logo concepts live in assets\brand, each with its own folder holding the source, the
+      png set, a multi resolution ico and a social banner. Everything in the solution that shows
+      the mark reads the properties below, so switching concept is the one line here plus the one
+      image path in README.md. Nothing else names a concept.
+
+      BrandMark is linked into both projects as Assets\Brand\Mark.png, which is what lets the XAML
+      reference a fixed pack uri that never changes when the concept does. A Resource is compiled
+      into the assembly, so it resolves identically from the IDE and from the published single
+      file exe, the same reason the bundled font is a Resource.
+  -->
+  <PropertyGroup>
+    <BrandConcept>concept-1-letterform</BrandConcept>
+    <BrandDirectory>$(MSBuildThisFileDirectory)assets\brand\$(BrandConcept)\</BrandDirectory>
+    <BrandIcon>$(BrandDirectory)localnexus-$(BrandConcept).ico</BrandIcon>
+    <BrandMark>$(BrandDirectory)localnexus-$(BrandConcept)-256.png</BrandMark>
+  </PropertyGroup>
+
+</Project>

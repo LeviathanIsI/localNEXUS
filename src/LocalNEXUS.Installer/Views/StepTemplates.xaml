@@ -17,19 +17,12 @@
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
 
-                <Border Grid.Column="0"
-                        Width="64"
-                        Height="64"
-                        CornerRadius="16"
-                        VerticalAlignment="Top"
-                        Background="{StaticResource Accent.Gradient.Brush}">
-                    <TextBlock Text="N"
-                               FontSize="30"
-                               FontWeight="Bold"
-                               Foreground="{StaticResource Text.Inverse.Brush}"
-                               HorizontalAlignment="Center"
-                               VerticalAlignment="Center" />
-                </Border>
+                <Image Grid.Column="0"
+                       Width="64"
+                       Height="64"
+                       VerticalAlignment="Top"
+                       RenderOptions.BitmapScalingMode="HighQuality"
+                       Source="/Assets/Brand/Mark.png" />
 
                 <StackPanel Grid.Column="1" Margin="22,0,0,0">
                     <TextBlock Style="{StaticResource ScreenTitle}" Text="Welcome to the localNEXUS 1.6.0 Setup Wizard" />
@@ -424,19 +417,12 @@
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
-            <Border Grid.Column="0"
-                    Width="64"
-                    Height="64"
-                    CornerRadius="16"
-                    VerticalAlignment="Top"
-                    Background="{StaticResource Accent.Gradient.Brush}">
-                <TextBlock Text="&#xE73E;"
-                           FontFamily="{StaticResource Font.Icons}"
-                           FontSize="26"
-                           Foreground="{StaticResource Text.Inverse.Brush}"
-                           HorizontalAlignment="Center"
-                           VerticalAlignment="Center" />
-            </Border>
+            <Image Grid.Column="0"
+                   Width="64"
+                   Height="64"
+                   VerticalAlignment="Top"
+                   RenderOptions.BitmapScalingMode="HighQuality"
+                   Source="/Assets/Brand/Mark.png" />
 
             <StackPanel Grid.Column="1" Margin="22,0,0,0">
                 <TextBlock Style="{StaticResource ScreenTitle}" Text="Completing the localNEXUS Setup Wizard" />

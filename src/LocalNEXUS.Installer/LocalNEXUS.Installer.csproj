@@ -9,7 +9,7 @@
     <RootNamespace>LocalNEXUS.Installer</RootNamespace>
     <AssemblyName>LocalNEXUS-Setup</AssemblyName>
     <LangVersion>latest</LangVersion>
-    <ApplicationIcon>..\..\installer\LocalNEXUS.ico</ApplicationIcon>
+    <ApplicationIcon>$(BrandIcon)</ApplicationIcon>
     <AssemblyTitle>LocalNEXUS Setup</AssemblyTitle>
     <Product>LocalNEXUS</Product>
     <Company>You Know Its Me Studios</Company>
@@ -36,6 +36,12 @@
     -->
     <Resource Include="..\LocalNEXUS.App\Assets\Fonts\JetBrainsMono-Regular.ttf" Link="Assets\Fonts\JetBrainsMono-Regular.ttf" />
     <Resource Include="..\LocalNEXUS.App\Assets\Fonts\JetBrainsMono-Bold.ttf" Link="Assets\Fonts\JetBrainsMono-Bold.ttf" />
+
+    <!--
+        The same brand mark the application wears, under the same linked name, so the wizard and
+        the product it installs cannot end up showing different logos.
+    -->
+    <Resource Include="$(BrandMark)" Link="Assets\Brand\Mark.png" />
   </ItemGroup>
 
   <ItemGroup>

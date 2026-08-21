@@ -9,6 +9,7 @@
     <RootNamespace>LocalNEXUS.App</RootNamespace>
     <AssemblyName>LocalNEXUS</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>$(BrandIcon)</ApplicationIcon>
     <LangVersion>latest</LangVersion>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
   </PropertyGroup>
@@ -22,6 +23,12 @@
     -->
     <Resource Include="Assets\Fonts\JetBrainsMono-Regular.ttf" />
     <Resource Include="Assets\Fonts\JetBrainsMono-Bold.ttf" />
+
+    <!--
+        The brand mark the title bar draws, linked in under a fixed name so the XAML does not
+        name a concept. Which file this is comes from BrandConcept in Directory.Build.props.
+    -->
+    <Resource Include="$(BrandMark)" Link="Assets\Brand\Mark.png" />
   </ItemGroup>
 
   <ItemGroup>
