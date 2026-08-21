@@ -20,7 +20,14 @@
     -->
 
     <Grid>
-        <StackPanel Orientation="Horizontal" Margin="10,0,0,0">
+        <!--
+            Centred, and that is load bearing. This bar has a fixed height, so a row left to
+            stretch fills all of it, and a TextBlock given more height than its text draws that
+            text at the top of what it was given while the dot beside it centres in the middle.
+            The two then disagree by half the leftover height. Centring the row makes it as tall
+            as the text, which is what puts the dot and the word on the same line.
+        -->
+        <StackPanel Orientation="Horizontal" Margin="10,0,0,0" VerticalAlignment="Center">
 
             <StackPanel Orientation="Horizontal"
                         Margin="0,0,16,0"

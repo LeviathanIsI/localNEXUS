@@ -55,15 +55,10 @@
                              AutomationProperties.Name="Workspace"
                              IsChecked="{Binding IsWorkspace, Mode=TwoWay}" />
 
-                <!--
-                    A badge on the corner of an icon rather than a dot beside a label, so it opts
-                    out of the optical nudge the style applies for text.
-                -->
                 <Ellipse Style="{StaticResource StateDot}"
                          HorizontalAlignment="Right"
                          VerticalAlignment="Top"
                          Margin="0,9,7,0"
-                         RenderTransform="{x:Null}"
                          Fill="{Binding Feed.RunState, Converter={StaticResource ResourceLookup}, ConverterParameter=RunState}" />
             </Grid>
 
@@ -74,15 +69,10 @@
                              AutomationProperties.Name="Network"
                              IsChecked="{Binding IsNetwork, Mode=TwoWay}" />
 
-                <!--
-                    A badge on the corner of an icon rather than a dot beside a label, so it opts
-                    out of the optical nudge the style applies for text.
-                -->
                 <Ellipse Style="{StaticResource StateDot}"
                          HorizontalAlignment="Right"
                          VerticalAlignment="Top"
                          Margin="0,9,7,0"
-                         RenderTransform="{x:Null}"
                          Fill="{Binding Network.Mesh.State, Converter={StaticResource ResourceLookup}, ConverterParameter=MeshNodeState}" />
             </Grid>
 
