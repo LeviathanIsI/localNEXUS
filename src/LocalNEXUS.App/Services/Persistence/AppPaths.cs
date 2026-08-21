@@ -77,6 +77,15 @@ public static class AppPaths
     /// </summary>
     public static string ModelPathsFile { get; } = Path.Combine(Root, "model-paths.txt");
 
+    /// <summary>Where GGUF files are suggested to go.</summary>
+    public static string ModelsGguf { get; } = Path.Combine(Models, "gguf");
+
+    /// <summary>Where safetensors model folders are suggested to go.</summary>
+    public static string ModelsSafetensors { get; } = Path.Combine(Models, "safetensors");
+
+    /// <summary>Reserved for embedding models. Empty and unused today.</summary>
+    public static string ModelsEmbeddings { get; } = Path.Combine(Models, "embeddings");
+
     /// <summary>Creates the data folders on first run. Safe to call repeatedly.</summary>
     public static void EnsureCreated()
     {
@@ -85,6 +94,76 @@ public static class AppPaths
         Directory.CreateDirectory(Graphs);
         Directory.CreateDirectory(Logs);
         Directory.CreateDirectory(Runtime);
+
+        EnsureModelFolders();
+    }
+
+    /// <summary>
+    /// Creates the typed model folders, each with a note saying what belongs in it.
+    /// </summary>
+    /// <remarks>
+    /// Organisation for people, not something anything here depends on. Format is decided by
+    /// reading the file, so a GGUF sitting in the safetensors folder loads exactly as it would
+    /// anywhere else, and nothing refuses a file for being in the wrong place. What a flat folder
+    /// costs is the signal: somebody arriving from another tool has no idea where anything goes,
+    /// and an empty directory does not tell them.
+    ///
+    /// Nothing is moved. An install that already has a flat folder full of models keeps working
+    /// exactly as it did, and gains three empty folders it is free to ignore.
+    ///
+    /// A note that already exists is left alone, because somebody may have written their own.
+    /// </remarks>
+    private static void EnsureModelFolders()
+    {
+        Create(
+            ModelsGguf,
+            "GGUF models go here." + Environment.NewLine + Environment.NewLine
+            + "One file per model, ending in .gguf. Subfolders are fine and are searched too, so "
+            + "grouping by family or by size works." + Environment.NewLine + Environment.NewLine
+            + "This folder is a suggestion. Models are recognised by reading the file rather than by "
+            + "where it sits, so one in the wrong folder still loads, and folders listed in "
+            + "model-paths.txt are searched as well.");
+
+        Create(
+            ModelsSafetensors,
+            "Safetensors models go here." + Environment.NewLine + Environment.NewLine
+            + "One folder per model, each holding a config.json beside its weight files. A lone "
+            + ".safetensors file with no config is not a model that can be served, and is reported "
+            + "as that rather than attempted." + Environment.NewLine + Environment.NewLine
+            + "These need the Python runtime, which is built in the background on first launch. GGUF "
+            + "models never touch it." + Environment.NewLine + Environment.NewLine
+            + "This folder is a suggestion. Models are recognised by reading what is there rather "
+            + "than by where it sits.");
+
+        Create(
+            ModelsEmbeddings,
+            "Embedding models will go here." + Environment.NewLine + Environment.NewLine
+            + "Nothing uses this yet. It is reserved for semantic search over the project index, "
+            + "which is not built: searching the run history is keyword matching today, and where a "
+            + "semantic layer would attach is written down rather than implemented." + Environment.NewLine
+            + Environment.NewLine
+            + "Leaving it empty is correct.");
+    }
+
+    /// <summary>Creates one model folder and its note, without disturbing a note already there.</summary>
+    private static void Create(string folder, string note)
+    {
+        try
+        {
+            Directory.CreateDirectory(folder);
+
+            var readme = Path.Combine(folder, "README.md");
+
+            if (!File.Exists(readme))
+            {
+                File.WriteAllText(readme, note + Environment.NewLine);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // A folder that will not be created is a tidiness problem, not a working one. Nothing
+            // depends on these existing, so failing a launch over one would be the wrong trade.
+        }
     }
 
     /// <summary>Returns a timestamped log file path inside <see cref="Logs"/>.</summary>
