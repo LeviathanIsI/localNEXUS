@@ -6,7 +6,7 @@ Do not open a public issue.
 
 [Open a security advisory](https://github.com/You-Know-Its-Me-Studios/LocalNEXUS/security/advisories/new).
 That gives a private thread and, if it is real, a way to publish an advisory and credit you.
-If advisories are not available to you, email joshua.r.bradford1@gmail.com with "LocalNEXUS
+If advisories are not available to you, email youknowitsmestudios@gmail.com with "LocalNEXUS
 security" in the subject.
 
 Include enough to reproduce it: the version, what an attacker has to control, and what they
