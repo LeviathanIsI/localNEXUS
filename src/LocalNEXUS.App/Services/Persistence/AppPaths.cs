@@ -99,6 +99,18 @@ public static class AppPaths
     }
 
     /// <summary>
+    /// The last line of every note this application writes into a model folder.
+    /// </summary>
+    /// <remarks>
+    /// A marker, so these can be kept current without overwriting somebody's own words. A note
+    /// carrying this line is one this application wrote and is replaced when the text changes; a
+    /// note without it has been edited and is left exactly as it is. Deleting the line is how
+    /// somebody claims the file.
+    /// </remarks>
+    private const string NoteMarker =
+        "This file is written by LocalNEXUS and replaced when it changes. Delete this line to keep your own version.";
+
+    /// <summary>
     /// Creates the typed model folders, each with a note saying what belongs in it.
     /// </summary>
     /// <remarks>
@@ -110,54 +122,184 @@ public static class AppPaths
     ///
     /// Nothing is moved. An install that already has a flat folder full of models keeps working
     /// exactly as it did, and gains three empty folders it is free to ignore.
-    ///
-    /// A note that already exists is left alone, because somebody may have written their own.
     /// </remarks>
     private static void EnsureModelFolders()
     {
-        Create(
-            ModelsGguf,
-            "GGUF models go here." + Environment.NewLine + Environment.NewLine
-            + "One file per model, ending in .gguf. Subfolders are fine and are searched too, so "
-            + "grouping by family or by size works." + Environment.NewLine + Environment.NewLine
-            + "This folder is a suggestion. Models are recognised by reading the file rather than by "
-            + "where it sits, so one in the wrong folder still loads, and folders listed in "
-            + "model-paths.txt are searched as well.");
-
-        Create(
-            ModelsSafetensors,
-            "Safetensors models go here." + Environment.NewLine + Environment.NewLine
-            + "One folder per model, each holding a config.json beside its weight files. A lone "
-            + ".safetensors file with no config is not a model that can be served, and is reported "
-            + "as that rather than attempted." + Environment.NewLine + Environment.NewLine
-            + "These need the Python runtime, which is built in the background on first launch. GGUF "
-            + "models never touch it." + Environment.NewLine + Environment.NewLine
-            + "This folder is a suggestion. Models are recognised by reading what is there rather "
-            + "than by where it sits.");
-
-        Create(
-            ModelsEmbeddings,
-            "Embedding models will go here." + Environment.NewLine + Environment.NewLine
-            + "Nothing uses this yet. It is reserved for semantic search over the project index, "
-            + "which is not built: searching the run history is keyword matching today, and where a "
-            + "semantic layer would attach is written down rather than implemented." + Environment.NewLine
-            + Environment.NewLine
-            + "Leaving it empty is correct.");
+        Create(ModelsGguf, GgufNote, "GGUF models go here.");
+        Create(ModelsSafetensors, SafetensorsNote, "Safetensors models go here.");
+        Create(ModelsEmbeddings, EmbeddingsNote, "Embedding models will go here.");
     }
 
-    /// <summary>Creates one model folder and its note, without disturbing a note already there.</summary>
-    private static void Create(string folder, string note)
+    private const string GgufNote = """
+        # GGUF models
+
+        Put `.gguf` files in this folder. One file is one model.
+
+        ## Adding one
+
+        Copy or move the file in. LocalNEXUS finds it the next time it scans, which happens at
+        startup and whenever you rescan from the Models section of Settings. Nothing has to be
+        registered and nothing has to be renamed.
+
+        Subfolders work and are searched, so this is fine:
+
+        ```
+        gguf\
+          qwen2.5-coder-7b-instruct-q4_k_m.gguf
+          llama\
+            llama-3.1-8b-instruct-q5_k_m.gguf
+        ```
+
+        ## Getting one
+
+        Hugging Face is where most of them are. Search for the model you want with "GGUF" in the
+        name, open the Files tab, and download a single `.gguf`. You do not need the rest of the
+        repository.
+
+        A file name usually ends with its quantization, such as `q4_k_m` or `q8_0`. Lower numbers
+        are smaller and faster and lose more quality. `q4_k_m` is the usual starting point, and
+        `q5_k_m` or `q6_k` are worth it if the model fits in your card with room to spare.
+
+        A 7B model at `q4_k_m` is roughly 4.5 GB and wants about 6 GB of VRAM with a useful context
+        window. Below 7B you will mostly watch the compiler check catch things.
+
+        ## Using one
+
+        Add a Model node to the canvas, click it, choose Local, and pick the model from the list.
+
+        ## Keeping models somewhere else
+
+        You do not have to keep them here. Either point a Model node straight at a file anywhere on
+        disk, or list the folders you keep models in, one per line, in `model-paths.txt` beside this
+        application's config. Both are scanned exactly like this folder.
+
+        ## This folder is a suggestion
+
+        A model is recognised by reading the file, never by where it sits, so one in the wrong
+        folder still loads and nothing is refused for being misfiled. The folders exist so you can
+        tell at a glance where things are.
+
+        """;
+
+    private const string SafetensorsNote = """
+        # Safetensors models
+
+        Put one folder per model in here. A model is a folder, not a file.
+
+        ## What a valid one looks like
+
+        ```
+        safetensors\
+          Qwen2.5-Coder-7B-Instruct\
+            config.json
+            model-00001-of-00004.safetensors
+            model-00002-of-00004.safetensors
+            model.safetensors.index.json
+            tokenizer.json
+            tokenizer_config.json
+        ```
+
+        `config.json` has to be there, beside the weights. That file is what says this is a model
+        rather than a folder with some tensors in it.
+
+        A lone `.safetensors` file with no `config.json`, or a folder of weights without one, is
+        reported as exactly that and is not offered as a model. It is not an error and nothing is
+        wrong with the file; there is just not enough there to serve.
+
+        ## Getting one
+
+        Download the whole repository from Hugging Face rather than picking files out of it. The
+        Hugging Face CLI is the least error prone way:
+
+        ```
+        huggingface-cli download Qwen/Qwen2.5-Coder-7B-Instruct --local-dir Qwen2.5-Coder-7B-Instruct
+        ```
+
+        Run that from inside this folder and it lands correctly. Cloning the repository with git
+        also works if you have git lfs set up.
+
+        ## The Python runtime
+
+        These are served through Python, which LocalNEXUS builds for itself in the background the
+        first time it starts. That download is roughly 3 GB on an NVIDIA card because it pulls a
+        CUDA build of torch, and a few hundred megabytes otherwise. Nothing waits on it and you can
+        keep working while it runs.
+
+        GGUF models never touch any of that. If you only ever use GGUF, the Python runtime is
+        wasted effort and you can ignore it.
+
+        Safetensors are unquantized, so they want considerably more memory than the same model as
+        GGUF. A 7B model is around 15 GB in fp16. Use GGUF unless you have a specific reason not to.
+
+        ## Using one
+
+        Add a Model node to the canvas, click it, choose Local, and pick the model from the list.
+        Which runtime serves it is worked out from what the folder contains; you are not asked.
+
+        ## This folder is a suggestion
+
+        A model is recognised by reading what is there, never by where it sits, so one in the wrong
+        folder still loads and nothing is refused for being misfiled.
+
+        """;
+
+    private const string EmbeddingsNote = """
+        # Embedding models
+
+        Nothing uses this folder yet. There is nothing for you to do with it.
+
+        It is reserved for semantic search over the project index. Searching your run history today
+        is keyword matching: it finds the words that were actually written, which costs nothing and
+        needs no model, and it does not find a different word meaning the same thing. Adding
+        embeddings is how that would be fixed, and it has deliberately not been built.
+
+        Putting a model in here will not make anything happen. It will not break anything either,
+        and a model that happens to be servable will simply appear in the model list like any other,
+        because models are found by reading files rather than by which folder they are in.
+
+        If you are looking for somewhere to put a model you intend to use, it is `..\gguf` or
+        `..\safetensors`.
+
+        """;
+
+    /// <summary>
+    /// Creates one model folder and its note, without overwriting one somebody has edited.
+    /// </summary>
+    /// <param name="folder">The folder to create.</param>
+    /// <param name="note">What to write.</param>
+    /// <param name="firstShipped">
+    /// The opening line of the first note shipped for this folder, which carried no marker.
+    /// </param>
+    /// <remarks>
+    /// The first version of these notes went out before there was a way to tell an application
+    /// written file from an edited one, so an install that already has one would keep it forever
+    /// and never see a correction. Recognising that opening line is the one time transition out of
+    /// that, and it is narrow enough not to catch anything somebody wrote themselves.
+    /// </remarks>
+    private static void Create(string folder, string note, string firstShipped)
     {
         try
         {
             Directory.CreateDirectory(folder);
 
             var readme = Path.Combine(folder, "README.md");
+            var text = note.ReplaceLineEndings().TrimEnd() + Environment.NewLine + Environment.NewLine
+                       + NoteMarker + Environment.NewLine;
 
-            if (!File.Exists(readme))
+            if (File.Exists(readme))
             {
-                File.WriteAllText(readme, note + Environment.NewLine);
+                var existing = File.ReadAllText(readme);
+
+                var ours = existing.Contains(NoteMarker, StringComparison.Ordinal)
+                           || existing.TrimStart().StartsWith(firstShipped, StringComparison.Ordinal);
+
+                if (!ours)
+                {
+                    return;
+                }
             }
+
+            File.WriteAllText(readme, text);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
