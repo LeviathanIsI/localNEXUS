@@ -15,6 +15,7 @@
         MinHeight="620"
         MinWidth="1040"
         WindowStartupLocation="CenterScreen"
+        WindowState="Maximized"
         WindowStyle="None"
         AllowsTransparency="True"
         Background="Transparent"
@@ -31,6 +32,9 @@
         The window draws its own title bar, which is the only way the menu bar can be part of it
         and the only way the caption can be themed. The caption buttons get their handlers from an
         attached behaviour so that the code behind stays a call to InitializeComponent.
+
+        It opens maximised, filling the work area. Height and Width above are not ignored: they
+        are the size restoring down gives back.
 
         AllowsTransparency is what lets a theme be seen through, and it is the installer's
         mechanism rather than a second one invented here. The alternative, a Windows 11 system
