@@ -6,6 +6,10 @@ This is what stops people. The repository does not contain the inference engines
 large, GPU specific, and carry their own licences, so you fetch them into folders that
 already exist and are gitignored.
 
+If you only want to run the application rather than work on it, the installer does this for you:
+build it with `.\release.ps1` and it fetches whichever engines you tick. This section is for
+working from a clone.
+
 The app builds and runs without them. It just cannot do anything, and the feed says so on
 startup.
 
@@ -41,11 +45,19 @@ src/LocalNEXUS.App/     everything
 vendor/                 engine binaries you fetch, plus committed Python lockfiles
 docs/                   documentation
 publish.ps1             produces the runnable exe
+release.ps1             produces the installer and the zip
+src/LocalNEXUS.Installer  the installer, a WPF app of its own
 dist/                   build output, gitignored
 ```
 
 `.\publish.ps1` is the real build. It publishes a self contained single file exe to `dist\`
 and copies whatever engines you have into `dist\vendor\` with paths intact.
+
+`.\release.ps1` produces what a release consists of: the installer and the plain zip,
+both into `dist\release\`. It calls `publish.ps1` rather than reimplementing it, so a
+release build and a development build are the same build.
+The installer is a WPF application in `src\LocalNEXUS.Installer`, which is why it
+looks like the product rather than like a setup utility.
 
 **"It compiles" is not the bar. "The exe in `dist\` runs and does the thing" is.** Single
 file publishing has traps, the sharpest being that `Assembly.Location` is empty inside a

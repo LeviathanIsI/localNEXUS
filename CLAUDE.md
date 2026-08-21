@@ -21,6 +21,16 @@ The long-term target is a network where people pool compute to collectively run 
 
 The counterbalance, equally important: build seams and interfaces for the vision, implementations only for what is actually in front of us. An abstraction that happens to hold two entries today is correct. A full protocol with nothing to talk to is waste. Do not implement speculative features.
 
+## Scope discipline
+
+- Build what the prompt asks for. Nothing else.
+- **An improvement you noticed is not a task.** If something looks suboptimal (a file is larger than you would like, a pattern could be cleaner, a dependency could be newer) and it is not in the prompt, write it down in the report and move on. Do not act on it.
+- Do not optimise, refactor, or tune anything the prompt did not name.
+- If a task genuinely cannot be completed without work outside the prompt, stop and say so before starting that work. Do not decide alone.
+- **When something fails twice, stop.** Report what failed and what you tried. Do not keep trying variations. Repeatedly re-running an expensive step is worse than reporting a blocker.
+- Do not re-run a build, publish, or long-running step that already succeeded. Reuse the artefact.
+- Answer a direct question directly and immediately, before doing anything else.
+
 ## Stack
 
 - Windows 11 desktop, WPF, .NET 8, C#

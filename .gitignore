@@ -132,3 +132,7 @@ vendor/python/__pycache__/
 
 # The compiled installer, which is build output like everything else in dist.
 dist/installer/
+
+# The application payload the installer embeds. Copied in by release.ps1 from dist, and no more
+# committable than dist itself.
+src/LocalNEXUS.Installer/Payload/

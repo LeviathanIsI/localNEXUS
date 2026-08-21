@@ -1,0 +1,81 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=System.Runtime">
+
+    <!--
+        Every brush the installer draws with, each one taking its colour from the theme dictionary
+        and never naming one itself. Same rule as the application: a literal colour anywhere but
+        InstallerTheme.xaml is a bug.
+
+        The application builds its brushes in code because it swaps themes at runtime, which needs
+        a live instance the converters can repaint. The installer has one theme and no picker, so
+        it does the simple thing instead. Building the swapping machinery here would be building
+        ahead for a feature that does not exist.
+    -->
+
+    <SolidColorBrush x:Key="Surface.Window.Brush" Color="{StaticResource Surface.WindowColor}" />
+    <SolidColorBrush x:Key="Surface.Panel.Brush" Color="{StaticResource Surface.PanelColor}" />
+    <SolidColorBrush x:Key="Surface.Card.Brush" Color="{StaticResource Surface.CardColor}" />
+    <SolidColorBrush x:Key="Surface.Input.Brush" Color="{StaticResource Surface.InputColor}" />
+    <SolidColorBrush x:Key="Surface.Border.Brush" Color="{StaticResource Surface.BorderColor}" />
+    <SolidColorBrush x:Key="Surface.SubtleBorder.Brush" Color="{StaticResource Surface.SubtleBorderColor}" />
+    <SolidColorBrush x:Key="Surface.Chrome.Brush" Color="{StaticResource Surface.ChromeColor}" />
+    <SolidColorBrush x:Key="Surface.Hover.Brush" Color="{StaticResource Surface.HoverColor}" />
+    <SolidColorBrush x:Key="Surface.Log.Brush" Color="{StaticResource Surface.LogColor}" />
+
+    <SolidColorBrush x:Key="Text.Primary.Brush" Color="{StaticResource Text.PrimaryColor}" />
+    <SolidColorBrush x:Key="Text.Secondary.Brush" Color="{StaticResource Text.SecondaryColor}" />
+    <SolidColorBrush x:Key="Text.Muted.Brush" Color="{StaticResource Text.MutedColor}" />
+    <SolidColorBrush x:Key="Text.Inverse.Brush" Color="{StaticResource Text.InverseColor}" />
+    <SolidColorBrush x:Key="Text.Disabled.Brush" Color="{StaticResource Text.DisabledColor}" />
+
+    <SolidColorBrush x:Key="Accent.Primary.Brush" Color="{StaticResource Accent.PrimaryColor}" />
+    <SolidColorBrush x:Key="Accent.Soft.Brush" Color="{StaticResource Accent.SoftColor}" />
+    <SolidColorBrush x:Key="Accent.Glow.Brush" Color="{StaticResource Accent.GlowColor}" />
+
+    <SolidColorBrush x:Key="Status.Success.Brush" Color="{StaticResource Status.SuccessColor}" />
+    <SolidColorBrush x:Key="Status.Warning.Brush" Color="{StaticResource Status.WarningColor}" />
+    <SolidColorBrush x:Key="Status.Error.Brush" Color="{StaticResource Status.ErrorColor}" />
+    <SolidColorBrush x:Key="Status.Info.Brush" Color="{StaticResource Status.InfoColor}" />
+
+    <!--
+        The accent gradient, at 135 degrees, which is the one thing in this design that no flat
+        theme colour could have carried. Used by the logo mark, the primary button, the progress
+        fill, the completed step circles and every selected control.
+    -->
+    <LinearGradientBrush x:Key="Accent.Gradient.Brush" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Offset="0" Color="{StaticResource Accent.StartColor}" />
+        <GradientStop Offset="1" Color="{StaticResource Accent.EndColor}" />
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="Accent.GradientHorizontal.Brush" StartPoint="0,0" EndPoint="1,0">
+        <GradientStop Offset="0" Color="{StaticResource Accent.StartColor}" />
+        <GradientStop Offset="1" Color="{StaticResource Accent.EndColor}" />
+    </LinearGradientBrush>
+
+    <!-- The window backdrop, with a faint violet lift at the bottom right. -->
+    <LinearGradientBrush x:Key="Backdrop.Brush" StartPoint="0,0" EndPoint="0.85,1">
+        <GradientStop Offset="0" Color="{StaticResource Backdrop.TopColor}" />
+        <GradientStop Offset="0.55" Color="{StaticResource Backdrop.BottomColor}" />
+        <GradientStop Offset="1" Color="{StaticResource Backdrop.GlowColor}" />
+    </LinearGradientBrush>
+
+    <!-- Type, matching the application's scale so the two products measure the same. -->
+    <sys:Double x:Key="Font.Size.Micro">11</sys:Double>
+    <sys:Double x:Key="Font.Size.Small">11.5</sys:Double>
+    <sys:Double x:Key="Font.Size.Normal">12.5</sys:Double>
+    <sys:Double x:Key="Font.Size.Body">13.5</sys:Double>
+    <sys:Double x:Key="Font.Size.Large">15</sys:Double>
+    <sys:Double x:Key="Font.Size.Title">20</sys:Double>
+
+    <FontFamily x:Key="Font.Sans">Segoe UI Variable Text, Segoe UI, Arial</FontFamily>
+    <FontFamily x:Key="Font.Icons">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
+
+    <!-- The same bundled face the application uses, compiled into this assembly by link. -->
+    <FontFamily x:Key="Font.Mono">pack://application:,,,/Assets/Fonts/#JetBrains Mono, Cascadia Mono, Consolas, Courier New</FontFamily>
+
+    <CornerRadius x:Key="Radius.Control">8</CornerRadius>
+    <CornerRadius x:Key="Radius.Card">10</CornerRadius>
+    <CornerRadius x:Key="Radius.Window">12</CornerRadius>
+
+</ResourceDictionary>

@@ -11,7 +11,15 @@ Unity C# is what it was built for. The engine does not know what Unity is.
 
 ## Quick start
 
-Grab a release, unzip it, run `LocalNEXUS.exe`. Self contained, no .NET install needed.
+Two ways in.
+
+**The installer.** Take `LocalNEXUS-setup.exe` from a release and run it. It installs per user, so
+there is no elevation prompt, and it fetches whichever engines you tick from their own release
+pages. Re-run it later to add an engine you skipped. It is not signed, so SmartScreen will warn
+you once.
+
+**The zip**, if you would rather. Unzip it and run `LocalNEXUS.exe`. Self contained, no .NET
+install needed, and you place the engine binaries yourself as described in `vendor/*/README.md`.
 
 Five minutes to a generated file, assuming a `.gguf` on disk:
 

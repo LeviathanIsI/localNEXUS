@@ -1,0 +1,53 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>LocalNEXUS.Installer</RootNamespace>
+    <AssemblyName>LocalNEXUS-Setup</AssemblyName>
+    <LangVersion>latest</LangVersion>
+    <ApplicationIcon>..\..\installer\LocalNEXUS.ico</ApplicationIcon>
+    <AssemblyTitle>LocalNEXUS Setup</AssemblyTitle>
+    <Product>LocalNEXUS</Product>
+    <Company>You Know Its Me Studios</Company>
+    <Copyright>Copyright 2026 You Know Its Me Studios</Copyright>
+
+    <!--
+        Signing seam. Not signed today, and adding it later is setting SignToolPath and
+        SignToolArguments rather than restructuring anything: the publish script calls the tool
+        over whatever this produces. An unsigned installer gets a SmartScreen warning, which is
+        the known cost and is no different for a WPF installer than for any other.
+    -->
+    <SignAfterPublish Condition="'$(SignAfterPublish)' == ''">false</SignAfterPublish>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+        The monospace face is the same file the application ships, included by link rather than
+        copied. One file on disk, two assemblies that compile it in, so the licence text and the
+        install log render in the face the product uses everywhere else.
+    -->
+    <Resource Include="..\LocalNEXUS.App\Assets\Fonts\JetBrainsMono-Regular.ttf" Link="Assets\Fonts\JetBrainsMono-Regular.ttf" />
+    <Resource Include="..\LocalNEXUS.App\Assets\Fonts\JetBrainsMono-Bold.ttf" Link="Assets\Fonts\JetBrainsMono-Bold.ttf" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+        The application itself travels inside this installer rather than being downloaded, which
+        is why it is not in the fetch list on the Ready page. Only the engines are fetched, and
+        only because they carry their own licences.
+
+        Conditional so that an ordinary build of the solution works with no payload present. The
+        installer says so plainly rather than failing at the moment somebody presses Install.
+    -->
+    <EmbeddedResource Include="Payload\LocalNEXUS.exe" Condition="Exists('Payload\LocalNEXUS.exe')" LogicalName="LocalNEXUS.Payload.exe" />
+  </ItemGroup>
+
+</Project>
