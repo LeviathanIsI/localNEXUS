@@ -40,4 +40,13 @@
     <Color x:Key="Pin.TextColor">#FF61AFEF</Color>
     <Color x:Key="Pin.CodeColor">#FFD19A66</Color>
 
+    <!--
+        The three stops of the surface gradient, which the window base layer and the canvas take.
+        A flat theme sets all three to its window colour, so the gradient brush is painted the same
+        way for every theme and nothing has to branch on which one is in force.
+    -->
+    <Color x:Key="Surface.GradientStartColor">#FF282C34</Color>
+    <Color x:Key="Surface.GradientMidColor">#FF282C34</Color>
+    <Color x:Key="Surface.GradientEndColor">#FF282C34</Color>
+
 </ResourceDictionary>

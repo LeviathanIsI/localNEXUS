@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
+using LocalNEXUS.App.Infrastructure;
 using LocalNEXUS.App.Services.Persistence;
 
 namespace LocalNEXUS.App.Services.Theming;
@@ -31,8 +32,24 @@ public sealed partial class ThemeService : ObservableObject
     private readonly AppConfig _config;
     private readonly ResourceDictionary _applicationResources;
 
+    /// <summary>
+    /// The least opaque the window's base layer may be made.
+    /// </summary>
+    /// <remarks>
+    /// A floor rather than a range down to nothing, because the thing behind the window is
+    /// arbitrary and a base layer thin enough to read a document through is a base layer that
+    /// cannot be read itself. This is the point where the palette still wins over whatever is
+    /// underneath it.
+    /// </remarks>
+    public const double MinimumWindowOpacity = 0.55d;
+
     /// <summary>The theme currently applied.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CurrentDefinition))]
+    [NotifyPropertyChangedFor(nameof(IsTransparencyAvailable))]
+    [NotifyPropertyChangedFor(nameof(IsWindowTranslucent))]
+    [NotifyPropertyChangedFor(nameof(EffectiveWindowOpacity))]
+    [NotifyPropertyChangedFor(nameof(TransparencySummary))]
     private AppTheme _current;
 
     public ThemeService(AppConfig config, ResourceDictionary applicationResources)
@@ -69,11 +86,81 @@ public sealed partial class ThemeService : ObservableObject
             AppTheme.Light,
             "Light",
             "For bright rooms.",
-            "Views/Themes/Light.xaml")
+            "Views/Themes/Light.xaml"),
+        new ThemeDefinition(
+            AppTheme.Mystic,
+            "Mystic",
+            "Violet wash, and the only one you can see through.",
+            "Views/Themes/Mystic.xaml",
+            ThemeCapabilities.GradientSurface | ThemeCapabilities.WindowTransparency)
     };
 
     /// <summary>The definition of the theme currently applied.</summary>
     public ThemeDefinition CurrentDefinition => Definition(Current);
+
+    /// <summary>
+    /// True when the transparency control has anything to offer.
+    /// </summary>
+    /// <remarks>
+    /// Two questions, and neither of them is which theme this is. The theme has to declare the
+    /// capability, and the machine has to be able to honour it, which is a real question because
+    /// the backdrop arrived part way through Windows 11.
+    /// </remarks>
+    public bool IsTransparencyAvailable
+        => CurrentDefinition.SupportsTransparency && WindowBackdrop.IsSupported;
+
+    /// <summary>What the appearance panel says about transparency under this theme.</summary>
+    public string TransparencySummary
+    {
+        get
+        {
+            if (!CurrentDefinition.SupportsTransparency)
+            {
+                return $"{CurrentDefinition.DisplayName} is opaque. Pick a theme that can be seen through to set this.";
+            }
+
+            return WindowBackdrop.IsSupported
+                ? "How solid the window is. What is behind the application shows through the base layer, and the panels stay opaque."
+                : "This needs Windows 11 22H2 or later, which this machine does not have. The window stays opaque.";
+        }
+    }
+
+    /// <summary>
+    /// How opaque the window's base layer should be, from the floor to fully solid.
+    /// </summary>
+    public double WindowOpacity
+    {
+        get => Math.Clamp(_config.WindowOpacity, MinimumWindowOpacity, 1d);
+        set
+        {
+            var clamped = Math.Clamp(value, MinimumWindowOpacity, 1d);
+
+            if (Math.Abs(_config.WindowOpacity - clamped) < 0.001d)
+            {
+                return;
+            }
+
+            _config.WindowOpacity = clamped;
+            _config.Save();
+
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(EffectiveWindowOpacity));
+            OnPropertyChanged(nameof(IsWindowTranslucent));
+        }
+    }
+
+    /// <summary>
+    /// What the base layer is actually painted at, which is solid unless the theme in force offers
+    /// transparency and this machine can do it.
+    /// </summary>
+    public double EffectiveWindowOpacity => IsTransparencyAvailable ? WindowOpacity : 1d;
+
+    /// <summary>True when the window should be asking the compositor for a backdrop.</summary>
+    /// <remarks>
+    /// Not the same question as whether transparency is available: a theme that offers it, set to
+    /// fully solid, has nothing to show through and should not be paying for a live blur.
+    /// </remarks>
+    public bool IsWindowTranslucent => IsTransparencyAvailable && WindowOpacity < 1d;
 
     /// <summary>Looks up a definition, falling back to the reference theme for a value this build does not know.</summary>
     public static ThemeDefinition Definition(AppTheme theme)
@@ -127,6 +214,30 @@ public sealed partial class ThemeService : ObservableObject
             // XAML re-resolves to. It has to be a new object rather than the one above, because
             // anything placed in the application resources is frozen on the way in.
             _applicationResources[brushKey] = new SolidColorBrush(colour);
+        }
+
+        foreach (var (brushKey, colourKeys) in SemanticBrushes.Gradients)
+        {
+            var stops = new List<Color>(colourKeys.Count);
+
+            foreach (var colourKey in colourKeys)
+            {
+                if (colours[colourKey] is Color stop)
+                {
+                    stops.Add(stop);
+                }
+            }
+
+            if (stops.Count != colourKeys.Count)
+            {
+                // Same rule as a missing solid colour: a theme short of a stop is a mistake in
+                // that theme, and leaving the gradient as it was makes it visible without leaving
+                // a hole where the window used to be.
+                continue;
+            }
+
+            ThemePalette.SetGradient(brushKey, stops);
+            _applicationResources[brushKey] = ThemePalette.BuildGradient(stops);
         }
     }
 }

@@ -171,4 +171,24 @@ public static class SemanticBrushes
         ("Wire.True.Brush", "Status.SuccessColor"),
         ("Wire.False.Brush", "Status.DangerColor")
     };
+
+    /// <summary>Gradient brush key to the theme colours of its stops, running start to end.</summary>
+    /// <remarks>
+    /// A second table rather than an entry in the first, because a gradient takes several colours
+    /// and a solid brush takes one, and folding them together would mean every row carrying a list
+    /// so that one of them could. Painting works the same way for both.
+    ///
+    /// Only one gradient exists and one entry is the right size for it. Every theme fills all
+    /// three stops, a flat one repeating its window colour, so there is one painting path and no
+    /// theme is a special case.
+    /// </remarks>
+    public static IReadOnlyList<(string Brush, IReadOnlyList<string> Colours)> Gradients { get; } = new (string, IReadOnlyList<string>)[]
+    {
+        ("Surface.Gradient.Brush", new[]
+        {
+            "Surface.GradientStartColor",
+            "Surface.GradientMidColor",
+            "Surface.GradientEndColor"
+        })
+    };
 }

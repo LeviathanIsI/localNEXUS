@@ -23,5 +23,8 @@ public enum AppTheme
     NearBlack,
 
     /// <summary>Light, with every state colour chosen for a light background.</summary>
-    Light
+    Light,
+
+    /// <summary>The installer's palette: violet wash, and the only theme that can be seen through.</summary>
+    Mystic
 }

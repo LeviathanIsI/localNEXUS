@@ -16,7 +16,13 @@
         strip is the shape the shell has, and the seam for the rest of it when it is wanted.
     -->
 
-    <DockPanel Background="{DynamicResource Surface.Window.Brush}">
+    <!--
+        No fill of its own. The window base layer below is what shows here, which is what puts
+        the theme gradient behind the canvas, and what lets a translucent theme be translucent
+        over the largest area the shell has. Every surface in here that carries text paints
+        itself and stays solid.
+    -->
+    <DockPanel Background="Transparent">
 
         <!-- Tabs -->
         <Border DockPanel.Dock="Top"
@@ -83,7 +89,7 @@
                              RemoveConnectionCommand="{Binding RemoveConnectionCommand}"
                              GridCellSize="16"
                              DisplayConnectionsOnTop="False"
-                             Background="{DynamicResource Surface.Window.Brush}">
+                             Background="Transparent">
             <nodify:NodifyEditor.ContextMenu>
                 <ContextMenu>
                     <MenuItem Header="Add node"

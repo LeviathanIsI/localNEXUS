@@ -85,19 +85,25 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [NotifyPropertyChangedFor(nameof(InspectorHeader))]
     [NotifyPropertyChangedFor(nameof(TitleText))]
     [NotifyPropertyChangedFor(nameof(StatusSummary))]
+    [NotifyPropertyChangedFor(nameof(LeftPanel))]
+    [NotifyPropertyChangedFor(nameof(RightPanel))]
     private PrimarySection _activeSection = PrimarySection.Workspace;
 
     /// <summary>True while the settings panel is covering the primary view.</summary>
     [ObservableProperty]
     private bool _isSettingsOpen;
 
-    /// <summary>True while the side bar is showing. Collapsing it gives the canvas the width.</summary>
-    [ObservableProperty]
-    private bool _isSideBarVisible = true;
+    /// <summary>The Explorer, on the left of the Workspace.</summary>
+    public CollapsiblePanelViewModel WorkspaceExplorer { get; } = new(PanelSide.Left, "the Explorer");
 
-    /// <summary>True while the right inspector is showing.</summary>
-    [ObservableProperty]
-    private bool _isInspectorVisible = true;
+    /// <summary>The inspector, on the right of the Workspace.</summary>
+    public CollapsiblePanelViewModel WorkspaceInspector { get; } = new(PanelSide.Right, "the inspector");
+
+    /// <summary>The filter rail, on the left of the Network.</summary>
+    public CollapsiblePanelViewModel NetworkFilters { get; } = new(PanelSide.Left, "the filters");
+
+    /// <summary>The details pane, on the right of the Network.</summary>
+    public CollapsiblePanelViewModel NetworkDetails { get; } = new(PanelSide.Right, "the details");
 
     /// <summary>Which tab of the bottom panel is showing.</summary>
     [ObservableProperty]
@@ -265,6 +271,22 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     public InspectorHeader InspectorHeader => InspectorHeader.For(InspectorContent);
 
     /// <summary>
+    /// The left panel of whichever tab is in front, and the right one.
+    /// </summary>
+    /// <remarks>
+    /// The window binds to these rather than to the four, so the layout is written once for two
+    /// slots instead of twice for four. Each tab keeps its own pair because the slots hold
+    /// different things on each: collapsing the filters to widen the peer table says nothing about
+    /// whether the Explorer should be out of the way on the canvas.
+    /// </remarks>
+    public CollapsiblePanelViewModel LeftPanel
+        => ActiveSection == PrimarySection.Workspace ? WorkspaceExplorer : NetworkFilters;
+
+    /// <summary>The right panel of whichever tab is in front.</summary>
+    public CollapsiblePanelViewModel RightPanel
+        => ActiveSection == PrimarySection.Workspace ? WorkspaceInspector : NetworkDetails;
+
+    /// <summary>
     /// True when the bottom panel and the chat box are showing. Both belong to the Workspace: the
     /// Network has no run to transcribe and nothing to type a request at, so the space goes to the
     /// table instead of to an empty transcript.
@@ -353,13 +375,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void CloseSettings() => IsSettingsOpen = false;
 
-    /// <summary>Shows or hides the side bar.</summary>
+    /// <summary>Shows or hides the left panel of whichever tab is in front.</summary>
     [RelayCommand]
-    private void ToggleSideBar() => IsSideBarVisible = !IsSideBarVisible;
+    private void ToggleSideBar() => LeftPanel.Toggle();
 
-    /// <summary>Shows or hides the right hand inspector.</summary>
+    /// <summary>Shows or hides the right panel of whichever tab is in front.</summary>
     [RelayCommand]
-    private void ToggleInspector() => IsInspectorVisible = !IsInspectorVisible;
+    private void ToggleInspector() => RightPanel.Toggle();
 
     /// <summary>Shows or hides the bottom panel.</summary>
     [RelayCommand(CanExecute = nameof(IsWorkspace))]

@@ -16,8 +16,24 @@ public sealed class AppConfig
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
-    /// <summary>The theme the window is wearing. Applied before anything is painted.</summary>
-    public Theming.AppTheme Theme { get; set; } = Theming.AppTheme.EditorDark;
+    /// <summary>
+    /// The theme the window is wearing. Applied before anything is painted.
+    /// </summary>
+    /// <remarks>
+    /// The default is what an install with no configuration file gets, and nothing more than that.
+    /// A file that exists has this property in it, whether or not anybody ever opened the picker,
+    /// so moving the default cannot reach back and repaint a machine that has already run.
+    /// </remarks>
+    public Theming.AppTheme Theme { get; set; } = Theming.AppTheme.Mystic;
+
+    /// <summary>
+    /// How opaque the window's base layer is, from the readability floor to fully solid.
+    /// </summary>
+    /// <remarks>
+    /// Kept whatever the theme is, rather than cleared when a theme without transparency is
+    /// picked, so that going back to one that has it returns to the setting it was left at.
+    /// </remarks>
+    public double WindowOpacity { get; set; } = 0.86d;
 
     /// <summary>
     /// Repair attempts a newly added compile check node starts with.
