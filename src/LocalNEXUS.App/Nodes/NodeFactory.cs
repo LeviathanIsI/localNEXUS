@@ -108,6 +108,8 @@ public sealed class NodeFactory
         new NodeDescriptor("Prompt", "Prompt", "Sends on what you typed in the chat box."),
         new NodeDescriptor("Triage", "Triage", "Reads your project and decides which files to leave alone, edit, or write new."),
         new NodeDescriptor("Model", "Model", "Asks a model, local or hosted, and sends on its reply."),
+        new NodeDescriptor("Debate", "Debate", "Puts two models in genuine disagreement about how to approach something, over several rounds, and sends on what they settled."),
+        new NodeDescriptor("Judge", "Judge", "Reads what a debate settled, or two models arguing separately, and makes the determination."),
         new NodeDescriptor("Reshape", "Reshape", "Reshapes the text passing through it. Inject standing instructions, keep the part you want, find and replace, trim, or run an expression."),
         new NodeDescriptor("CompilerCheck", "Compiler check", "Compiles the code and asks the model to fix whatever does not build."),
         new NodeDescriptor("Output", "Output", "Writes the finished files into your project.")

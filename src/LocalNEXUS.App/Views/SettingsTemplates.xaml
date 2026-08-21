@@ -21,6 +21,14 @@
         <settings:ModelNodeSettingsView />
     </DataTemplate>
 
+    <DataTemplate DataType="{x:Type nodes:DebateNode}">
+        <settings:DebateNodeSettingsView />
+    </DataTemplate>
+
+    <DataTemplate DataType="{x:Type nodes:JudgeNode}">
+        <settings:JudgeNodeSettingsView />
+    </DataTemplate>
+
     <DataTemplate DataType="{x:Type nodes:ReshapeNode}">
         <settings:ReshapeNodeSettingsView />
     </DataTemplate>

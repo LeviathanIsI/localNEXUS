@@ -49,6 +49,8 @@ wrote. Everything else is more nodes in the middle of that.
 | Prompt         | Holds what you typed. Feeds Triage or Model                                            |
 | Triage         | Reads the project index, ranks existing files, decides edit or create, orders the work |
 | Model          | Calls an LLM. Local, mesh, or OpenRouter                                               |
+| Debate         | Two models argue an approach over several rounds, and send on what they settled        |
+| Judge          | Reads a debate, or two models arguing separately, and makes the determination           |
 | Reshape        | Reshapes the text going by. Inject standing text, extract what matters, replace, trim  |
 | Compiler check | Compiles against the project's real references, hands failures back for repair         |
 | Output         | Writes files, subject to the Unity binding rules                                       |

@@ -23,7 +23,7 @@ between nodes, so it never interrupts a model mid stream.
 ```
 src/LocalNEXUS.App/
   Models/          NodeBase, Pin, Connection, GraphModel, pin typing and validation
-  Nodes/           PromptNode, TriageNode, ModelNode, ReshapeNode, CompilerCheckNode,
+  Nodes/           PromptNode, TriageNode, ModelNode, DebateNode, JudgeNode, ReshapeNode,
                    OutputNode, NodeFactory
   Services/
     Execution/     GraphExecutor, RunContext, RunState, topological sort

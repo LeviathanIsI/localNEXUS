@@ -1,0 +1,183 @@
+<UserControl x:Class="LocalNEXUS.App.Views.Settings.DebateNodeSettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:nodes="clr-namespace:LocalNEXUS.App.Nodes"
+             d:DataContext="{d:DesignInstance Type=nodes:DebateNode}"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d">
+
+    <StackPanel>
+        <TextBlock Style="{StaticResource HintText}"
+                   TextWrapping="Wrap"
+                   Text="Two models argue about how to approach the subject on the Text pin, over several rounds, each reading what the other actually said. What comes out is a brief, not code: wire a Model node after it to write the implementation." />
+
+        <!-- Model A -->
+        <TextBlock Style="{StaticResource SectionHeader}" Margin="0,20,0,0" Text="Model A" />
+
+        <TextBlock Style="{StaticResource FieldLabel}" Text="What it does" />
+        <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+            <RadioButton Content="Debate"
+                         GroupName="FirstRole"
+                         ToolTip="Argue the position it believes is right, and change its mind when the other is better."
+                         IsChecked="{Binding FirstRole, Converter={StaticResource EnumToBoolean}, ConverterParameter=Debate}" />
+            <RadioButton Content="Defend"
+                         GroupName="FirstRole"
+                         Margin="12,0,0,0"
+                         ToolTip="Make the case for the proposal and answer what is said against it."
+                         IsChecked="{Binding FirstRole, Converter={StaticResource EnumToBoolean}, ConverterParameter=Defend}" />
+            <RadioButton Content="Criticize"
+                         GroupName="FirstRole"
+                         Margin="12,0,0,0"
+                         ToolTip="Find where the proposal breaks."
+                         IsChecked="{Binding FirstRole, Converter={StaticResource EnumToBoolean}, ConverterParameter=Criticize}" />
+        </StackPanel>
+
+        <TextBlock Style="{StaticResource FieldLabel}" Text="What it argues from" />
+        <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+            <RadioButton Content="The codebase"
+                         GroupName="FirstSource"
+                         ToolTip="The patterns already in the open project, read from the index."
+                         IsChecked="{Binding FirstSource, Converter={StaticResource EnumToBoolean}, ConverterParameter=Codebase}" />
+            <RadioButton Content="Its own reasoning"
+                         GroupName="FirstSource"
+                         Margin="12,0,0,0"
+                         ToolTip="What the model knows, without being shown the project."
+                         IsChecked="{Binding FirstSource, Converter={StaticResource EnumToBoolean}, ConverterParameter=OwnReasoning}" />
+        </StackPanel>
+
+        <!-- Model B -->
+        <TextBlock Style="{StaticResource SectionHeader}" Margin="0,20,0,0" Text="Model B" />
+
+        <TextBlock Style="{StaticResource FieldLabel}" Text="What it does" />
+        <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+            <RadioButton Content="Debate"
+                         GroupName="SecondRole"
+                         IsChecked="{Binding SecondRole, Converter={StaticResource EnumToBoolean}, ConverterParameter=Debate}" />
+            <RadioButton Content="Defend"
+                         GroupName="SecondRole"
+                         Margin="12,0,0,0"
+                         IsChecked="{Binding SecondRole, Converter={StaticResource EnumToBoolean}, ConverterParameter=Defend}" />
+            <RadioButton Content="Criticize"
+                         GroupName="SecondRole"
+                         Margin="12,0,0,0"
+                         IsChecked="{Binding SecondRole, Converter={StaticResource EnumToBoolean}, ConverterParameter=Criticize}" />
+        </StackPanel>
+
+        <TextBlock Style="{StaticResource FieldLabel}" Text="What it argues from" />
+        <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+            <RadioButton Content="The codebase"
+                         GroupName="SecondSource"
+                         IsChecked="{Binding SecondSource, Converter={StaticResource EnumToBoolean}, ConverterParameter=Codebase}" />
+            <RadioButton Content="Its own reasoning"
+                         GroupName="SecondSource"
+                         Margin="12,0,0,0"
+                         IsChecked="{Binding SecondSource, Converter={StaticResource EnumToBoolean}, ConverterParameter=OwnReasoning}" />
+        </StackPanel>
+
+        <TextBlock Style="{StaticResource HintText}"
+                   Margin="0,10,0,0"
+                   TextWrapping="Wrap"
+                   Text="One arguing from the project and one from what is generally right is the pairing worth having. Both may debate, but two defenders never disagree and two critics never propose anything, so those two pairings are refused before the run starts." />
+
+        <!-- Settling -->
+        <TextBlock Style="{StaticResource SectionHeader}" Margin="0,20,0,0" Text="When it has settled" />
+
+        <TextBlock Style="{StaticResource FieldLabel}" Text="Agreement needed" />
+        <Slider Minimum="0"
+                Maximum="100"
+                TickFrequency="1"
+                IsSnapToTickEnabled="True"
+                AutomationProperties.Name="Agreement needed, as a percentage"
+                Value="{Binding ConvergenceThreshold, Mode=TwoWay}" />
+
+        <Grid Margin="0,4,0,0">
+            <TextBlock Style="{StaticResource HintText}" HorizontalAlignment="Left" Text="0" />
+            <TextBlock Style="{StaticResource HintText}"
+                       HorizontalAlignment="Center"
+                       Text="{Binding ConvergenceThreshold, StringFormat='{}{0} percent'}" />
+            <TextBlock Style="{StaticResource HintText}" HorizontalAlignment="Right" Text="100" />
+        </Grid>
+
+        <TextBlock Style="{StaticResource HintText}"
+                   Margin="0,8,0,0"
+                   TextWrapping="Wrap"
+                   Text="{Binding ThresholdMeaning}" />
+
+        <TextBlock Style="{StaticResource HintText}"
+                   Margin="0,8,0,0"
+                   TextWrapping="Wrap"
+                   Text="Two numbers are reported each round. Each model says how far it has come, which is free but drifts optimistic because models tend to agree. A separate call reads both positions and scores them, which costs one small call and is the honest one. Only the scored number decides, and the gap between them is worth watching: both models claiming ninety while an outside read says forty means they are being agreeable rather than agreeing." />
+
+        <TextBlock Style="{StaticResource FieldLabel}" Text="Stop after" />
+        <TextBox Text="{Binding TimeBudget, UpdateSourceTrigger=LostFocus}"
+                 AutomationProperties.Name="Time budget, as minutes and seconds" />
+
+        <TextBlock Style="{StaticResource HintText}"
+                   TextWrapping="Wrap"
+                   Text="Minutes and seconds, for example 05:00. However the debate is going, it stops there. It also stops after six rounds whatever the clock says, because a fast pair of local models can get through twenty exchanges inside a generous budget and two that have not come together by the sixth are not going to." />
+
+        <TextBlock Style="{StaticResource FieldLabel}" Text="Which model scores and judges" />
+        <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+            <RadioButton Content="Model A"
+                         GroupName="Arbiter"
+                         IsChecked="{Binding Arbiter, Converter={StaticResource EnumToBoolean}, ConverterParameter=First}" />
+            <RadioButton Content="Model B"
+                         GroupName="Arbiter"
+                         Margin="12,0,0,0"
+                         IsChecked="{Binding Arbiter, Converter={StaticResource EnumToBoolean}, ConverterParameter=Second}" />
+        </StackPanel>
+
+        <TextBlock Style="{StaticResource HintText}"
+                   TextWrapping="Wrap"
+                   Text="A debate has two models, so the outside read comes from one of them wearing a different hat. That is weaker than a genuine third model and is said plainly rather than presented as impartial. What it still catches is both models claiming agreement that a read of what they wrote does not support." />
+
+        <!-- Not converging -->
+        <TextBlock Style="{StaticResource SectionHeader}" Margin="0,20,0,0" Text="When they do not agree" />
+
+        <StackPanel Margin="0,6,0,0">
+            <RadioButton Content="Let a judge decide and carry on"
+                         GroupName="NotConverged"
+                         Margin="0,0,0,4"
+                         IsChecked="{Binding OnNotConverged, Converter={StaticResource EnumToBoolean}, ConverterParameter=FallBackToJudge}" />
+            <RadioButton Content="Stop and ask me"
+                         GroupName="NotConverged"
+                         IsChecked="{Binding OnNotConverged, Converter={StaticResource EnumToBoolean}, ConverterParameter=AlertAndWait}" />
+        </StackPanel>
+
+        <TextBlock Style="{StaticResource HintText}"
+                   TextWrapping="Wrap"
+                   Text="Asking is right when somebody is watching. A run that stops for a question is worth nothing to somebody who walked away, which is why letting a judge decide is the default. Asking and then getting no answer falls back to the judge anyway." />
+
+        <TextBlock Style="{StaticResource FieldLabel}" Text="How the judge resolves it" />
+        <StackPanel Margin="0,4,0,0">
+            <RadioButton Content="Combine both"
+                         GroupName="FallbackJudge"
+                         Margin="0,0,0,4"
+                         IsChecked="{Binding FallbackJudgeMode, Converter={StaticResource EnumToBoolean}, ConverterParameter=Combine}" />
+            <RadioButton Content="Choose a side"
+                         GroupName="FallbackJudge"
+                         Margin="0,0,0,4"
+                         IsChecked="{Binding FallbackJudgeMode, Converter={StaticResource EnumToBoolean}, ConverterParameter=ChooseASide}" />
+            <RadioButton Content="Decide independently"
+                         GroupName="FallbackJudge"
+                         IsChecked="{Binding FallbackJudgeMode, Converter={StaticResource EnumToBoolean}, ConverterParameter=DecideIndependently}" />
+        </StackPanel>
+
+        <TextBlock Style="{StaticResource HintText}"
+                   TextWrapping="Wrap"
+                   Text="Combining is the default here, because the rounds have already surfaced both positions and something usable has to come out. A Judge node wired on the canvas defaults the other way, since wiring one deliberately is asking for a determination rather than an average." />
+
+        <!-- Last run -->
+        <TextBlock Style="{StaticResource SectionHeader}" Margin="0,20,0,0" Text="Last debate" />
+        <TextBlock Style="{StaticResource HintText}"
+                   Margin="0,4,0,0"
+                   TextWrapping="Wrap"
+                   Text="{Binding LastOutcome}" />
+
+        <TextBlock Style="{StaticResource HintText}"
+                   Margin="0,6,0,0"
+                   TextWrapping="Wrap"
+                   Text="Every round is written to the Activity panel as it happens, and into the run record with it, so the whole argument is readable afterwards in the history window and not only the verdict." />
+    </StackPanel>
+</UserControl>

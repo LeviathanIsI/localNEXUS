@@ -41,6 +41,8 @@
     <Color x:Key="NodeType.TriageColor">#FF4FC1FF</Color>
     <Color x:Key="NodeType.ModelColor">#FFC586C0</Color>
     <Color x:Key="NodeType.ReshapeColor">#FF4EC9B0</Color>
+    <Color x:Key="NodeType.DebateColor">#FFCE9178</Color>
+    <Color x:Key="NodeType.JudgeColor">#FFB5CEA8</Color>
     <Color x:Key="NodeType.CompilerCheckColor">#FFD16D9E</Color>
     <Color x:Key="NodeType.OutputColor">#FFDCDCAA</Color>
 
