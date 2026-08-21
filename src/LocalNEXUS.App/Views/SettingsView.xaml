@@ -234,19 +234,100 @@
 
                     <Rectangle Height="1" Margin="0,20,0,0" Fill="{DynamicResource Surface.Border.Brush}" />
 
-                    <TextBlock Style="{StaticResource SectionHeader}" Margin="0,16,0,0" Text="Cloud provider" />
+                    <TextBlock Style="{StaticResource SectionHeader}" Margin="0,16,0,0" Text="Cloud providers" />
                     <TextBlock Style="{StaticResource HintText}"
-                               Text="Used by model nodes you add from now on, so you only type the key once. Nodes you already have keep their own." />
+                               TextWrapping="Wrap"
+                               Text="Use the accounts you already pay for. Keys are encrypted for this Windows account and never written into a saved graph, so a graph can be shared without taking your key with it." />
 
-                    <TextBlock Style="{StaticResource FieldLabel}" Text="Base URL" />
-                    <TextBox Text="{Binding CloudBaseUrl, UpdateSourceTrigger=LostFocus}" />
-                    <TextBlock Style="{StaticResource HintText}" Text="Leave blank to use the provider's own address." />
+                    <ItemsControl ItemsSource="{Binding Providers.Providers}" Margin="0,12,0,0">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Style="{StaticResource Card}" Margin="0,0,0,8" Padding="14,12">
+                                    <StackPanel>
+                                        <Grid>
+                                            <StackPanel HorizontalAlignment="Left" Orientation="Horizontal">
+                                                <TextBlock Text="{Binding Provider.DisplayName}" FontWeight="SemiBold" />
+                                                <TextBlock Style="{StaticResource HintText}" Margin="10,0,0,0" Text="{Binding StatusText}" />
+                                            </StackPanel>
+                                            <TextBlock Style="{StaticResource HintText}"
+                                                       HorizontalAlignment="Right"
+                                                       Text="{Binding Provider.RateSummary}" />
+                                        </Grid>
 
-                    <TextBlock Style="{StaticResource FieldLabel}" Text="API key" />
-                    <TextBox Text="{Binding CloudApiKey, UpdateSourceTrigger=LostFocus}" FontFamily="{StaticResource Font.Mono}" />
+                                        <Grid Margin="0,8,0,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+
+                                            <TextBox Grid.Column="0"
+                                                     FontFamily="{StaticResource Font.Mono}"
+                                                     Text="{Binding KeyEntry, UpdateSourceTrigger=PropertyChanged}"
+                                                     AutomationProperties.Name="API key" />
+
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="8,0,0,0">
+                                                <Button Content="Save"
+                                                        MinWidth="64"
+                                                        Command="{Binding DataContext.Providers.SaveKeyCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        CommandParameter="{Binding}" />
+                                                <Button Content="Clear"
+                                                        MinWidth="64"
+                                                        Margin="6,0,0,0"
+                                                        Command="{Binding DataContext.Providers.ClearKeyCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        CommandParameter="{Binding}"
+                                                        Visibility="{Binding HasKey, Converter={StaticResource BooleanToVisibility}}" />
+                                                <Button Content="Get a key"
+                                                        MinWidth="76"
+                                                        Margin="6,0,0,0"
+                                                        Command="{Binding DataContext.Providers.GetKeyCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        CommandParameter="{Binding}"
+                                                        Visibility="{Binding HasKeyUrl, Converter={StaticResource BooleanToVisibility}}" />
+                                                <Button Content="Remove"
+                                                        MinWidth="76"
+                                                        Margin="6,0,0,0"
+                                                        Command="{Binding DataContext.Providers.RemoveCustomCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        CommandParameter="{Binding}"
+                                                        Visibility="{Binding Provider.IsCustom, Converter={StaticResource BooleanToVisibility}}" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <TextBlock Style="{StaticResource SectionHeader}" Margin="0,16,0,0" Text="Add another endpoint" />
                     <TextBlock Style="{StaticResource HintText}"
-                               Foreground="{DynamicResource Status.Warning.Brush}"
-                               Text="Stored in plain text in config.json." />
+                               TextWrapping="Wrap"
+                               Text="Anything that speaks the OpenAI API works here, listed above or not." />
+
+                    <Grid Margin="0,8,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="180" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <TextBox Grid.Column="0"
+                                 Text="{Binding Providers.CustomName, UpdateSourceTrigger=PropertyChanged}"
+                                 AutomationProperties.Name="Endpoint name" />
+                        <TextBox Grid.Column="1"
+                                 Margin="8,0,0,0"
+                                 FontFamily="{StaticResource Font.Mono}"
+                                 Text="{Binding Providers.CustomBaseUrl, UpdateSourceTrigger=PropertyChanged}"
+                                 AutomationProperties.Name="Base url" />
+                        <Button Grid.Column="2" Margin="8,0,0,0" MinWidth="64" Content="Add" Command="{Binding Providers.AddCustomCommand}" />
+                    </Grid>
+
+                    <TextBlock Style="{StaticResource SectionHeader}" Margin="0,20,0,0" Text="Warn before an expensive run" />
+                    <TextBlock Style="{StaticResource HintText}" Text="{Binding Providers.ThresholdSummary}" TextWrapping="Wrap" />
+
+                    <TextBlock Style="{StaticResource FieldLabel}" Text="Ask above" />
+                    <TextBox Text="{Binding Providers.CostWarningThreshold, UpdateSourceTrigger=LostFocus}"
+                             AutomationProperties.Name="Cost warning threshold in dollars" />
+                    <TextBlock Style="{StaticResource HintText}"
+                               TextWrapping="Wrap"
+                               Text="Dollars. What a run is measured against is a ceiling, being the whole input plus the most each node is allowed to write, so the real cost is usually lower and can be higher. Set it to zero to never be asked. Local models cost nothing and never trigger it." />
                 </StackPanel>
 
                 <!-- Unity -->

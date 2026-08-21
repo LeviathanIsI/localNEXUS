@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.Input;
 using LocalNEXUS.App.Infrastructure;
 using LocalNEXUS.App.Models;
 using LocalNEXUS.App.Services.Execution;
+using LocalNEXUS.App.Services.Inference;
 
 namespace LocalNEXUS.App.ViewModels;
 
@@ -23,6 +24,7 @@ public sealed partial class ActivityFeedViewModel : ObservableObject
     private readonly GraphModel _graph;
     private readonly ActivityFeed _feed;
     private readonly Dispatcher _dispatcher;
+    private readonly RunCostTracker _cost;
 
     private CancellationTokenSource? _runCancellation;
     private RunContext? _run;
@@ -62,12 +64,21 @@ public sealed partial class ActivityFeedViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(ClearFeedCommand))]
     private bool _isActive = true;
 
-    public ActivityFeedViewModel(GraphExecutor executor, GraphModel graph, ActivityFeed feed, Dispatcher dispatcher)
+    public ActivityFeedViewModel(
+        GraphExecutor executor,
+        GraphModel graph,
+        ActivityFeed feed,
+        Dispatcher dispatcher,
+        RunCostTracker? cost = null)
     {
         _executor = executor;
         _graph = graph;
         _feed = feed;
         _dispatcher = dispatcher;
+
+        // The same instance the nodes add to, so the total the feed reports is the one they
+        // built rather than a second count of the same thing.
+        _cost = cost ?? new RunCostTracker();
 
         _executor.RunCreated += (_, run) => AttachRun(run);
     }
@@ -94,6 +105,10 @@ public sealed partial class ActivityFeedViewModel : ObservableObject
         _runCancellation = new CancellationTokenSource();
 
         _feed.Add(ActivityKind.Request, "Request", request);
+
+        // Each run is priced on its own, so the total starts at nothing.
+        _cost.Reset();
+
         RunState = RunState.Running;
 
         try
@@ -115,6 +130,15 @@ public sealed partial class ActivityFeedViewModel : ObservableObject
         }
         finally
         {
+            // The final figure, once, and only when something actually cost money. A run made
+            // entirely of local models says nothing rather than saying zero.
+            if (_cost.HasCost)
+            {
+                _feed.Info(
+                    "Run cost",
+                    $"{RunCost.Format(_cost.Total)} across {_cost.Calls} call(s).");
+            }
+
             DetachRun();
             _runCancellation?.Dispose();
             _runCancellation = null;

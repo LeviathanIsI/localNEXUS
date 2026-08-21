@@ -48,6 +48,14 @@ public sealed class AppConfig
     public string? CloudBaseUrl { get; set; }
 
     /// <summary>
+    /// What a run may cost before it asks first, in dollars. Zero switches the warning off.
+    /// </summary>
+    public decimal CostWarningThreshold { get; set; } = 1.00m;
+
+    /// <summary>OpenAI compatible endpoints the user added by url.</summary>
+    public List<CustomProviderRecord> CustomProviders { get; set; } = new();
+
+    /// <summary>
     /// The key a newly added model node starts with, so a key is typed once rather than once per
     /// node.
     /// </summary>
@@ -56,7 +64,6 @@ public sealed class AppConfig
     /// model node writes its key into the graph it belongs to. Worth knowing before pasting a key
     /// into a file that gets shared.
     /// </remarks>
-    public string? CloudApiKey { get; set; }
 
     /// <summary>The Unity project folder that was open when the app last closed.</summary>
     public string? LastUnityProjectPath { get; set; }
@@ -200,3 +207,14 @@ public sealed class AppConfig
         File.WriteAllText(AppPaths.ConfigFile, json);
     }
 }
+
+/// <summary>
+/// An OpenAI compatible endpoint somebody added themselves.
+/// </summary>
+/// <remarks>
+/// Only the name and the address. The key for it lives in the credential store like every other
+/// key, so this record is safe to sit in a plain settings file.
+/// </remarks>
+/// <param name="Name">What to call it.</param>
+/// <param name="BaseUrl">Root of its API.</param>
+public sealed record CustomProviderRecord(string Name, string BaseUrl);

@@ -6,6 +6,7 @@ using LocalNEXUS.App.Infrastructure;
 using LocalNEXUS.App.Models;
 using LocalNEXUS.App.Nodes;
 using LocalNEXUS.App.Services.Compilation;
+using LocalNEXUS.App.Services.Credentials;
 using LocalNEXUS.App.Services.Dialogs;
 using LocalNEXUS.App.Services.Distributed;
 using LocalNEXUS.App.Services.Extensions;
@@ -31,13 +32,14 @@ public partial class App : Application
     private ChildProcessGroup? _children;
     private LlamaServerManager? _llamaServers;
     private PythonRuntimeManager? _pythonRuntime;
-    private OpenAiCompatibleClient? _modelClient;
+    private ModelClientRouter? _modelClient;
     private MeshManager? _mesh;
     private CancellationTokenSource? _provisioning;
     private CancellationTokenSource? _indexing;
     private ViewModels.NetworkViewModel? _network;
     private Services.Extensions.ExtensionHost? _extensionHost;
     private Services.Dialogs.ExtensionsWindowService? _extensionsWindow;
+    private Services.Credentials.DpapiCredentialStore? _credentials;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -98,6 +100,14 @@ public partial class App : Application
         // Extensions are per project, so the registry starts empty and is pointed at a project
         // when one is opened. The host starts nothing here: extension processes are lazy, and an
         // install with a dozen of them has to cost nothing at launch.
+        // Keys, encrypted for this Windows account. Built before anything that resolves an
+        // endpoint, because a run cannot reach a hosted provider without it.
+        var credentials = new DpapiCredentialStore(feed);
+        _credentials = credentials;
+
+        // What the current run has spent. One instance, reset when a run starts.
+        var cost = new RunCostTracker();
+
         var extensions = new ExtensionRegistry(feed);
         extensions.OpenProject(unityProject.ProjectPath);
         unityProject.PropertyChanged += (_, e) =>
@@ -110,7 +120,7 @@ public partial class App : Application
         var extensionHost = new ExtensionHost(children, feed);
         _extensionHost = extensionHost;
 
-        var factory = new NodeFactory(catalog, mesh, dialogs, config, extensions, extensionHost);
+        var factory = new NodeFactory(catalog, mesh, dialogs, config, extensions, extensionHost, credentials);
         var serializer = new GraphSerializer(factory);
 
         // Restoring the node is deliberately not awaited: composition must not block on a
@@ -128,7 +138,12 @@ public partial class App : Application
         // adding a third changes this line and nothing else.
         var runtimes = new RuntimeResolver(_llamaServers, _pythonRuntime);
 
-        _modelClient = new OpenAiCompatibleClient();
+        // One router over three adapters. Everything upstream still asks for a completion
+        // against an endpoint; which protocol answers is decided from the endpoint itself.
+        _modelClient = new ModelClientRouter(
+            new OpenAiCompatibleClient(),
+            new AnthropicClient(),
+            new GeminiClient());
 
         // Roslyn against the open project's own Unity references. The reference set is cached
         // behind this and rebuilt only when the project's compiled assemblies change.
@@ -148,10 +163,15 @@ public partial class App : Application
             new FileWriter(),
             feed,
             extensions,
-            new ToolSupportProbe(OpenAiCompatibleClient.CreateDefaultHttpClient()));
+            new ToolSupportProbe(OpenAiCompatibleClient.CreateDefaultHttpClient()),
+            credentials,
+            cost)
+        {
+            CostWarningThreshold = config.CostWarningThreshold
+        };
         var executor = new GraphExecutor(services);
 
-        var feedViewModel = new ActivityFeedViewModel(executor, graph, feed, Dispatcher);
+        var feedViewModel = new ActivityFeedViewModel(executor, graph, feed, Dispatcher, cost);
         var catalogViewModel = new ModelCatalogViewModel(catalog, dialogs);
         var pythonViewModel = new PythonEnvironmentViewModel(pythonEnvironment, dialogs);
         var networkViewModel = new NetworkViewModel(mesh, catalog, config, feed, dialogs);
@@ -183,6 +203,7 @@ public partial class App : Application
             pythonViewModel,
             networkViewModel,
             extensionsViewModel,
+            new CloudProvidersViewModel(credentials, config, dialogs, feed),
             projectIndex,
             dialogs,
             () => IndexProjectAsync(projectIndex, unityProject.ProjectPath, feed, indexing.Token));

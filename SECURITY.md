@@ -41,8 +41,15 @@ is isolation from failure, not from intent: nothing sandboxes what it does to yo
 manifest declares what it contributes and you see that before installing, which is the point at
 which to decide whether you trust it.
 
-**API keys are plain text.** In `config.json` and inside any saved graph with a hosted Model
-node. Share or commit a graph and the key goes with it. Strip the `apiKey` fields first.
+**API keys are encrypted, and are not in your graphs.** They live in
+`%LOCALAPPDATA%\LocalNEXUS\credentials.dat`, encrypted with DPAPI for the signed in Windows
+account, keyed by provider. A saved graph names the provider and never carries the key, so a
+graph can be shared or committed safely. This replaces the previous arrangement, where keys sat
+in plain text in `config.json` and in every saved graph that used one.
+
+What that does not defend against is anything already running as you, which can call DPAPI too.
+It defends against the realistic case, which is a file being copied, synced, backed up or
+committed.
 
 **It starts child processes and opens ports.** `llama-server` binds `127.0.0.1` on a per model
 port, so it is not reachable from the network. It runs with permissive CORS and no API key,
@@ -63,7 +70,8 @@ which refuses anything landing outside the opened project. Escaping that is a vu
   be reachable.
 - Anything making it more dangerous to open a graph, project or model file than described
   above.
-- Leaking API keys beyond the plain text storage described above.
+- Recovering a stored key without the signed in user's credentials, or a key reaching a graph
+  file, a log, an error message or the activity feed.
 - Privilege escalation, or an engine process outliving the app in a way the job object was
   supposed to prevent.
 

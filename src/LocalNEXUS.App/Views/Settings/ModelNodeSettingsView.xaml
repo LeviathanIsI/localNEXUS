@@ -26,7 +26,37 @@
                          GroupName="Provider"
                          Margin="0,0,0,4"
                          IsChecked="{Binding Provider, Converter={StaticResource EnumToBoolean}, ConverterParameter=OpenRouter}" />
+            <RadioButton Content="Cloud"
+                         GroupName="Provider"
+                         Margin="0,0,0,4"
+                         ToolTip="A hosted provider you have an account with."
+                         IsChecked="{Binding Provider, Converter={StaticResource EnumToBoolean}, ConverterParameter=Cloud}" />
         </WrapPanel>
+
+        <!-- Cloud provider selection -->
+        <StackPanel Visibility="{Binding IsCloud, Converter={StaticResource BooleanToVisibility}}">
+            <TextBlock Style="{StaticResource FieldLabel}" Text="Provider" />
+            <ComboBox ItemsSource="{Binding AvailableProviders}"
+                      DisplayMemberPath="DisplayName"
+                      SelectedValuePath="Id"
+                      SelectedValue="{Binding CloudProviderId}" />
+
+            <TextBlock Style="{StaticResource HintText}" Text="{Binding ProviderStatus}" TextWrapping="Wrap" Margin="0,4,0,0" />
+
+            <TextBlock Style="{StaticResource HintText}"
+                       Margin="0,4,0,0"
+                       TextWrapping="Wrap"
+                       Foreground="{DynamicResource Status.Warning.Brush}"
+                       Text="This provider has no key yet. Add one in Settings under Models. The graph is fine; it just cannot run until there is a key."
+                       Visibility="{Binding NeedsKey, Converter={StaticResource BooleanToVisibility}}" />
+
+            <TextBlock Style="{StaticResource FieldLabel}" Text="Model id" />
+            <TextBox Text="{Binding CloudModelId, UpdateSourceTrigger=PropertyChanged}"
+                     FontFamily="{StaticResource Font.Mono}" />
+            <TextBlock Style="{StaticResource HintText}"
+                       TextWrapping="Wrap"
+                       Text="Free text, because a provider serves many models. The rate shown above is for the one that provider is best known for, so a different model may cost more or less." />
+        </StackPanel>
 
         <!-- Local model selection -->
         <StackPanel Visibility="{Binding IsLocal, Converter={StaticResource BooleanToVisibility}}">

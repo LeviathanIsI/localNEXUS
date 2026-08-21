@@ -23,5 +23,15 @@ public enum ModelProvider
     SelfHosted,
 
     /// <summary>A hosted model reached through OpenRouter.</summary>
-    OpenRouter
+    OpenRouter,
+
+    /// <summary>
+    /// A hosted model reached directly at whichever provider the node names.
+    /// </summary>
+    /// <remarks>
+    /// One value for every direct provider rather than one value each, because which company is
+    /// on the other end is data in the catalogue rather than a branch here. Adding an eleventh
+    /// provider does not touch this enum.
+    /// </remarks>
+    Cloud
 }

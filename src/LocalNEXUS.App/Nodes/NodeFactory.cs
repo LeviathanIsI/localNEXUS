@@ -1,4 +1,5 @@
 using LocalNEXUS.App.Models;
+using LocalNEXUS.App.Services.Credentials;
 using LocalNEXUS.App.Services.Dialogs;
 using LocalNEXUS.App.Services.Distributed;
 using LocalNEXUS.App.Services.Extensions;
@@ -23,6 +24,7 @@ public sealed class NodeFactory
     private readonly ExtensionRegistry _extensions;
     private readonly ExtensionHost _host;
     private readonly ExtensionToolset _toolset;
+    private readonly ICredentialStore _credentials;
 
     public NodeFactory(
         ModelCatalog catalog,
@@ -30,8 +32,10 @@ public sealed class NodeFactory
         IDialogService dialogs,
         AppConfig config,
         ExtensionRegistry extensions,
-        ExtensionHost host)
+        ExtensionHost host,
+        ICredentialStore credentials)
     {
+        _credentials = credentials;
         _catalog = catalog;
         _mesh = mesh;
         _dialogs = dialogs;
@@ -132,10 +136,9 @@ public sealed class NodeFactory
             EmittedCharacters = _config.DefaultEmittedCharacters,
             CandidateLimit = _config.DefaultCandidateLimit
         },
-        "Model" => new ModelNode(_catalog, _mesh, _dialogs, _toolset)
-        {
-            ApiKey = _config.CloudApiKey ?? string.Empty
-        },
+        // No key is seeded, because a node no longer holds one. It names a provider and the key
+        // is looked up from the store when a run needs it.
+        "Model" => new ModelNode(_catalog, _mesh, _dialogs, _toolset, _credentials),
         "Patch" or "Transform" => new PatchNode(),
         "CompilerCheck" or "CompileCheck" or "Compile" => new CompilerCheckNode { RetryLimit = _config.DefaultRetryLimit },
         "Output" => new OutputNode(),

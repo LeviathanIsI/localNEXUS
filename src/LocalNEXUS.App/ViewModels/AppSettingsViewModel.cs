@@ -42,6 +42,7 @@ public sealed partial class AppSettingsViewModel : ObservableObject
         PythonEnvironmentViewModel python,
         NetworkViewModel network,
         ExtensionsViewModel extensions,
+        CloudProvidersViewModel providers,
         ProjectIndexService index,
         IDialogService dialogs,
         Func<Task> reindex)
@@ -49,6 +50,7 @@ public sealed partial class AppSettingsViewModel : ObservableObject
         _config = config;
         _catalog = catalog;
         Extensions = extensions;
+        Providers = providers;
         _index = index;
         _dialogs = dialogs;
         _reindex = reindex;
@@ -79,6 +81,9 @@ public sealed partial class AppSettingsViewModel : ObservableObject
 
     /// <summary>The extensions registered against the open project.</summary>
     public ExtensionsViewModel Extensions { get; }
+
+    /// <summary>Hosted providers, their keys and the spending threshold.</summary>
+    public CloudProvidersViewModel Providers { get; }
 
     /// <summary>What the project index currently knows.</summary>
     public ProjectIndexService Index => _index;
@@ -127,13 +132,6 @@ public sealed partial class AppSettingsViewModel : ObservableObject
     }
 
     /// <summary>The key a newly added model node starts with.</summary>
-    public string CloudApiKey
-    {
-        get => _config.CloudApiKey ?? string.Empty;
-        set => SetConfig(value, v => _config.CloudApiKey = string.IsNullOrWhiteSpace(v) ? null : v.Trim());
-    }
-
-    /// <summary>Repair attempts a newly added compile check node starts with.</summary>
     public int DefaultRetryLimit
     {
         get => _config.DefaultRetryLimit;

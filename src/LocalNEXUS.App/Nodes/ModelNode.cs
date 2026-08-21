@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using LocalNEXUS.App.Infrastructure;
 using LocalNEXUS.App.Models;
+using LocalNEXUS.App.Services.Credentials;
 using LocalNEXUS.App.Services.Dialogs;
 using LocalNEXUS.App.Services.Distributed;
 using LocalNEXUS.App.Services.Editing;
@@ -56,6 +57,9 @@ public sealed partial class ModelNode : NodeBase, ICodeRepairSource, IPlanningMo
     [NotifyPropertyChangedFor(nameof(IsNetwork))]
     [NotifyPropertyChangedFor(nameof(IsSelfHosted))]
     [NotifyPropertyChangedFor(nameof(IsOpenRouter))]
+    [NotifyPropertyChangedFor(nameof(IsCloud))]
+    [NotifyPropertyChangedFor(nameof(NeedsKey))]
+    [NotifyPropertyChangedFor(nameof(ProviderStatus))]
     [NotifyPropertyChangedFor(nameof(ModelDisplayName))]
     private ModelProvider _provider = ModelProvider.Local;
 
@@ -134,9 +138,23 @@ public sealed partial class ModelNode : NodeBase, ICodeRepairSource, IPlanningMo
     [ObservableProperty]
     private string _baseUrl = string.Empty;
 
-    /// <summary>Bearer token. Sent to OpenRouter, and to a self hosted server when set.</summary>
+    /// <summary>
+    /// Which hosted provider this node uses, by catalogue id.
+    /// </summary>
+    /// <remarks>
+    /// An identifier, never a key. The key for this provider lives in the credential store and is
+    /// looked up when a run needs it, so a graph says Anthropic rather than saying a secret and
+    /// can be shared or committed without taking one with it.
+    /// </remarks>
     [ObservableProperty]
-    private string _apiKey = string.Empty;
+    [NotifyPropertyChangedFor(nameof(CloudProvider))]
+    [NotifyPropertyChangedFor(nameof(NeedsKey))]
+    [NotifyPropertyChangedFor(nameof(ProviderStatus))]
+    private string _cloudProviderId = string.Empty;
+
+    /// <summary>The model id sent to that provider. Free text, because a provider serves many.</summary>
+    [ObservableProperty]
+    private string _cloudModelId = string.Empty;
 
     /// <summary>
     /// How this node is asked to express a change to an existing file. Per node because the right
@@ -159,6 +177,7 @@ public sealed partial class ModelNode : NodeBase, ICodeRepairSource, IPlanningMo
 
     private readonly IDialogService _dialogs;
     private readonly ExtensionToolset? _toolset;
+    private readonly ICredentialStore? _credentials;
 
     /// <summary>Extensions whose tools this node may call. Empty means the node offers no tools.</summary>
     public ObservableCollection<string> SelectedExtensionIds { get; } = new();
@@ -173,13 +192,19 @@ public sealed partial class ModelNode : NodeBase, ICodeRepairSource, IPlanningMo
     /// </remarks>
     public ObservableCollection<string> AllowedToolNames { get; } = new();
 
-    public ModelNode(ModelCatalog catalog, MeshManager mesh, IDialogService dialogs, ExtensionToolset? toolset = null)
+    public ModelNode(
+        ModelCatalog catalog,
+        MeshManager mesh,
+        IDialogService dialogs,
+        ExtensionToolset? toolset = null,
+        ICredentialStore? credentials = null)
         : base("Model")
     {
         Catalog = catalog;
         Mesh = mesh;
         _dialogs = dialogs;
         _toolset = toolset;
+        _credentials = credentials;
 
         Prompt = AddInput("Text", PinType.Text);
         Completion = AddOutput("Code", PinType.Code);
@@ -214,6 +239,12 @@ public sealed partial class ModelNode : NodeBase, ICodeRepairSource, IPlanningMo
 
     /// <summary>True when the OpenRouter provider is selected.</summary>
     public bool IsOpenRouter => Provider == ModelProvider.OpenRouter;
+
+    /// <summary>True while this node uses a hosted provider chosen from the catalogue.</summary>
+    public bool IsCloud => Provider == ModelProvider.Cloud;
+
+    /// <summary>Everything the provider list offers, for the node's selector.</summary>
+    public static IReadOnlyList<CloudProvider> AvailableProviders => ProviderCatalog.All;
 
     /// <summary>Where this node's local model comes from: the catalogue, or one of its own.</summary>
     public LocalModelSource ModelSource
@@ -537,7 +568,8 @@ public sealed partial class ModelNode : NodeBase, ICodeRepairSource, IPlanningMo
         ["contextSize"] = ContextSize,
         ["gpuLayers"] = GpuLayers,
         ["baseUrl"] = BaseUrl,
-        ["apiKey"] = ApiKey,
+        ["cloudProvider"] = CloudProviderId,
+        ["cloudModel"] = CloudModelId,
         ["maxToolCalls"] = MaxToolCalls,
         ["extensions"] = new JsonArray(SelectedExtensionIds.Select(id => (JsonNode?)JsonValue.Create(id)).ToArray()),
         ["allowedTools"] = new JsonArray(AllowedToolNames.Select(t => (JsonNode?)JsonValue.Create(t)).ToArray())
@@ -579,7 +611,8 @@ public sealed partial class ModelNode : NodeBase, ICodeRepairSource, IPlanningMo
         ContextSize = settings["contextSize"]?.GetValue<int>() ?? LlamaLaunchOptions.DefaultContextSize;
         GpuLayers = settings["gpuLayers"]?.GetValue<int>() ?? LlamaLaunchOptions.DefaultGpuLayers;
         BaseUrl = settings["baseUrl"]?.GetValue<string>() ?? DefaultBaseUrlFor(Provider);
-        ApiKey = settings["apiKey"]?.GetValue<string>() ?? string.Empty;
+        CloudProviderId = settings["cloudProvider"]?.GetValue<string>() ?? string.Empty;
+        CloudModelId = settings["cloudModel"]?.GetValue<string>() ?? string.Empty;
         MaxToolCalls = settings["maxToolCalls"]?.GetValue<int>() ?? 8;
 
         SelectedExtensionIds.Clear();
@@ -692,6 +725,8 @@ public sealed partial class ModelNode : NodeBase, ICodeRepairSource, IPlanningMo
         string userContent,
         CancellationToken ct)
     {
+        await WarnIfExpensiveAsync(ctx, userContent, ct).ConfigureAwait(false);
+
         var onToken = new DelegateProgress<string>(entry.Append);
 
         var messages = new List<ChatMessage>();
@@ -791,8 +826,21 @@ public sealed partial class ModelNode : NodeBase, ICodeRepairSource, IPlanningMo
         }
 
         entry.Flush();
-        entry.Detail = result.Summary;
-        StatusMessage = result.Summary;
+
+        // What this call cost, added to the run total. Nothing is shown for a local model,
+        // because a local model costs nothing and a zero would read as a measurement.
+        var callCost = ctx.Services.Cost.Add(CloudProvider, result.PromptTokens, result.CompletionTokens);
+
+        entry.Detail = callCost is { } spent
+            ? $"{result.Summary}, {RunCost.Format(spent)}"
+            : result.Summary;
+
+        StatusMessage = entry.Detail;
+
+        if (ctx.Services.Cost.HasCost)
+        {
+            ctx.Feed.Info("Run cost", ctx.Services.Cost.Summary);
+        }
 
         return result.Text;
     }
@@ -913,25 +961,125 @@ public sealed partial class ModelNode : NodeBase, ICodeRepairSource, IPlanningMo
     /// application starts; network models are served by the mesh, which decides for itself
     /// whether that means one peer or layer stages across several.
     /// </summary>
+    /// <summary>
+    /// Asks before a call that could be expensive.
+    /// </summary>
+    /// <remarks>
+    /// The number is a ceiling and the message says so, twice, because a person deciding whether
+    /// to spend money is owed the truth about how firm the figure is. It is the input plus the
+    /// most the model is allowed to write, priced at the provider's listed rate. The real cost is
+    /// usually lower, because models rarely run to their limit, and can be higher, because the
+    /// model id is free text and the rate is for whichever model that provider is best known for.
+    ///
+    /// Nothing local reaches this, since a local model has no rates and costs nothing.
+    /// </remarks>
+    private async Task WarnIfExpensiveAsync(NodeExecutionContext ctx, string userContent, CancellationToken ct)
+    {
+        var threshold = ctx.Services.CostWarningThreshold;
+
+        if (threshold <= 0m || CloudProvider is not { } provider || !RunCost.HasRates(provider))
+        {
+            return;
+        }
+
+        var ceiling = RunCost.Ceiling(provider, (SystemPrompt?.Length ?? 0) + userContent.Length, MaxTokens);
+
+        if (ceiling < threshold)
+        {
+            return;
+        }
+
+        var approved = await ctx.Feed
+            .RequestConfirmationAsync(
+                $"{Title} could cost up to {RunCost.Format(ceiling)}",
+                $"That is a ceiling, not a quote: it prices the whole input plus the {MaxTokens} tokens this node " +
+                $"allows at {provider.DisplayName}'s listed rate. The real cost is usually lower, and can be higher " +
+                "if the model you named is priced above that rate. Run it?",
+                ct)
+            .ConfigureAwait(false);
+
+        if (!approved)
+        {
+            throw new OperationCanceledException($"{Title} was not run, because of what it might have cost.");
+        }
+    }
+
+    /// <summary>The catalogue entry this node points at, or null when it points at nothing yet.</summary>
+    public CloudProvider? CloudProvider => ProviderCatalog.Find(EffectiveProviderId);
+
+    /// <summary>
+    /// True when this node names a provider that has no key yet.
+    /// </summary>
+    /// <remarks>
+    /// Not an error and not drawn as one. A graph somebody else made will land here the first
+    /// time it is opened, and the honest reading is that it needs something rather than that it
+    /// is broken.
+    /// </remarks>
+    public bool NeedsKey
+        => Provider is ModelProvider.OpenRouter or ModelProvider.Cloud
+           && CloudProvider is not null
+           && _credentials?.Has(CloudProvider.Id) != true;
+
+    /// <summary>What the inspector says about the provider.</summary>
+    public string ProviderStatus => CloudProvider is not { } provider
+        ? "No provider chosen."
+        : NeedsKey
+            ? $"{provider.DisplayName} needs a key. Add one in Settings under Models."
+            : $"{provider.DisplayName}, {provider.RateSummary}.";
+
+    /// <summary>
+    /// Which catalogue id this node resolves against.
+    /// </summary>
+    /// <remarks>
+    /// OpenRouter predates the catalogue and its own provider value, so it maps onto the
+    /// catalogue entry of the same name rather than being a second way of saying the same thing.
+    /// </remarks>
+    private string EffectiveProviderId
+        => Provider == ModelProvider.OpenRouter ? "openrouter" : CloudProviderId;
+
+    /// <summary>
+    /// Builds an endpoint for a hosted provider, taking the key from the store.
+    /// </summary>
+    private ModelEndpoint ResolveCloud()
+    {
+        var provider = ProviderCatalog.Find(EffectiveProviderId)
+            ?? throw new InvalidOperationException(
+                $"{Title} has no provider chosen. Pick one in the node's settings.");
+
+        var modelId = Provider == ModelProvider.OpenRouter && !string.IsNullOrWhiteSpace(OpenRouterModel)
+            ? OpenRouterModel
+            : CloudModelId;
+
+        if (string.IsNullOrWhiteSpace(modelId))
+        {
+            throw new InvalidOperationException(
+                $"{Title} has no model id set for {provider.DisplayName}.");
+        }
+
+        var key = _credentials?.Get(provider.Id);
+
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            throw new InvalidOperationException(
+                $"{Title} uses {provider.DisplayName}, which has no key yet. " +
+                $"Add one in Settings under Models. Keys are stored encrypted and never saved into a graph.");
+        }
+
+        // A base url typed on the node wins, so a provider can be pointed at a proxy without a
+        // catalogue change.
+        var baseUrl = string.IsNullOrWhiteSpace(BaseUrl) ? provider.BaseUrl : BaseUrl;
+
+        return new ModelEndpoint(baseUrl, modelId, key, provider.Wire, provider.Id);
+    }
+
     private async Task<ModelEndpoint> ResolveEndpointAsync(
         NodeExecutionContext ctx,
         ActivityEvent entry,
         CancellationToken ct)
     {
-        if (Provider == ModelProvider.OpenRouter)
+        if (Provider is ModelProvider.OpenRouter or ModelProvider.Cloud)
         {
-            if (string.IsNullOrWhiteSpace(OpenRouterModel))
-            {
-                throw new InvalidOperationException($"{Title} has no OpenRouter model slug set.");
-            }
-
-            if (string.IsNullOrWhiteSpace(ApiKey))
-            {
-                throw new InvalidOperationException($"{Title} has no OpenRouter API key set.");
-            }
-
-            var openRouterUrl = string.IsNullOrWhiteSpace(BaseUrl) ? OpenRouterBaseUrl : BaseUrl;
-            return new ModelEndpoint(openRouterUrl, OpenRouterModel, ApiKey);
+            return ResolveCloud();
         }
 
         if (Provider == ModelProvider.Network)
@@ -951,8 +1099,7 @@ public sealed partial class ModelNode : NodeBase, ICodeRepairSource, IPlanningMo
                 throw new InvalidOperationException($"{Title} has no model id set for its self hosted server.");
             }
 
-            var key = string.IsNullOrWhiteSpace(ApiKey) ? null : ApiKey;
-            return new ModelEndpoint(BaseUrl, SelfHostedModelId, key);
+            return new ModelEndpoint(BaseUrl, SelfHostedModelId);
         }
 
         if (ModelSource == LocalModelSource.MissingFile)

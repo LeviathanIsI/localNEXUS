@@ -1,5 +1,6 @@
 using LocalNEXUS.App.Infrastructure;
 using LocalNEXUS.App.Services.Compilation;
+using LocalNEXUS.App.Services.Credentials;
 using LocalNEXUS.App.Services.Distributed;
 using LocalNEXUS.App.Services.Extensions;
 using LocalNEXUS.App.Services.Files;
@@ -25,9 +26,13 @@ public sealed class ExecutionServices
         FileWriter fileWriter,
         IActivityFeed feed,
         ExtensionRegistry? extensions = null,
-        ToolSupportProbe? toolSupport = null)
+        ToolSupportProbe? toolSupport = null,
+        ICredentialStore? credentials = null,
+        RunCostTracker? cost = null)
     {
         Extensions = extensions;
+        Credentials = credentials;
+        Cost = cost ?? new RunCostTracker();
         ToolSupport = toolSupport ?? new ToolSupportProbe(new System.Net.Http.HttpClient());
         ModelClient = modelClient;
         Runtimes = runtimes;
@@ -68,6 +73,15 @@ public sealed class ExecutionServices
 
     /// <summary>Answers whether a model behind an endpoint can call tools.</summary>
     public ToolSupportProbe ToolSupport { get; }
+
+    /// <summary>The API keys for hosted providers, or null when nothing configured one.</summary>
+    public ICredentialStore? Credentials { get; }
+
+    /// <summary>What this run has spent so far.</summary>
+    public RunCostTracker Cost { get; }
+
+    /// <summary>What a run may cost before it asks first. Zero switches the warning off.</summary>
+    public decimal CostWarningThreshold { get; init; }
 
     /// <summary>The live transcript of the run.</summary>
     public IActivityFeed Feed { get; }
