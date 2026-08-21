@@ -50,7 +50,7 @@ public sealed class GraphExecutor
     /// <param name="ct">Stops the run between nodes and cancels the node currently executing.</param>
     /// <returns>The run context, whose <see cref="RunContext.State"/> reports the outcome.</returns>
     /// <exception cref="InvalidOperationException">A run is already in progress.</exception>
-    public async Task<RunContext> RunAsync(GraphModel graph, string userRequest, CancellationToken ct)
+    public async Task<RunContext> RunAsync(GraphModel graph, string userRequest, CancellationToken ct, string? runId = null)
     {
         ArgumentNullException.ThrowIfNull(graph);
 
@@ -59,7 +59,7 @@ public sealed class GraphExecutor
             throw new InvalidOperationException("A run is already in progress.");
         }
 
-        var run = new RunContext(graph, userRequest ?? string.Empty);
+        var run = new RunContext(graph, userRequest ?? string.Empty, runId);
         Current = run;
         RunCreated?.Invoke(this, run);
 

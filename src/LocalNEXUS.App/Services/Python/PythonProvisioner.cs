@@ -227,6 +227,8 @@ public sealed partial class PythonProvisioner : ObservableObject
 
             await SetAsync(PythonEnvironmentState.Ready, "Ready", string.Empty).ConfigureAwait(false);
             _feed.Info("Python runtime ready", $"Safetensors models can be run. {choice.Reason}");
+
+            PruneDownloadCache();
             return true;
         }
         catch (OperationCanceledException)
@@ -391,6 +393,71 @@ public sealed partial class PythonProvisioner : ObservableObject
         catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
         {
             return null;
+        }
+    }
+
+    /// <summary>
+    /// Removes the wheels uv downloaded, now that they are installed.
+    /// </summary>
+    /// <remarks>
+    /// The cache holds a copy of everything that went into the environment, so after a successful
+    /// build it is roughly the size of the environment again and serves nothing: the environment
+    /// is verified, the record is written, and a rebuild downloads what it needs anyway. Keeping
+    /// it doubles the cost of the one thing on this machine measured in gigabytes.
+    ///
+    /// Only after success, and never on the repair path before verification, because a cache is
+    /// exactly what makes a second attempt quick when the first one did not finish.
+    ///
+    /// Best effort. A cache that will not delete, usually because something still has a handle on
+    /// it, is disk that will be reclaimed next time rather than a reason to report a failure for
+    /// an environment that is working.
+    /// </remarks>
+    private void PruneDownloadCache()
+    {
+        try
+        {
+            if (!Directory.Exists(AppPaths.PythonCache))
+            {
+                return;
+            }
+
+            var before = DirectoryBytes(AppPaths.PythonCache);
+            Directory.Delete(AppPaths.PythonCache, recursive: true);
+
+            if (before > 0)
+            {
+                _feed.Info(
+                    "Reclaimed the Python download cache",
+                    $"{before / (1024.0 * 1024):0.#} MB of wheels that are already installed.");
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Left where it is. It costs disk, not correctness, and the next successful build
+            // tries again.
+        }
+    }
+
+    private static long DirectoryBytes(string folder)
+    {
+        try
+        {
+            return Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories)
+                .Sum(file =>
+                {
+                    try
+                    {
+                        return new FileInfo(file).Length;
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                    {
+                        return 0L;
+                    }
+                });
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return 0L;
         }
     }
 

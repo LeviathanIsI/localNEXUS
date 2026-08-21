@@ -20,6 +20,9 @@ public enum SettingsSection
     /// <summary>Extensions registered against the open project.</summary>
     Extensions,
 
+    /// <summary>What the record of past runs is keeping, and what it is costing.</summary>
+    History,
+
     /// <summary>The values a newly added node starts from.</summary>
     Behaviour
 }

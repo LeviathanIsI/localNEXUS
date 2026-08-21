@@ -33,6 +33,21 @@
                 Command="{Binding OpenSettingsCommand}" />
 
         <!--
+            The record of past runs, a window of its own for the same reason extensions is one:
+            reading what went wrong last time while setting up the next attempt means having both
+            on screen at once.
+        -->
+        <Button DockPanel.Dock="Bottom"
+                Style="{StaticResource IconButton}"
+                Width="48"
+                Height="46"
+                FontSize="16"
+                Content="&#xE81C;"
+                ToolTip="Run history: every run this project has had, and putting one back."
+                AutomationProperties.Name="Run history"
+                Command="{Binding OpenHistoryCommand}" />
+
+        <!--
             Extensions is a window of its own, opened from here and left open while the work
             carries on. It sits above the gear because it is a place rather than a setting.
         -->

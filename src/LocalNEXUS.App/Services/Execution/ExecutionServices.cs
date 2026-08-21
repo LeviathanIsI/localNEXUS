@@ -26,6 +26,7 @@ public sealed class ExecutionServices
         FileWriter fileWriter,
         IActivityFeed feed,
         StagingStore? staging = null,
+        History.RunHistoryStore? history = null,
         ExtensionRegistry? extensions = null,
         ToolSupportProbe? toolSupport = null,
         ICredentialStore? credentials = null,
@@ -43,6 +44,7 @@ public sealed class ExecutionServices
         UnityProject = unityProject;
         FileWriter = fileWriter;
         Staging = staging ?? new StagingStore();
+        History = history ?? new History.RunHistoryStore();
         Feed = feed;
     }
 
@@ -78,6 +80,15 @@ public sealed class ExecutionServices
     /// anything outstanding without learning that a node called Output exists.
     /// </remarks>
     public StagingStore Staging { get; }
+
+    /// <summary>
+    /// The record of every run this project has had.
+    /// </summary>
+    /// <remarks>
+    /// Reached by a node only to say what it did to a file and to keep a copy of what was there
+    /// first. Reading the record is the history window's business, not a node's.
+    /// </remarks>
+    public History.RunHistoryStore History { get; }
 
     /// <summary>The extensions registered against the open project, or null when none is open.</summary>
     public ExtensionRegistry? Extensions { get; }

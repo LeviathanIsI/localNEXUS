@@ -24,6 +24,9 @@ public sealed class NodeExecutionContext
     /// <summary>The request typed into the chat box before the run started.</summary>
     public string UserRequest => _run.UserRequest;
 
+    /// <summary>This run's identity in the record, or null when nothing is recording.</summary>
+    public string? RunId => _run.RunId;
+
     /// <summary>The live transcript of the run.</summary>
     public IActivityFeed Feed => Services.Feed;
 

@@ -26,6 +26,7 @@ public sealed partial class ActivityFeedViewModel : ObservableObject
     private readonly Dispatcher _dispatcher;
     private readonly RunCostTracker _cost;
     private readonly Services.Files.StagingStore _staging;
+    private readonly Services.History.RunRecorder? _recorder;
 
     private CancellationTokenSource? _runCancellation;
     private RunContext? _run;
@@ -71,8 +72,14 @@ public sealed partial class ActivityFeedViewModel : ObservableObject
         ActivityFeed feed,
         Dispatcher dispatcher,
         RunCostTracker? cost = null,
-        Services.Files.StagingStore? staging = null)
+        Services.Files.StagingStore? staging = null,
+        Services.History.RunRecorder? recorder = null)
     {
+        // The run lifecycle is owned here, so this is where a run gets its identity in the record.
+        // Doing it in the executor would put knowledge of the record into the one component that
+        // is meant to know only how to order nodes.
+        _recorder = recorder;
+
         // The same store the output node writes to, so the box below is describing the files that
         // are actually waiting rather than a second copy of the idea.
         _staging = staging ?? new Services.Files.StagingStore(dispatcher);
@@ -153,6 +160,9 @@ public sealed partial class ActivityFeedViewModel : ObservableObject
         _runCancellation?.Dispose();
         _runCancellation = new CancellationTokenSource();
 
+        // Begun before the first entry, so everything the run says lands under it.
+        var runId = _recorder?.BeginRun(request, "graph", _graph.Nodes.Count, _graph.Connections.Count);
+
         _feed.Add(ActivityKind.Request, "Request", request);
 
         // Each run is priced on its own, so the total starts at nothing.
@@ -163,7 +173,7 @@ public sealed partial class ActivityFeedViewModel : ObservableObject
         try
         {
             var run = await Task.Run(
-                () => _executor.RunAsync(_graph, request, _runCancellation.Token),
+                () => _executor.RunAsync(_graph, request, _runCancellation.Token, runId),
                 _runCancellation.Token).ConfigureAwait(true);
 
             RunState = run.State;
@@ -187,6 +197,15 @@ public sealed partial class ActivityFeedViewModel : ObservableObject
                     "Run cost",
                     $"{RunCost.Format(_cost.Total)} across {_cost.Calls} call(s).");
             }
+
+            // Last, so the cost entry above is inside the run it belongs to.
+            _recorder?.EndRun(RunState.ToString(), _cost.Total, _cost.Calls);
+
+            // The caps are applied here rather than by a job that wakes up on its own. There is
+            // no background work in this design at all: the record never goes stale, so there is
+            // nothing for an idle task to reconcile, and the one thing that does grow is trimmed
+            // at the only moment it grew.
+            _recorder?.ApplyLimits();
 
             DetachRun();
             _runCancellation?.Dispose();

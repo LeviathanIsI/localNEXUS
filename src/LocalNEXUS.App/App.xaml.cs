@@ -52,6 +52,8 @@ public partial class App : Application
     /// when something has actually gone wrong.
     /// </remarks>
     private ViewModels.MainViewModel? _mainViewModel;
+    private Services.History.RunHistoryStore? _history;
+    private Services.Dialogs.IHistoryWindow? _historyWindow;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -165,6 +167,19 @@ public partial class App : Application
         var staging = new Services.Files.StagingStore(Dispatcher);
         staging.OpenProject(unityProject.ProjectPath);
 
+        // Every run this project has had. Opened without being awaited, because creating a
+        // database is not something the window should wait behind, and nothing can be recorded
+        // until a run starts anyway.
+        var history = new Services.History.RunHistoryStore();
+        _history = history;
+        _ = history.OpenProjectAsync(unityProject.ProjectPath, CancellationToken.None);
+
+        var recorder = new Services.History.RunRecorder(history, config);
+        recorder.Attach(feed);
+
+        var historyWindow = new Services.Dialogs.HistoryWindowService();
+        _historyWindow = historyWindow;
+
         // What the open project already contains. Built on demand rather than at startup, so a
         // session that never runs a graph never reads a project it was not asked about.
         var projectIndex = new ProjectIndexService();
@@ -179,6 +194,7 @@ public partial class App : Application
             new FileWriter(),
             feed,
             staging,
+            history,
             extensions,
             new ToolSupportProbe(OpenAiCompatibleClient.CreateDefaultHttpClient()),
             credentials,
@@ -188,7 +204,7 @@ public partial class App : Application
         };
         var executor = new GraphExecutor(services);
 
-        var feedViewModel = new ActivityFeedViewModel(executor, graph, feed, Dispatcher, cost, staging);
+        var feedViewModel = new ActivityFeedViewModel(executor, graph, feed, Dispatcher, cost, staging, recorder);
         var catalogViewModel = new ModelCatalogViewModel(catalog, dialogs);
         var pythonViewModel = new PythonEnvironmentViewModel(pythonEnvironment, dialogs);
         var networkViewModel = new NetworkViewModel(mesh, catalog, config, feed, dialogs);
@@ -225,6 +241,10 @@ public partial class App : Application
             dialogs,
             () => IndexProjectAsync(projectIndex, unityProject.ProjectPath, feed, indexing.Token));
 
+        // The settings panel reports what the record holds, so it is pointed at the same one the
+        // recorder writes to rather than at a second instance of nothing.
+        settingsViewModel.UseHistory(history);
+
         var mainViewModel = new MainViewModel(
             graph,
             factory,
@@ -242,7 +262,9 @@ public partial class App : Application
             extensionsWindow,
             config,
             Dispatcher,
-            compiler);
+            compiler,
+            history,
+            historyWindow);
 
         ReportEnvironment(feed, catalog);
 
@@ -293,10 +315,12 @@ public partial class App : Application
         _provisioning?.Cancel();
         _indexing?.Cancel();
         _mainViewModel?.Dispose();
+        _history?.DisposeAsync().AsTask().GetAwaiter().GetResult();
         _network?.Dispose();
         // Before the group, so each extension is asked to stop and its connection closed rather
         // than every one of them being terminated cold.
         _extensionsWindow?.Close();
+        _historyWindow?.Close();
         _extensionHost?.Dispose();
         _mesh?.Dispose();
         _llamaServers?.Dispose();

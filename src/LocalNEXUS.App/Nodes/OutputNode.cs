@@ -103,8 +103,12 @@ public sealed partial class OutputNode : NodeBase
             ? await File.ReadAllTextAsync(absolutePath, ct).ConfigureAwait(false)
             : null;
 
+        SnapshotBefore(ctx, absolutePath);
+
         var bytes = await ctx.Services.FileWriter.WriteAsync(absolutePath, content, ct).ConfigureAwait(false);
         var change = DiffStat.Between(original, content);
+
+        Record(ctx, displayPath, Services.History.FileOutcome.Written, change.HasChange ? change.Text : null);
 
         StatusMessage = $"{displayPath}  ({bytes} bytes)";
         ctx.Feed.Add(ActivityKind.FileWritten, $"Wrote {displayPath}", absolutePath, Id).Detail =
@@ -174,6 +178,7 @@ public sealed partial class OutputNode : NodeBase
             if (file.Check == FileCheckState.DidNotCompile)
             {
                 staging.Stage(Stage(file, StagedReason.DidNotCompile, file.CheckDetail));
+                Record(ctx, file.RelativePath, Services.History.FileOutcome.Staged, file.CheckDetail);
                 staged++;
 
                 ctx.Feed.Info(
@@ -199,6 +204,7 @@ public sealed partial class OutputNode : NodeBase
             catch (UnityScriptRuleException ex)
             {
                 staging.Stage(Stage(file, StagedReason.RefusedByProjectRules, ex.Message));
+                Record(ctx, file.RelativePath, Services.History.FileOutcome.Refused, ex.Message);
                 staged++;
 
                 // Deliberately not an error entry. This file compiles; it was refused, which is a
@@ -207,6 +213,11 @@ public sealed partial class OutputNode : NodeBase
                 ctx.Feed.Info($"{file.RelativePath} was refused", ex.Message);
                 continue;
             }
+
+            // What is there now, kept before it is replaced. Only files about to change are
+            // copied, which is what makes undo cheap enough to do on every run rather than on
+            // request.
+            SnapshotBefore(ctx, absolute);
 
             batch.Stage(absolute, file.Content);
 
@@ -218,6 +229,7 @@ public sealed partial class OutputNode : NodeBase
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 staging.Stage(Stage(file, StagedReason.WriteFailed, ex.Message));
+                Record(ctx, file.RelativePath, Services.History.FileOutcome.Staged, ex.Message);
                 staged++;
 
                 ctx.Feed.Error($"{file.RelativePath} could not be written", ex.Message);
@@ -229,6 +241,12 @@ public sealed partial class OutputNode : NodeBase
 
             written++;
             bytes += result.Sum(w => w.Bytes);
+
+            Record(
+                ctx,
+                file.RelativePath,
+                Services.History.FileOutcome.Written,
+                result.Count > 0 && result[0].Change.HasChange ? result[0].Change.Text : null);
 
             var entry = ctx.Feed.Add(
                 ActivityKind.FileWritten,
@@ -261,6 +279,34 @@ public sealed partial class OutputNode : NodeBase
         }
 
         return NodeResult.Empty;
+    }
+
+    /// <summary>
+    /// Keeps what a file holds before this run changes it, so the run can be undone.
+    /// </summary>
+    /// <remarks>
+    /// Nothing happens when no run identity was handed down, which is the case when the history
+    /// could not be opened. A write is not held up for the want of a record of it.
+    /// </remarks>
+    private static void SnapshotBefore(NodeExecutionContext ctx, string absolutePath)
+    {
+        if (ctx.RunId is { } runId)
+        {
+            ctx.Services.History.Snapshot(runId, absolutePath);
+        }
+    }
+
+    /// <summary>Files what became of one file under the run that dealt with it.</summary>
+    private static void Record(
+        NodeExecutionContext ctx,
+        string relativePath,
+        Services.History.FileOutcome outcome,
+        string? detail)
+    {
+        if (ctx.RunId is { } runId)
+        {
+            ctx.Services.History.RecordFile(runId, relativePath, outcome, detail);
+        }
     }
 
     /// <summary>Turns a file the run could not finish into the record that outlives the run.</summary>

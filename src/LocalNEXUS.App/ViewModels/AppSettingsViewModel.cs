@@ -124,6 +124,59 @@ public sealed partial class AppSettingsViewModel : ObservableObject
         }
     }
 
+    /// <summary>The record of past runs, so the panel can say what it holds.</summary>
+    public Services.History.RunHistoryStore History { get; private set; } = new();
+
+    /// <summary>What the record is costing on disk, refreshed on demand.</summary>
+    [ObservableProperty]
+    private Services.History.HistoryUsage _historyUsage = Services.History.HistoryUsage.None;
+
+    /// <summary>How many runs keep their snapshots.</summary>
+    public int SnapshotRunLimit
+    {
+        get => _config.SnapshotRunLimit;
+        set => SetConfig(Math.Clamp(value, 1, 1000), v => _config.SnapshotRunLimit = v);
+    }
+
+    /// <summary>How many days a snapshot is kept.</summary>
+    public int SnapshotAgeDays
+    {
+        get => _config.SnapshotAgeDays;
+        set => SetConfig(Math.Clamp(value, 1, 3650), v => _config.SnapshotAgeDays = v);
+    }
+
+    /// <summary>Reads what the record is costing.</summary>
+    [RelayCommand]
+    private async Task RefreshHistoryUsageAsync()
+        => HistoryUsage = await History.ReadUsageAsync(CancellationToken.None).ConfigureAwait(true);
+
+    /// <summary>Applies the caps now rather than waiting for the next run to do it.</summary>
+    [RelayCommand]
+    private async Task PruneSnapshotsAsync()
+    {
+        History.PruneSnapshots(SnapshotRunLimit, SnapshotAgeDays);
+        await RefreshHistoryUsageAsync().ConfigureAwait(true);
+    }
+
+    /// <summary>Drops every snapshot, keeping what the runs said.</summary>
+    [RelayCommand]
+    private async Task ClearSnapshotsAsync()
+    {
+        History.ClearSnapshots();
+        await RefreshHistoryUsageAsync().ConfigureAwait(true);
+    }
+
+    /// <summary>Drops the whole record for this project.</summary>
+    [RelayCommand]
+    private async Task ClearHistoryAsync()
+    {
+        History.ClearHistory();
+        await RefreshHistoryUsageAsync().ConfigureAwait(true);
+    }
+
+    /// <summary>Points this panel at the record, which App owns.</summary>
+    public void UseHistory(Services.History.RunHistoryStore history) => History = history;
+
     /// <summary>Where cloud requests go by default. Blank uses whatever the provider defaults to.</summary>
     public string CloudBaseUrl
     {

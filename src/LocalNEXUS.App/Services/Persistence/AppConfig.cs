@@ -27,6 +27,19 @@ public sealed class AppConfig
     public Theming.AppTheme Theme { get; set; } = Theming.ThemeService.DefaultTheme;
 
     /// <summary>
+    /// How many runs keep their file snapshots.
+    /// </summary>
+    /// <remarks>
+    /// Text is small and snapshots are not, so only snapshots are capped. A run past this keeps
+    /// its whole transcript and simply can no longer be undone, which is the right thing to lose
+    /// first: what happened is worth more than the ability to reverse something from last month.
+    /// </remarks>
+    public int SnapshotRunLimit { get; set; } = 50;
+
+    /// <summary>How many days a snapshot is kept before it is dropped.</summary>
+    public int SnapshotAgeDays { get; set; } = 30;
+
+    /// <summary>
     /// How opaque the window's base layer is, from the readability floor to fully solid.
     /// </summary>
     /// <remarks>

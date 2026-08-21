@@ -44,6 +44,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private readonly ActivityFeed _feed;
     private readonly AppConfig _config;
     private readonly Services.Compilation.ICodeCompiler _compiler;
+    private readonly Services.History.RunHistoryStore _history;
+    private readonly IHistoryWindow _historyWindow;
     private readonly IExtensionsWindow _extensionsWindow;
 
     /// <summary>Nodes whose selection state this view model is currently following.</summary>
@@ -135,9 +137,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         IExtensionsWindow extensionsWindow,
         AppConfig config,
         Dispatcher dispatcher,
-        Services.Compilation.ICodeCompiler compiler)
+        Services.Compilation.ICodeCompiler compiler,
+        Services.History.RunHistoryStore history,
+        IHistoryWindow historyWindow)
     {
         _compiler = compiler;
+        _history = history;
+        _historyWindow = historyWindow;
         _extensionsWindow = extensionsWindow;
         Graph = graph;
         _factory = factory;
@@ -370,6 +376,25 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// </remarks>
     [RelayCommand]
     private void OpenExtensions() => _extensionsWindow.Show(Settings.Extensions);
+
+    /// <summary>
+    /// Opens the run history, which is a window rather than a panel.
+    /// </summary>
+    /// <remarks>
+    /// The view model is built here and handed over each time, so the window opens onto whatever
+    /// the record holds now rather than onto whatever it held when the application started.
+    /// </remarks>
+    [RelayCommand]
+    private void OpenHistory()
+    {
+        var history = new HistoryViewModel(_history, _feed);
+
+        // Taking a past request back is the half of undo that leaves the files alone.
+        history.RequestReused += request => Feed.RequestText = request;
+
+        _historyWindow.Show(history);
+        _ = history.RefreshCommand.ExecuteAsync(null);
+    }
 
     /// <summary>Closes the settings panel, landing back where the work was left.</summary>
     [RelayCommand]
@@ -691,6 +716,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // offer somebody the unfinished work of the one they just left.
             RefreshCompilerReachability();
             Feed.Staging.OpenProject(UnityProject.ProjectPath);
+
+            // The record belongs to a project too, and for the same reason. Not awaited: opening
+            // a database is not something a property change should wait behind.
+            _ = _history.OpenProjectAsync(UnityProject.ProjectPath, CancellationToken.None);
         }
     }
 

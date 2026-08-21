@@ -42,8 +42,21 @@ public sealed partial class ActivityEvent : ObservableObject
 
     private TaskCompletionSource<bool>? _completion;
 
+    /// <summary>
+    /// Told when this entry is finished, so that whatever is recording it can write the final
+    /// body rather than the first chunk of it.
+    /// </summary>
+    /// <remarks>
+    /// A streamed entry is added the instant the model starts talking and grows for as long as it
+    /// keeps talking. Recording it once at that moment would keep an empty row, and recording it
+    /// on every chunk would write a thousand. It is written on arrival so a crash cannot lose that
+    /// it happened, and written again here once it has stopped changing.
+    /// </remarks>
+    internal Action<ActivityEvent>? Completed { get; set; }
+
     public ActivityEvent(ActivityKind kind, string title, string? text = null, Guid? nodeId = null)
     {
+        Id = Guid.NewGuid();
         Kind = kind;
         Title = title;
         NodeId = nodeId;
@@ -54,6 +67,9 @@ public sealed partial class ActivityEvent : ObservableObject
             _body.Append(text);
         }
     }
+
+    /// <summary>This entry's own identity, which the record uses to update it once it is finished.</summary>
+    public Guid Id { get; }
 
     /// <summary>What kind of entry this is.</summary>
     public ActivityKind Kind { get; }
@@ -169,6 +185,7 @@ public sealed partial class ActivityEvent : ObservableObject
     {
         _lastNotifyTimestamp = Environment.TickCount64;
         RaiseTextChanged();
+        Completed?.Invoke(this);
     }
 
     /// <summary>

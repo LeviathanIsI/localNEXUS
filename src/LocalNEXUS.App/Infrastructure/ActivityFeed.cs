@@ -23,6 +23,16 @@ public sealed class ActivityFeed : IActivityFeed
 
     public ActivityFeed(Dispatcher dispatcher) => _dispatcher = dispatcher;
 
+    /// <summary>
+    /// Told about every entry as it is added, and again once a streamed one has finished.
+    /// </summary>
+    /// <remarks>
+    /// A hook rather than a dependency. The feed reports what happened and has no idea whether
+    /// anything is writing it down, which is what keeps recording out of the path a node takes to
+    /// say something.
+    /// </remarks>
+    public Action<ActivityEvent, bool>? Recorder { get; set; }
+
     /// <summary>Every entry recorded so far, oldest first.</summary>
     public ObservableCollection<ActivityEvent> Events { get; } = new();
 
@@ -30,6 +40,15 @@ public sealed class ActivityFeed : IActivityFeed
     public ActivityEvent Add(ActivityKind kind, string title, string? text = null, Guid? nodeId = null)
     {
         var entry = new ActivityEvent(kind, title, text, nodeId);
+
+        var recorder = Recorder;
+
+        if (recorder is not null)
+        {
+            entry.Completed = finished => recorder(finished, true);
+            recorder(entry, false);
+        }
+
         Invoke(() => Events.Add(entry));
         return entry;
     }

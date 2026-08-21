@@ -26,12 +26,22 @@ public sealed partial class RunContext : ObservableObject
 
     private TaskCompletionSource? _pauseGate;
 
-    public RunContext(GraphModel graph, string userRequest)
+    public RunContext(GraphModel graph, string userRequest, string? runId = null)
     {
         Graph = graph;
         UserRequest = userRequest;
         StartedAt = DateTimeOffset.Now;
+        RunId = runId;
     }
+
+    /// <summary>
+    /// This run's identity in the record, or null when nothing is recording.
+    /// </summary>
+    /// <remarks>
+    /// Carried here so a node can file a snapshot or a written file under the run it belongs to
+    /// without going looking for what is currently in progress.
+    /// </remarks>
+    public string? RunId { get; }
 
     /// <summary>The graph being executed.</summary>
     public GraphModel Graph { get; }
