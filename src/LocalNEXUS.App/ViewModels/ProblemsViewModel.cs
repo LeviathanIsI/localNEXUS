@@ -21,7 +21,7 @@ namespace LocalNEXUS.App.ViewModels;
 public sealed partial class ProblemsViewModel : ObservableObject, IDisposable
 {
     private readonly GraphModel _graph;
-    private readonly HashSet<CompileCheckNode> _observed = new();
+    private readonly HashSet<CompilerCheckNode> _observed = new();
 
     private bool _disposed;
 
@@ -64,7 +64,7 @@ public sealed partial class ProblemsViewModel : ObservableObject, IDisposable
 
     private void OnNodeChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(CompileCheckNode.LastProblems))
+        if (e.PropertyName == nameof(CompilerCheckNode.LastProblems))
         {
             Rebuild();
         }
@@ -72,7 +72,7 @@ public sealed partial class ProblemsViewModel : ObservableObject, IDisposable
 
     private void Resubscribe()
     {
-        var wanted = _graph.Nodes.OfType<CompileCheckNode>().ToHashSet();
+        var wanted = _graph.Nodes.OfType<CompilerCheckNode>().ToHashSet();
 
         foreach (var gone in _observed.Except(wanted).ToList())
         {
@@ -94,7 +94,7 @@ public sealed partial class ProblemsViewModel : ObservableObject, IDisposable
         Problems.Clear();
 
         var rows = _graph.Nodes
-            .OfType<CompileCheckNode>()
+            .OfType<CompilerCheckNode>()
             .SelectMany(node => node.LastProblems.Select(d => new ProblemViewModel(d, node.Title)))
             .OrderByDescending(p => p.Severity)
             .ThenBy(p => p.File, StringComparer.OrdinalIgnoreCase)

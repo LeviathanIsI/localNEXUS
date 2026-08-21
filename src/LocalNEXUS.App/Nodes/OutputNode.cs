@@ -45,7 +45,7 @@ public sealed partial class OutputNode : NodeBase
     private bool _askBeforeWriting;
 
     public OutputNode()
-        : base("Write File")
+        : base("Output")
     {
         Content = AddInput("Code", PinType.Code);
     }

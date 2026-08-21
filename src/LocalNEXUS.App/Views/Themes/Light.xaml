@@ -46,11 +46,11 @@
     <Color x:Key="Diff.AddedColor">#FF107C41</Color>
     <Color x:Key="Diff.RemovedColor">#FFC42B1C</Color>
 
-    <Color x:Key="NodeType.InputColor">#FF0066B8</Color>
-    <Color x:Key="NodeType.PlanColor">#FF0F7285</Color>
+    <Color x:Key="NodeType.PromptColor">#FF0066B8</Color>
+    <Color x:Key="NodeType.TriageColor">#FF0F7285</Color>
     <Color x:Key="NodeType.ModelColor">#FF7719AA</Color>
-    <Color x:Key="NodeType.TransformColor">#FF107C41</Color>
-    <Color x:Key="NodeType.CompileColor">#FFB5237E</Color>
+    <Color x:Key="NodeType.PatchColor">#FF107C41</Color>
+    <Color x:Key="NodeType.CompilerCheckColor">#FFB5237E</Color>
     <Color x:Key="NodeType.OutputColor">#FF8A5A00</Color>
 
     <Color x:Key="Pin.TextColor">#FF0066B8</Color>

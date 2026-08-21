@@ -56,6 +56,18 @@ public sealed partial class NodeViewModel : ObservableObject, IDisposable
     /// <summary>The node type, which is what the accent colour is resolved from.</summary>
     public string TypeKey => Node.TypeKey;
 
+    /// <summary>
+    /// The type as a person would say it, which is not always the key.
+    /// </summary>
+    /// <remarks>
+    /// Read from the palette rather than spelled here, for the same reason the inspector reads it
+    /// from the palette: every extra place a type name is written out is a place it can come to
+    /// disagree with the others, and this one used to show CompilerCheck under a node the palette
+    /// calls Compiler check.
+    /// </remarks>
+    public string TypeLabel => Nodes.NodeFactory.Descriptors
+        .FirstOrDefault(d => d.TypeKey == Node.TypeKey).DisplayName ?? Node.TypeKey;
+
     /// <summary>What the node last reported, such as a token rate or the file it is on.</summary>
     public string? Detail => Node.StatusMessage;
 

@@ -11,10 +11,10 @@ namespace LocalNEXUS.App.Nodes;
 /// The node reads the request from the execution context rather than having the executor push a
 /// value into it. That keeps the executor a plain graph walker with no knowledge of node types.
 /// </remarks>
-public sealed class InputNode : NodeBase
+public sealed class PromptNode : NodeBase
 {
-    public InputNode()
-        : base("Request")
+    public PromptNode()
+        : base("Prompt")
     {
         Request = AddOutput("Text", PinType.Text);
     }
@@ -23,7 +23,7 @@ public sealed class InputNode : NodeBase
     public Pin Request { get; }
 
     /// <inheritdoc />
-    public override string TypeKey => "Input";
+    public override string TypeKey => "Prompt";
 
     /// <inheritdoc />
     public override Task<NodeResult> ExecuteAsync(NodeExecutionContext ctx, CancellationToken ct)

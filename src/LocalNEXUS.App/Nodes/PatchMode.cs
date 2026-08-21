@@ -1,7 +1,7 @@
 namespace LocalNEXUS.App.Nodes;
 
 /// <summary>How a transform node rewrites the value passing through it.</summary>
-public enum TransformMode
+public enum PatchMode
 {
     /// <summary>Substitute the input into a template, then apply find and replace pairs.</summary>
     Template,

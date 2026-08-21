@@ -37,26 +37,31 @@ public sealed class NodeFactory
     /// <summary>Every node type that can be added to a graph, in palette order.</summary>
     public static IReadOnlyList<NodeDescriptor> Descriptors { get; } = new[]
     {
-        new NodeDescriptor("Input", "Input", "Emits the request typed into the chat box."),
-        new NodeDescriptor("Plan", "Plan", "Reads the open Unity project and works out which files the request needs."),
-        new NodeDescriptor("Model", "Model", "Sends its input to a local or hosted model and emits the reply."),
-        new NodeDescriptor("Transform", "Transform", "Rewrites the value passing through it with a template or a C# expression."),
-        new NodeDescriptor("CompileCheck", "Compile check", "Compiles the code passing through it and asks the model that wrote it to fix what does not."),
-        new NodeDescriptor("Output", "Output", "Writes its input to a file inside the opened Unity project.")
+        new NodeDescriptor("Prompt", "Prompt", "Sends on what you typed in the chat box."),
+        new NodeDescriptor("Triage", "Triage", "Reads your project and decides which files to leave alone, edit, or write new."),
+        new NodeDescriptor("Model", "Model", "Asks a model, local or hosted, and sends on its reply."),
+        new NodeDescriptor("Patch", "Patch", "Applies a change to the code passing through it."),
+        new NodeDescriptor("CompilerCheck", "Compiler check", "Compiles the code and asks the model to fix whatever does not build."),
+        new NodeDescriptor("Output", "Output", "Writes the finished files into your project.")
     };
 
     /// <summary>Creates a node of the given type, started from the application wide defaults.</summary>
     /// <remarks>
-    /// The key a node is created from has to be the key it saves itself under, or a graph does not
-    /// survive being reopened. <c>Compile</c> is still accepted because the palette used to offer
-    /// that key while the node saved itself as <c>CompileCheck</c>, and a graph written by that
-    /// build is worth still being able to open.
+    /// Every key a node has ever saved itself under is accepted here, and the current key is the
+    /// one written back. That is the whole of the migration, and it is not optional: a key this
+    /// does not recognise is reported as an unknown type and the node is dropped along with every
+    /// wire attached to it, so a rename without this silently eats somebody's graph. It happened
+    /// once already, when the palette offered <c>Compile</c> while the node saved itself as
+    /// <c>CompileCheck</c>.
+    ///
+    /// The old names are: Input for Prompt, Plan for Triage, Transform for Patch, and both
+    /// CompileCheck and Compile for Compiler check.
     /// </remarks>
-    /// <exception cref="NotSupportedException">The type key is not one this build knows about.</exception>
+    /// <exception cref="NotSupportedException">The type key is not one this build has ever used.</exception>
     public NodeBase Create(string typeKey) => typeKey switch
     {
-        "Input" => new InputNode(),
-        "Plan" => new PlanNode
+        "Prompt" or "Input" => new PromptNode(),
+        "Triage" or "Plan" => new TriageNode
         {
             MapCharacters = _config.DefaultMapCharacters,
             CandidateCharacters = _config.DefaultCandidateCharacters,
@@ -67,8 +72,8 @@ public sealed class NodeFactory
         {
             ApiKey = _config.CloudApiKey ?? string.Empty
         },
-        "Transform" => new TransformNode(),
-        "CompileCheck" or "Compile" => new CompileCheckNode { RetryLimit = _config.DefaultRetryLimit },
+        "Patch" or "Transform" => new PatchNode(),
+        "CompilerCheck" or "CompileCheck" or "Compile" => new CompilerCheckNode { RetryLimit = _config.DefaultRetryLimit },
         "Output" => new OutputNode(),
         _ => throw new NotSupportedException($"Unknown node type '{typeKey}'.")
     };

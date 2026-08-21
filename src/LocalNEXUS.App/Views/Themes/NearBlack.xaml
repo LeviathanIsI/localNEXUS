@@ -30,11 +30,11 @@
     <Color x:Key="Diff.AddedColor">#FF4ADE80</Color>
     <Color x:Key="Diff.RemovedColor">#FFFF5C5C</Color>
 
-    <Color x:Key="NodeType.InputColor">#FF60A5FA</Color>
-    <Color x:Key="NodeType.PlanColor">#FF22D3EE</Color>
+    <Color x:Key="NodeType.PromptColor">#FF60A5FA</Color>
+    <Color x:Key="NodeType.TriageColor">#FF22D3EE</Color>
     <Color x:Key="NodeType.ModelColor">#FF7C5CFF</Color>
-    <Color x:Key="NodeType.TransformColor">#FF4ADE80</Color>
-    <Color x:Key="NodeType.CompileColor">#FFF472B6</Color>
+    <Color x:Key="NodeType.PatchColor">#FF4ADE80</Color>
+    <Color x:Key="NodeType.CompilerCheckColor">#FFF472B6</Color>
     <Color x:Key="NodeType.OutputColor">#FFFBBF24</Color>
 
     <Color x:Key="Pin.TextColor">#FF60A5FA</Color>

@@ -330,10 +330,10 @@ public partial class App : Application
         ReportBundledFont(feed);
 
         feed.Info(
-            TransformNode.CanCompileScripts ? "Script transforms ready" : "Script transforms unavailable",
-            TransformNode.CanCompileScripts
-                ? "A Transform node can compile a C# expression, which is what strips a markdown fence off a model reply."
-                : "The script compiler could not be built in this build, so a Transform node can only use its template. "
+            PatchNode.CanCompileScripts ? "Script transforms ready" : "Script transforms unavailable",
+            PatchNode.CanCompileScripts
+                ? "A Patch node can run a C# expression, which is what strips a markdown fence off a model reply."
+                : "The script compiler could not be built in this build, so a Patch node can only use find and replace. "
                   + "Fence stripping, which the repair loop relies on, will not work.");
     }
 

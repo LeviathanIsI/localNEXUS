@@ -1,14 +1,14 @@
-<UserControl x:Class="LocalNEXUS.App.Views.Settings.InputNodeSettingsView"
+<UserControl x:Class="LocalNEXUS.App.Views.Settings.PromptNodeSettingsView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:nodes="clr-namespace:LocalNEXUS.App.Nodes"
-             d:DataContext="{d:DesignInstance Type=nodes:InputNode}"
+             d:DataContext="{d:DesignInstance Type=nodes:PromptNode}"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d">
 
     <StackPanel>
-        <TextBlock Style="{StaticResource SectionHeader}" Text="Request source" />
+        <TextBlock Style="{StaticResource SectionHeader}" Text="What it sends" />
         <TextBlock Style="{StaticResource HintText}"
                    Text="No settings. It sends on whatever you type in the chat box." />
     </StackPanel>

@@ -73,9 +73,13 @@ public sealed record InspectorHeader(
     };
 
     /// <summary>
-    /// The type key as a person would say it. Only one of the six needs saying differently, and
-    /// spelling that one out is smaller than a lookup table.
+    /// The type key as a person would say it, taken from the palette rather than spelled again.
     /// </summary>
+    /// <remarks>
+    /// This used to carry its own special case, which made it a fourth place a node type was
+    /// named and the one that disagreed: it said Compile where the palette said Compile check.
+    /// Reading the palette is what stops that happening again.
+    /// </remarks>
     private static string NodeTypeLabel(string typeKey)
-        => typeKey == "CompileCheck" ? "Compile" : typeKey;
+        => Nodes.NodeFactory.Descriptors.FirstOrDefault(d => d.TypeKey == typeKey).DisplayName ?? typeKey;
 }

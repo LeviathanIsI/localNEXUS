@@ -27,7 +27,7 @@ namespace LocalNEXUS.App.Nodes;
 /// It emits the plan as a list of tasks. A wire carrying a list is what makes the coder downstream
 /// run once per file without the graph changing shape.
 /// </remarks>
-public sealed partial class PlanNode : NodeBase
+public sealed partial class TriageNode : NodeBase
 {
     /// <summary>How many candidates ranking offers before any file is read.</summary>
     public const int DefaultCandidateLimit = 12;
@@ -66,8 +66,8 @@ public sealed partial class PlanNode : NodeBase
     [ObservableProperty]
     private string _lastBlocked = string.Empty;
 
-    public PlanNode()
-        : base("Plan")
+    public TriageNode()
+        : base("Triage")
     {
         Request = AddInput("Text", PinType.Text);
         Plan = AddOutput("Text", PinType.Text);
@@ -80,7 +80,7 @@ public sealed partial class PlanNode : NodeBase
     public Pin Plan { get; }
 
     /// <inheritdoc />
-    public override string TypeKey => "Plan";
+    public override string TypeKey => "Triage";
 
     /// <summary>The budget in force, said out loud so it is never a hidden number.</summary>
     public string BudgetSummary => Budget.Summary;

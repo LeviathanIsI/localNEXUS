@@ -9,24 +9,24 @@
         adding its view and one entry here.
     -->
 
-    <DataTemplate DataType="{x:Type nodes:InputNode}">
-        <settings:InputNodeSettingsView />
+    <DataTemplate DataType="{x:Type nodes:PromptNode}">
+        <settings:PromptNodeSettingsView />
     </DataTemplate>
 
-    <DataTemplate DataType="{x:Type nodes:PlanNode}">
-        <settings:PlanNodeSettingsView />
+    <DataTemplate DataType="{x:Type nodes:TriageNode}">
+        <settings:TriageNodeSettingsView />
     </DataTemplate>
 
     <DataTemplate DataType="{x:Type nodes:ModelNode}">
         <settings:ModelNodeSettingsView />
     </DataTemplate>
 
-    <DataTemplate DataType="{x:Type nodes:TransformNode}">
-        <settings:TransformNodeSettingsView />
+    <DataTemplate DataType="{x:Type nodes:PatchNode}">
+        <settings:PatchNodeSettingsView />
     </DataTemplate>
 
-    <DataTemplate DataType="{x:Type nodes:CompileCheckNode}">
-        <settings:CompileCheckNodeSettingsView />
+    <DataTemplate DataType="{x:Type nodes:CompilerCheckNode}">
+        <settings:CompilerCheckNodeSettingsView />
     </DataTemplate>
 
     <DataTemplate DataType="{x:Type nodes:OutputNode}">

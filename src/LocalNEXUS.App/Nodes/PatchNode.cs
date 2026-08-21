@@ -25,7 +25,7 @@ namespace LocalNEXUS.App.Nodes;
 /// strips a markdown fence from a model reply: without the pass through, a repaired reply would
 /// arrive at the compiler still wrapped in one and could never compile.
 /// </remarks>
-public sealed partial class TransformNode : NodeBase, ICodeRepairSource
+public sealed partial class PatchNode : NodeBase, ICodeRepairSource
 {
     /// <summary>The placeholder replaced with the incoming value in template mode.</summary>
     public const string InputPlaceholder = "{{input}}";
@@ -89,7 +89,7 @@ public sealed partial class TransformNode : NodeBase, ICodeRepairSource
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsTemplateMode))]
     [NotifyPropertyChangedFor(nameof(IsScriptMode))]
-    private TransformMode _mode = TransformMode.Template;
+    private PatchMode _mode = PatchMode.Template;
 
     /// <summary>The template applied in template mode. Occurrences of <c>{{input}}</c> are substituted.</summary>
     [ObservableProperty]
@@ -102,8 +102,8 @@ public sealed partial class TransformNode : NodeBase, ICodeRepairSource
     private ScriptRunner<object>? _compiled;
     private string? _compiledFor;
 
-    public TransformNode()
-        : base("Transform")
+    public PatchNode()
+        : base("Patch")
     {
         Source = AddInput("Code", PinType.Code);
         Result = AddOutput("Code", PinType.Code);
@@ -119,13 +119,13 @@ public sealed partial class TransformNode : NodeBase, ICodeRepairSource
     public ObservableCollection<FindReplacePair> Replacements { get; } = new();
 
     /// <inheritdoc />
-    public override string TypeKey => "Transform";
+    public override string TypeKey => "Patch";
 
     /// <summary>True when template mode is selected. Drives which editor is shown.</summary>
-    public bool IsTemplateMode => Mode == TransformMode.Template;
+    public bool IsTemplateMode => Mode == PatchMode.Template;
 
     /// <summary>True when script mode is selected.</summary>
-    public bool IsScriptMode => Mode == TransformMode.Script;
+    public bool IsScriptMode => Mode == PatchMode.Script;
 
     /// <inheritdoc />
     public override async Task<NodeResult> ExecuteAsync(NodeExecutionContext ctx, CancellationToken ct)
@@ -134,8 +134,8 @@ public sealed partial class TransformNode : NodeBase, ICodeRepairSource
 
         var output = Mode switch
         {
-            TransformMode.Template => ApplyTemplate(input),
-            TransformMode.Script => await RunScriptAsync(input, ct).ConfigureAwait(false),
+            PatchMode.Template => ApplyTemplate(input),
+            PatchMode.Script => await RunScriptAsync(input, ct).ConfigureAwait(false),
             _ => input
         };
 
@@ -168,7 +168,7 @@ public sealed partial class TransformNode : NodeBase, ICodeRepairSource
     /// <inheritdoc />
     public override void LoadSettings(JsonObject settings)
     {
-        if (Enum.TryParse<TransformMode>(settings["mode"]?.GetValue<string>(), out var mode))
+        if (Enum.TryParse<PatchMode>(settings["mode"]?.GetValue<string>(), out var mode))
         {
             Mode = mode;
         }
@@ -233,8 +233,8 @@ public sealed partial class TransformNode : NodeBase, ICodeRepairSource
         // this node is for, unwrapping a fence or renaming a symbol, still applies to the fix.
         return Mode switch
         {
-            TransformMode.Template => ApplyTemplate(revised),
-            TransformMode.Script => await RunScriptAsync(revised, ct).ConfigureAwait(false),
+            PatchMode.Template => ApplyTemplate(revised),
+            PatchMode.Script => await RunScriptAsync(revised, ct).ConfigureAwait(false),
             _ => revised
         };
     }
@@ -280,7 +280,7 @@ public sealed partial class TransformNode : NodeBase, ICodeRepairSource
         object? value;
         try
         {
-            value = await runner(new TransformScriptGlobals { input = input }, ct).ConfigureAwait(false);
+            value = await runner(new PatchScriptGlobals { input = input }, ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -311,7 +311,7 @@ public sealed partial class TransformNode : NodeBase, ICodeRepairSource
 
         try
         {
-            var script = CSharpScript.Create<object>(ScriptExpression, options, typeof(TransformScriptGlobals));
+            var script = CSharpScript.Create<object>(ScriptExpression, options, typeof(PatchScriptGlobals));
             _compiled = script.CreateDelegate();
             _compiledFor = ScriptExpression;
             return _compiled;

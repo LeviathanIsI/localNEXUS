@@ -70,11 +70,11 @@ public static class SemanticBrushes
         ("Pin.Code.Brush", "Pin.CodeColor"),
 
         // Node type accents. The only colour a node carries.
-        ("NodeType.Input.Brush", "NodeType.InputColor"),
-        ("NodeType.Plan.Brush", "NodeType.PlanColor"),
+        ("NodeType.Prompt.Brush", "NodeType.PromptColor"),
+        ("NodeType.Triage.Brush", "NodeType.TriageColor"),
         ("NodeType.Model.Brush", "NodeType.ModelColor"),
-        ("NodeType.Transform.Brush", "NodeType.TransformColor"),
-        ("NodeType.CompileCheck.Brush", "NodeType.CompileColor"),
+        ("NodeType.Patch.Brush", "NodeType.PatchColor"),
+        ("NodeType.CompilerCheck.Brush", "NodeType.CompilerCheckColor"),
         ("NodeType.Output.Brush", "NodeType.OutputColor"),
 
         // Node execution state, as the model records it.

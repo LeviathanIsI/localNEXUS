@@ -30,7 +30,7 @@ namespace LocalNEXUS.App.Nodes;
 /// file at a time: the third file of a plan legitimately calls into the first, and neither Unity
 /// nor the project's compiled assemblies have ever seen either of them.
 /// </remarks>
-public sealed partial class CompileCheckNode : NodeBase
+public sealed partial class CompilerCheckNode : NodeBase
 {
     /// <summary>Repair attempts allowed by default after the first failure.</summary>
     public const int DefaultRetryLimit = 3;
@@ -85,8 +85,8 @@ public sealed partial class CompileCheckNode : NodeBase
     [ObservableProperty]
     private string _referenceSummary = string.Empty;
 
-    public CompileCheckNode()
-        : base("Compile Check")
+    public CompilerCheckNode()
+        : base("Compiler check")
     {
         Code = AddInput("Code", PinType.Code);
         Checked = AddOutput("Code", PinType.Code);
@@ -99,7 +99,7 @@ public sealed partial class CompileCheckNode : NodeBase
     public Pin Checked { get; }
 
     /// <inheritdoc />
-    public override string TypeKey => "CompileCheck";
+    public override string TypeKey => "CompilerCheck";
 
     /// <summary>True when a failed check stops the run. Bound by the settings panel.</summary>
     public bool FaultsTheRun => FailureBehaviour == CompileFailureBehaviour.FaultTheRun;

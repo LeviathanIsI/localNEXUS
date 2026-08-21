@@ -22,7 +22,7 @@ than a fixed pipeline, so the features on the roadmap drop in without rework.
   rather than inverted from a dark one. The choice is remembered.
 - **Node canvas.** Add, drag, wire and delete nodes. Built on
   [Nodify](https://miroiu.github.io/nodify).
-- **Six node types.** Input, Plan, Model, Transform, Compile check, Output.
+- **Six node types.** Prompt, Triage, Model, Patch, Compiler check, Output.
 - **Typed pins.** Pins are colour coded by what they carry (`Text` is blue, `Code` is
   amber). Invalid drops are refused while you drag, and the wire tells you why.
 - **A general graph executor.** Nodes are ordered by their connections using Kahn's
@@ -40,14 +40,14 @@ than a fixed pipeline, so the features on the roadmap drop in without rework.
   pick an engine.
 - **Live streaming.** Tokens land in the activity feed as they arrive, followed by token
   counts, throughput and elapsed time.
-- **Project awareness.** The Plan node reads what the open Unity project already contains, ranks
+- **Project awareness.** The Triage node reads what the open Unity project already contains, ranks
   its files against the request, and decides per file whether to use it, edit it, or write
   something new that references it. Creating a type the project already has is refused.
 - **Multi-file generation.** One request produces as many files as it needs, in dependency order,
   each one shown what the earlier ones actually declared.
 - **Editing existing files.** Changes come back as a line-tagged diff and are applied tolerantly,
   batched one write per file, and nothing is written unless the whole plan succeeds.
-- **Compile checking and repair.** The Compile check node compiles generated C# against the
+- **Compile checking and repair.** The Compiler check node compiles generated C# against the
   open Unity project before anything is written, and when it does not compile it hands the
   errors back to the model that wrote it and asks for another attempt, up to a retry cap.
 - **File writing.** The Output node writes into the Unity project you opened, optionally
@@ -305,13 +305,13 @@ build rather than by reading its documentation:
 
 ## Working against an existing project
 
-Wire the Plan node between the request and the model:
+Wire the Triage node between the prompt and the model:
 
 ```
-Input -> Plan -> Model -> Compile check -> Output
+Prompt -> Triage -> Model -> Compiler check -> Output
 ```
 
-The Plan node reads the project, works out which files the request is about, and emits an ordered
+The Triage node reads the project, works out which files the request is about, and emits an ordered
 list of files to write. Everything downstream then runs once per file: the model writes them in
 order, the compile check checks each against the ones before it, and the writer applies them
 together or not at all.
@@ -402,10 +402,10 @@ changing a default here can never reach back into a graph that already exists.
 
 ## Checking that generated code compiles
 
-Drop a **Compile check** node between the model and the Output node:
+Drop a **Compiler check** node between the model and the Output node:
 
 ```
-Input -> Model -> Transform -> Compile check -> Output
+Prompt -> Model -> Patch -> Compiler check -> Output
 ```
 
 It compiles what passes through it and only lets it onward if it compiles. Nothing is written
@@ -436,7 +436,7 @@ the compiler errors. It repeats until the code compiles or the **retry limit** i
 by default. Every attempt appears in the activity feed with its number and the errors it was
 given, so a loop is never silent.
 
-A Transform node in between is not in the way: it passes the request further upstream and applies
+A Patch node in between is not in the way: it passes the request further upstream and applies
 itself to whatever comes back, so a repaired reply gets its markdown fence stripped exactly as
 the first one did.
 
@@ -453,8 +453,8 @@ paths inside this folder and refuse anything that would land outside it.
 ## Building the demo graph
 
 1. Open your Unity project.
-2. Add **Input**, two **Model** nodes, and an **Output** node from the palette.
-3. Wire them: `Input.Text` to the first model's `Text`, the first model's `Code` to the
+2. Add **Prompt**, two **Model** nodes, and an **Output** node from the palette.
+3. Wire them: `Prompt.Text` to the first model's `Text`, the first model's `Code` to the
    second model's `Text`, the second model's `Code` to `Output.Code`.
 4. Configure the first model as the planner. A system prompt along these lines works
    well:
@@ -474,20 +474,20 @@ paths inside this folder and refuse anything that would land outside it.
 Both models stream into the feed, and the file appears in `Assets/Scripts`.
 
 If a model wraps its reply in a markdown code fence despite the prompt, drop a
-**Transform** node between it and the Output node and leave it in **Script** mode. Its
+**Patch** node between it and the Output node and leave it in **Script** mode. Its
 default expression removes a surrounding fence and leaves anything else alone.
 
 ## Notes on the design
 
 **Pin types.** Connections require the source and target pin types to match, with one
 deliberate exception: a `Code` output may feed a `Text` input. Without it a Model node,
-which takes `Text` and emits `Code`, could only ever be fed by an Input node, so chaining
+which takes `Text` and emits `Code`, could only ever be fed by a Prompt node, so chaining
 a planning model into a coding model would be impossible. The exception is one
 directional: a `Text` output still cannot reach a `Code` input, so prose cannot be piped
 straight into a file writer. The rule lives in one place,
 `Models/PinTypeCompatibility.cs`.
 
-**Transform script mode** evaluates a single C# expression through Roslyn with the
+**Patch script mode** evaluates a single C# expression through Roslyn with the
 incoming value bound to `input`. `System`, `System.Linq`, `System.Text` and
 `System.Text.RegularExpressions` are imported. Compilation is cached per expression, and
 compile errors surface in the activity feed when the node runs.
@@ -501,7 +501,7 @@ between nodes, so it never interrupts a model mid stream.
 ```
 src/LocalNEXUS.App/
   Models/          NodeBase, Pin, Connection, GraphModel, pin typing and validation
-  Nodes/           InputNode, PlanNode, ModelNode, TransformNode, CompileCheckNode,
+  Nodes/           PromptNode, TriageNode, ModelNode, PatchNode, CompilerCheckNode,
                    OutputNode, NodeFactory
   Services/
     Execution/     GraphExecutor, RunContext, RunState, topological sort
@@ -541,7 +541,7 @@ publish.ps1        self contained single file publish into dist/
 Deliberately not in the slice, planned next:
 
 - **Memory node** and cross run persistence.
-- **Compile check node** with an automatic repair loop.
+- **Compiler check node** with an automatic repair loop.
 - **Loop node** and automatic iteration over lists.
 - **Breakpoints on wires**, to inspect a value mid graph.
 - **Per node detail tabs** and expandable inline diffs in the feed.

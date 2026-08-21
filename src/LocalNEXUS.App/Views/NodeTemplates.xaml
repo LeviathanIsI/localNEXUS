@@ -102,7 +102,7 @@
 
                     <StackPanel Grid.Column="1">
                         <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
-                        <TextBlock Style="{StaticResource MutedText}" Text="{Binding TypeKey}" />
+                        <TextBlock Style="{StaticResource MutedText}" Text="{Binding TypeLabel}" />
                     </StackPanel>
                 </Grid>
             </nodify:Node.Header>
