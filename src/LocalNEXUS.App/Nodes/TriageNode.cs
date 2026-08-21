@@ -71,11 +71,19 @@ public sealed partial class TriageNode : NodeBase
         : base("Triage")
     {
         Request = AddInput("Text", PinType.Text);
+
+        // Appended after the request, never before it. A saved graph matches its pins by name and
+        // falls back to position, so putting this first would hand it the request's saved identity
+        // and drop the wire feeding it.
+        Model = AddInput("Model", PinType.Model);
         Plan = AddOutput("Text", PinType.Text);
     }
 
     /// <summary>Receives the request to plan.</summary>
     public Pin Request { get; }
+
+    /// <summary>The model this plans with, handed in rather than hunted for.</summary>
+    public Pin Model { get; }
 
     /// <summary>Carries the ordered file plan onwards, one item per file to write.</summary>
     public Pin Plan { get; }
@@ -138,15 +146,20 @@ public sealed partial class TriageNode : NodeBase
         var map = ProjectDigest.BuildMap(index, candidates, budget);
         var summary = ProjectDigest.BuildCandidateSummary(candidates, budget);
 
-        // The planner borrows whichever model is going to do the writing, found by following this
-        // node's own output wire. A graph then has one place where a model is chosen, and this
-        // node is not a second copy of every model setting.
-        var planner = ctx.FindDownstream<IPlanningModel>();
+        // The planner is handed in on a pin rather than found by searching downstream. It still
+        // borrows a model rather than carrying a second copy of every model setting; what changed
+        // is that the canvas now says which one, instead of it being whichever node happened to be
+        // wired after this one.
+        // Read from the wire rather than from what the wire carried. A model handed over for
+        // reference may legitimately run after the node using it, which is exactly this graph: the
+        // plan goes to the model and the model is what planned it. A reference does not need its
+        // producer to have run, only to exist.
+        var planner = ctx.GetSourceNode(Model) as IModelHandle;
 
         if (planner is null)
         {
             throw new InvalidOperationException(
-                $"{Title} found no model to plan with. Wire a Model node downstream of it.");
+                $"{Title} has no model to plan with. Wire a Model node's Model output into its Model input.");
         }
 
         if (!planner.CanAnswer(out var whyNot))
@@ -207,7 +220,7 @@ public sealed partial class TriageNode : NodeBase
     /// </remarks>
     private async Task<string> ResolveAsync(
         NodeExecutionContext ctx,
-        IPlanningModel planner,
+        IModelHandle planner,
         NodeBase plannerNode,
         string originalMessage,
         IReadOnlyList<ClarificationQuestion> questions,

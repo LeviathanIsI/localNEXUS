@@ -94,51 +94,6 @@ public sealed class NodeExecutionContext
     }
 
     /// <summary>
-    /// The first node reachable from this one that offers a capability, following output wires.
-    /// </summary>
-    /// <remarks>
-    /// Breadth first and depth limited, so a planner two nodes upstream of the coder still finds
-    /// it and a graph wired in a loop cannot walk forever. Cycles are rejected before a run
-    /// starts, so the visited set is belt and braces rather than a real defence.
-    /// </remarks>
-    public T? FindDownstream<T>(int maxDepth = 4)
-        where T : class
-    {
-        var visited = new HashSet<NodeBase> { Node };
-        var frontier = new List<NodeBase> { Node };
-
-        for (var depth = 0; depth < maxDepth && frontier.Count > 0; depth++)
-        {
-            var next = new List<NodeBase>();
-
-            foreach (var node in frontier)
-            {
-                foreach (var pin in node.Outputs)
-                {
-                    foreach (var target in GetTargetNodes(pin))
-                    {
-                        if (!visited.Add(target))
-                        {
-                            continue;
-                        }
-
-                        if (target is T match)
-                        {
-                            return match;
-                        }
-
-                        next.Add(target);
-                    }
-                }
-            }
-
-            frontier = next;
-        }
-
-        return null;
-    }
-
-    /// <summary>
     /// A context belonging to another node of the same run, so that node can read its own inputs.
     /// </summary>
     /// <remarks>

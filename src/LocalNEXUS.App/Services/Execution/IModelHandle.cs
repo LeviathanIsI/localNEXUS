@@ -1,19 +1,23 @@
 namespace LocalNEXUS.App.Services.Execution;
 
 /// <summary>
-/// A node that can be asked a question and will answer it with a model.
+/// A configured model, handed along a Model pin to a node that needs one to think with.
 /// </summary>
 /// <remarks>
-/// The same trick as <see cref="ICodeRepairSource"/>, in the other direction. A node that needs a
-/// model but is not itself a model node looks along its own wires for something that advertises
-/// this, and asks. It never names a node type, the executor is not involved, and a graph wired
-/// with nothing that can answer gets a clear refusal rather than a surprise.
+/// What travels on a Model pin. It used to be found by searching the wires downstream for a node
+/// that advertised itself, which worked and was invisible: nothing on the canvas said which model
+/// did the planning, because the answer was whichever one happened to be wired after. Now the
+/// wire says it, and one model can be handed to several consumers.
+///
+/// Still an interface rather than the node type, for the same reason it was one before. A node
+/// that needs a model has no business knowing what a Model node is, and an extension contributing
+/// a node can declare a Model input without referencing anything in this assembly's node list.
 ///
 /// The system prompt is supplied by the caller rather than taken from the node, because the node
 /// is configured for its own job. A coder told to emit raw C# is the wrong voice for a planner,
 /// and borrowing the endpoint without borrowing the instructions is the point.
 /// </remarks>
-public interface IPlanningModel
+public interface IModelHandle
 {
     /// <summary>Whether this node could answer right now, and why not when it could not.</summary>
     /// <param name="reason">Set to a human readable explanation when this returns false.</param>

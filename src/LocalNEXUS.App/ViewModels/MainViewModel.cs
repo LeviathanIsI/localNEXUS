@@ -584,6 +584,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
             _feed.Info("Graph loaded", $"{Graph.Nodes.Count} nodes, {Graph.Connections.Count} connections from {path}");
 
+            // News, not a problem. A graph brought up to date opened correctly.
+            foreach (var migration in _serializer.Migrations)
+            {
+                _feed.Info("Graph brought up to date", migration);
+            }
+
             foreach (var warning in warnings)
             {
                 _feed.Error("Graph load warning", warning);

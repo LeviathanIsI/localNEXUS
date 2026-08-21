@@ -37,7 +37,7 @@ namespace LocalNEXUS.App.Nodes;
 /// it runs once per file and emits a list. That is the whole of fan out: a wire carries one item
 /// or many identically, so a graph that writes five files is the same graph that writes one.
 /// </remarks>
-public sealed partial class ModelNode : NodeBase, ICodeRepairSource, IPlanningModel
+public sealed partial class ModelNode : NodeBase, ICodeRepairSource, IModelHandle
 {
     /// <summary>Base URL used for every OpenRouter request.</summary>
     public const string OpenRouterBaseUrl = "https://openrouter.ai/api/v1";
@@ -209,6 +209,11 @@ public sealed partial class ModelNode : NodeBase, ICodeRepairSource, IPlanningMo
         Prompt = AddInput("Text", PinType.Text);
         Completion = AddOutput("Code", PinType.Code);
 
+        // Appended after the completion, never before it. A saved graph matches its pins by name
+        // and falls back to position, so putting this first would hand it the completion's saved
+        // identity and drop every wire leaving this node.
+        Self = AddOutput("Model", PinType.Model);
+
         // A fresh node is usable straight away when the machine already has a model.
         SelectedLocalModel = catalog.Models.FirstOrDefault();
     }
@@ -224,6 +229,15 @@ public sealed partial class ModelNode : NodeBase, ICodeRepairSource, IPlanningMo
 
     /// <summary>Carries the model reply onwards.</summary>
     public Pin Completion { get; }
+
+    /// <summary>
+    /// Hands this model to whatever needs one, rather than handing over a reply.
+    /// </summary>
+    /// <remarks>
+    /// This node is the call, so it emits itself rather than consuming one of these. It costs a
+    /// model node nothing to leave unwired, and a node used the ordinary way is unchanged.
+    /// </remarks>
+    public Pin Self { get; }
 
     /// <inheritdoc />
     public override string TypeKey => "Model";
@@ -412,7 +426,7 @@ public sealed partial class ModelNode : NodeBase, ICodeRepairSource, IPlanningMo
         }
 
         StatusMessage = $"{produced.Count} file(s) written";
-        return NodeResult.FromPin(Completion, produced);
+        return Emit(produced);
     }
 
     /// <summary>
@@ -453,6 +467,20 @@ public sealed partial class ModelNode : NodeBase, ICodeRepairSource, IPlanningMo
         => signatures.Count == 0
             ? string.Empty
             : ContextBudget.Fit(string.Join(Environment.NewLine + Environment.NewLine, signatures), 4000, "earlier signatures");
+
+    /// <summary>
+    /// The reply on the completion pin, and this node itself on the model pin.
+    /// </summary>
+    /// <remarks>
+    /// Both every time. A consumer of the model pin needs the reference whether or not anything is
+    /// reading the reply, and the executor gathers output pins the same way for all of them, so
+    /// there is nothing to decide here.
+    /// </remarks>
+    private NodeResult Emit(object? produced) => NodeResult.FromValues(new Dictionary<Guid, object?>
+    {
+        [Completion.Id] = produced,
+        [Self.Id] = this
+    });
 
     /// <inheritdoc />
     public bool CanAnswer(out string reason) => HasUsableModel(out reason);
@@ -711,7 +739,7 @@ public sealed partial class ModelNode : NodeBase, ICodeRepairSource, IPlanningMo
             throw new InvalidOperationException($"{Title} received an empty reply from {ModelDisplayName}.");
         }
 
-        return NodeResult.FromPin(Completion, text);
+        return Emit(text);
     }
 
     /// <summary>

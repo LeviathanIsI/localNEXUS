@@ -69,6 +69,10 @@ public static class SemanticBrushes
         ("Pin.Text.Brush", "Pin.TextColor"),
         ("Pin.Code.Brush", "Pin.CodeColor"),
 
+        // A model pin wears the model node's own colour, so the wire and the node it comes
+        // from read as the same thing. No theme is edited for this: that is what this table is.
+        ("Pin.Model.Brush", "NodeType.ModelColor"),
+
         // Node type accents. The only colour a node carries.
         ("NodeType.Prompt.Brush", "NodeType.PromptColor"),
         ("NodeType.Triage.Brush", "NodeType.TriageColor"),

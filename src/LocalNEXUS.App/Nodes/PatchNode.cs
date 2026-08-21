@@ -157,6 +157,10 @@ public sealed partial class PatchNode : NodeBase, ICodeRepairSource
     {
         Source = AddInput("Code", PinType.Code);
         Rule = AddInput("Rule", PinType.Text);
+
+        // Appended last, never inserted. A saved graph matches its pins by name and falls back to
+        // position, so anything put in front of these would take their saved identity with it.
+        Author = AddInput("Model", PinType.Model);
         Result = AddOutput("Code", PinType.Code);
     }
 
@@ -167,6 +171,21 @@ public sealed partial class PatchNode : NodeBase, ICodeRepairSource
     /// Receives the rule to apply. Optional: with nothing wired, the rule on the node is used.
     /// </summary>
     public Pin Rule { get; }
+
+    /// <summary>
+    /// A model asked to turn the rule on this node into a concrete one, when a rule is not
+    /// already arriving on the pin above.
+    /// </summary>
+    /// <remarks>
+    /// Optional, and the default path never touches it. With nothing wired here this node does
+    /// exactly what v1.2 settled it should do: applies its rule mechanically, without inference,
+    /// so stripping a fence stays fast, repeatable and local.
+    ///
+    /// Wiring a model is an explicit request for the other behaviour, which is why it is a wire
+    /// rather than a setting. It costs a model call per run and sends the rule, not the code, so
+    /// what leaves the machine is the instruction rather than the file.
+    /// </remarks>
+    public Pin Author { get; }
 
     /// <summary>Carries the rewritten value onwards.</summary>
     public Pin Result { get; }
@@ -190,7 +209,8 @@ public sealed partial class PatchNode : NodeBase, ICodeRepairSource
     public override async Task<NodeResult> ExecuteAsync(NodeExecutionContext ctx, CancellationToken ct)
     {
         var input = ctx.GetText(Source);
-        var rule = ResolveRule(ctx, out var wired);
+        var wired = ctx.GetSourceNode(Rule) is not null;
+        var rule = await ResolveRuleAsync(ctx, ct).ConfigureAwait(false);
 
         var output = await ApplyAsync(rule, input, ct).ConfigureAwait(false);
 
@@ -292,7 +312,8 @@ public sealed partial class PatchNode : NodeBase, ICodeRepairSource
 
         // The revised reply goes through this transform exactly as the first one did, so whatever
         // this node is for, unwrapping a fence or renaming a symbol, still applies to the fix.
-        return await ApplyAsync(ResolveRule(ctx, out _), revised, ct).ConfigureAwait(false);
+        return await ApplyAsync(await ResolveRuleAsync(ctx, ct).ConfigureAwait(false), revised, ct)
+            .ConfigureAwait(false);
     }
 
     /// <summary>
@@ -305,22 +326,90 @@ public sealed partial class PatchNode : NodeBase, ICodeRepairSource
     /// connected and produced nothing is a different thing and is refused, because that is a
     /// wiring mistake and silently patching nothing would hide it.
     /// </remarks>
-    private PatchRule ResolveRule(NodeExecutionContext ctx, out bool wired)
+    /// <summary>The rule typed on this node, in whichever form the mode says.</summary>
+    private PatchRule OwnRule() => new(Mode, Mode switch
     {
-        wired = ctx.GetSourceNode(Rule) is not null;
+        PatchMode.Template => Template ?? string.Empty,
+        PatchMode.Script => ScriptExpression ?? string.Empty,
+        _ => RegexPattern ?? string.Empty
+    }, RegexReplacement ?? string.Empty);
 
-        if (!wired)
+    /// <summary>
+    /// The rule, having given a wired model the chance to write one.
+    /// </summary>
+    /// <remarks>
+    /// Three sources, in this order. A rule arriving on the Rule pin wins, because something
+    /// upstream already produced one and asking a model to produce a second would be work nobody
+    /// asked for. Failing that, a model wired to the Model pin is asked to turn the rule on this
+    /// node into a concrete one. Failing that, the rule on the node is used as it stands, which is
+    /// the default path and touches no model at all.
+    ///
+    /// What is sent is the instruction, never the code. The point of doing this mechanically was
+    /// that a file should not leave the machine to be reformatted, and that still holds: the model
+    /// sees what the change is meant to be and answers with a pattern.
+    ///
+    /// A model that answers with something unusable fails the node, for the same reason a
+    /// malformed rule does. Quietly falling back to the rule on the node would mean the graph did
+    /// something other than what it was wired to do, and reported success.
+    /// </remarks>
+    private async Task<PatchRule> ResolveRuleAsync(NodeExecutionContext ctx, CancellationToken ct)
+    {
+        if (ctx.GetSourceNode(Rule) is not null)
         {
-            return new PatchRule(Mode, Mode switch
-            {
-                PatchMode.Template => Template ?? string.Empty,
-                PatchMode.Script => ScriptExpression ?? string.Empty,
-                _ => RegexPattern ?? string.Empty
-            }, RegexReplacement ?? string.Empty);
+            return PatchRule.Parse(ctx.GetText(Rule), Mode, RegexReplacement ?? string.Empty);
         }
 
-        return PatchRule.Parse(ctx.GetText(Rule), Mode, RegexReplacement ?? string.Empty);
+        // From the wire, not from what it carried, for the same reason triage does: a model
+        // handed over for reference may run after the node that uses it.
+        if (ctx.GetSourceNode(Author) is not IModelHandle author)
+        {
+            return OwnRule();
+        }
+
+        if (!author.CanAnswer(out var whyNot))
+        {
+            throw new PatchRuleException($"{Title} cannot ask for a rule: {whyNot}");
+        }
+
+        var instruction = OwnRule().Primary;
+
+        if (string.IsNullOrWhiteSpace(instruction))
+        {
+            throw new PatchRuleException(
+                $"{Title} has a model wired but nothing to ask it for. Describe the change on the node.");
+        }
+
+        var authorNode = author as NodeBase
+            ?? throw new PatchRuleException($"{Title} found something that is not a node on its Model pin.");
+
+        ctx.Feed.Info($"{Title}: asking {authorNode.Title} for a rule", instruction);
+
+        var reply = await author
+            .AnswerAsync(RuleAuthorSystemPrompt, BuildRuleRequest(instruction), ctx.ForNode(authorNode), ct)
+            .ConfigureAwait(false);
+
+        var rule = PatchRule.Parse(reply, Mode, RegexReplacement ?? string.Empty);
+
+        ctx.Feed.Info($"{Title}: the rule it wrote", rule.Primary);
+
+        return rule;
     }
+
+    /// <summary>The voice a model authoring a rule answers in.</summary>
+    private const string RuleAuthorSystemPrompt =
+        "You write one text transformation rule and nothing else. No explanation, no commentary, "
+        + "no markdown fences. Your entire answer is the rule.";
+
+    /// <summary>What a model is asked when it is authoring the rule.</summary>
+    private string BuildRuleRequest(string instruction) => Mode switch
+    {
+        PatchMode.Template => $"Write a template that performs this change. Use {InputPlaceholder} where the "
+                              + $"incoming text goes. The change:{Environment.NewLine}{instruction}",
+        PatchMode.Script => $"Write one C# expression that performs this change. The incoming text is available "
+                            + $"as input. The change:{Environment.NewLine}{instruction}",
+        _ => "Write a .NET regular expression that performs this change, then a newline, then what a match "
+             + $"is replaced with. The change:{Environment.NewLine}{instruction}"
+    };
 
     /// <summary>Applies a rule to a value, mechanically and without asking anything.</summary>
     private async Task<string> ApplyAsync(PatchRule rule, string input, CancellationToken ct)

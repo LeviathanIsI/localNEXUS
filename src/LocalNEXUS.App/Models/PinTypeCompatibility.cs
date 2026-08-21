@@ -22,7 +22,19 @@ public static class PinTypeCompatibility
 {
     /// <summary>True when a value produced as <paramref name="source"/> may be consumed as <paramref name="target"/>.</summary>
     public static bool CanFlow(PinType source, PinType target)
-        => source == target || (source is PinType.Code && target is PinType.Text);
+    {
+        // A model is a reference to something that can be asked a question, not a value that can
+        // be read. It joins only to itself, and it says so before the exception below rather than
+        // relying on equality to cover it, so that a future exception cannot quietly widen to
+        // include it. Coercing a model to text would turn a wire that means "use this model" into
+        // one that means "paste this model's name", and the second one compiles.
+        if (source is PinType.Model || target is PinType.Model)
+        {
+            return source == target;
+        }
+
+        return source == target || (source is PinType.Code && target is PinType.Text);
+    }
 
     /// <summary>A short explanation of why a flow is not permitted, for the pending wire label.</summary>
     public static string DescribeRefusal(PinType source, PinType target)

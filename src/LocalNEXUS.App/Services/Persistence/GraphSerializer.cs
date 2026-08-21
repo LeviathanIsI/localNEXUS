@@ -58,6 +58,16 @@ public sealed class GraphSerializer
     /// </summary>
     /// <returns>Warnings for anything in the file that could not be restored.</returns>
     /// <exception cref="InvalidDataException">The file is not a graph this build can read.</exception>
+    /// <summary>
+    /// What the last load brought up to date, which is news rather than a problem.
+    /// </summary>
+    /// <remarks>
+    /// Separate from the warnings because they mean opposite things. A warning is something the
+    /// document lost; this is something it gained, and reporting the two the same way would put a
+    /// successful upgrade in red beside a dropped connection.
+    /// </remarks>
+    public IReadOnlyList<string> Migrations { get; private set; } = Array.Empty<string>();
+
     public IReadOnlyList<string> LoadInto(GraphModel target, string path)
     {
         ArgumentNullException.ThrowIfNull(target);
@@ -80,6 +90,15 @@ public sealed class GraphSerializer
 
         var restored = RestoreNodes(document["nodes"] as JsonArray, target, warnings);
         RestoreConnections(document["connections"] as JsonArray, target, restored, warnings);
+
+        // Last, once the graph is whole. A migration reads wires, so it cannot run before they
+        // exist, and anything it adds is a real connection rather than a special case for the
+        // executor to know about.
+        //
+        // Deliberately not added to the warnings. A warning is reported as an error, and a graph
+        // that opened correctly and was brought up to date has nothing wrong with it. Saying so in
+        // red would teach somebody to ignore the one thing that means a wire was lost.
+        Migrations = GraphMigrations.Apply(target);
 
         return warnings;
     }

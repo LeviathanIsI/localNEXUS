@@ -14,5 +14,20 @@ public enum PinType
     Text,
 
     /// <summary>Source code produced or transformed by a node.</summary>
-    Code
+    Code,
+
+    /// <summary>
+    /// A configured model, handed to a node that needs one to think with.
+    /// </summary>
+    /// <remarks>
+    /// A reference rather than a value. What travels here is the model node itself, so one model
+    /// configured once can be handed to several consumers, and looking at the canvas answers which
+    /// model does the planning instead of leaving it to be inferred from what happens to be wired
+    /// downstream.
+    ///
+    /// Appended rather than inserted. Nothing serialises this enum by number today, but the habit
+    /// is the point: a pin's saved identity is matched by name with a positional fallback, and
+    /// anything that reorders pins hands one of them another's identity.
+    /// </remarks>
+    Model
 }

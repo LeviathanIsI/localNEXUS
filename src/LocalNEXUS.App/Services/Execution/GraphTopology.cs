@@ -30,7 +30,19 @@ public static class GraphTopology
 
         // Several wires can join the same pair of nodes through different pins. Collapse them so
         // that one dependency is not counted twice.
+        //
+        // A model wire is not one of them. It carries a reference to a configured model rather
+        // than a value that model produced, so the consumer needs the model to exist, not to have
+        // run. Counting it as a dependency would make the ordinary planning graph a cycle and
+        // refuse to run it: a triage node feeds its plan to a model, and that same model is the
+        // one triage plans with, so the two wires point in opposite directions between the same
+        // pair of nodes. They are not a loop, because only one of them is a flow.
+        //
+        // This reasons about a pin type, never a node type. It is the same table
+        // PinTypeCompatibility consults, and the executor above it still knows nothing about what
+        // any node is or does.
         var edges = graph.Connections
+            .Where(c => c.Source.PinType != PinType.Model)
             .Select(c => (From: c.Source.Owner, To: c.Target.Owner))
             .Where(e => e.From != e.To)
             .Distinct()
