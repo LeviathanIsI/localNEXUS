@@ -43,6 +43,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private readonly IDialogService _dialogs;
     private readonly ActivityFeed _feed;
     private readonly AppConfig _config;
+    private readonly IExtensionsWindow _extensionsWindow;
 
     /// <summary>Nodes whose selection state this view model is currently following.</summary>
     private readonly HashSet<NodeBase> _observedNodes = new();
@@ -125,9 +126,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         ProjectIndexService projectIndex,
         ThemeService themes,
         AppSettingsViewModel settings,
+        IExtensionsWindow extensionsWindow,
         AppConfig config,
         Dispatcher dispatcher)
     {
+        _extensionsWindow = extensionsWindow;
         Graph = graph;
         _factory = factory;
         _serializer = serializer;
@@ -335,6 +338,16 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// <summary>Opens the settings panel over whichever section is showing.</summary>
     [RelayCommand]
     private void OpenSettings() => IsSettingsOpen = true;
+
+    /// <summary>
+    /// Opens the extensions window.
+    /// </summary>
+    /// <remarks>
+    /// A window rather than a settings page, and not modal, so a graph that needs an extension
+    /// can be wired while looking at what the extension offers.
+    /// </remarks>
+    [RelayCommand]
+    private void OpenExtensions() => _extensionsWindow.Show(Settings.Extensions);
 
     /// <summary>Closes the settings panel, landing back where the work was left.</summary>
     [RelayCommand]

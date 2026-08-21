@@ -34,9 +34,8 @@ public static class ExtensionPresets
         Name: "AnkleBreaker Unity MCP",
         Version: "latest",
         Description:
-            "Drives the Unity editor from a model: scenes, assets, components, the console and the " +
-            "project. The broadest of the Unity servers, with several hundred tools depending on " +
-            "the version it resolves to.",
+            "Lets a model work the editor for you: scenes, assets, components, the console and the " +
+            "project. The broadest of the Unity servers, with several hundred tools.",
         Author: "AnkleBreaker Studio",
         Homepage: "https://github.com/AnkleBreaker-Studio/unity-mcp-plugin",
         Contracts: new[] { ExtensionContract.Mcp },
@@ -74,8 +73,8 @@ public static class ExtensionPresets
             Name: "Unity MCP server",
             Version: "bundled with the editor",
             Description:
-                "Unity's own server, which reaches the running editor over a named pipe. Narrower " +
-                "than the community servers and tied to the AI Assistant package.",
+                "Unity's own server. Fewer tools than the community ones and tied to the AI " +
+                "Assistant package, but it comes from Unity.",
             Author: "Unity Technologies",
             Homepage: "https://docs.unity3d.com/Packages/com.unity.ai.assistant@latest",
             Contracts: new[] { ExtensionContract.Mcp },
@@ -97,15 +96,29 @@ public static class ExtensionPresets
                     "The relay connects to a running editor over a named pipe, so the project has to be open in Unity.")
             },
             Launch: new ExtensionLaunch(relay, new[] { "--mcp" }),
-            // Said out loud rather than discovered later. Unity has deprecated this in favour of
-            // their command line tool, and the current AI Assistant package caps connected MCP
-            // clients at zero, which is a deliberate block on third party clients rather than a
-            // bug. It is offered because the relay still exists and still works where the older
-            // package is installed, and it is labelled because installing it on a current project
-            // would otherwise look like a bug in this application.
+            // Said out loud rather than discovered later, and said accurately, which takes more
+            // words than the previous version used.
+            //
+            // The server still ships and is still documented. Unity has deprecated it in favour
+            // of their command line tool. From AI Assistant 2.7.0 a local licence entitlement
+            // counts against the connection limit, and a free licence therefore sees a limit of
+            // zero and gets a connection revoked.
+            //
+            // Whether that is intended is genuinely unclear and this does not pretend otherwise.
+            // It is on Unity's issue tracker as reproducible on 2.7.0 and not on 2.6.0, which
+            // reads like a regression, while the changelog line about entitlements reads like
+            // intent. Both are true at once and neither settles it.
+            //
+            // It is offered because it still works where an older package is installed, and it is
+            // labelled because otherwise a failure to connect on a current project looks like a
+            // bug in this application.
             Deprecated:
-                "Unity has deprecated their MCP server in favour of the Unity CLI, and recent " +
-                "versions of the AI Assistant package refuse third party clients outright. Expect " +
-                "this to connect only on projects using an older package.");
+                "Unity has deprecated this in favour of the Unity CLI, though the server still " +
+                "ships and is still documented. From AI Assistant 2.7.0 your local licence " +
+                "entitlement counts against the connection limit, so a free licence sees a limit " +
+                "of zero and gets 'Connection revoked'. Whether that is deliberate is unclear: it " +
+                "is filed on Unity's issue tracker as happening on 2.7.0 and not 2.6.0, while the " +
+                "changelog reads like it was intended. Expect this to connect on an older package " +
+                "or a paid licence, and not otherwise.");
     }
 }

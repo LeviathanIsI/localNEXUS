@@ -15,10 +15,7 @@ public enum ExtensionSource
     Presets,
 
     /// <summary>What this project has registered.</summary>
-    Installed,
-
-    /// <summary>The ways of adding something that is not a preset.</summary>
-    Add
+    Installed
 }
 
 /// <summary>
@@ -40,6 +37,7 @@ public sealed partial class ExtensionsViewModel : ObservableObject
     private readonly ExtensionInstaller _installer;
     private readonly PrerequisiteChecker _prerequisites;
     private readonly IDialogService _dialogs;
+    private readonly IAddExtensionDialog _addDialog;
     private readonly IActivityFeed _feed;
 
     /// <summary>Which shelf is showing.</summary>
@@ -49,45 +47,25 @@ public sealed partial class ExtensionsViewModel : ObservableObject
     /// <summary>The extension whose details are showing.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSelection))]
+    [NotifyPropertyChangedFor(nameof(HasNothingSelected))]
     [NotifyPropertyChangedFor(nameof(SelectedPrerequisites))]
     private InstalledExtension? _selected;
 
     /// <summary>The preset whose details are showing, when the presets shelf is up.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSelectedPreset))]
+    [NotifyPropertyChangedFor(nameof(HasNothingSelected))]
     private ExtensionManifest? _selectedPreset;
 
     /// <summary>What a long running operation is doing right now.</summary>
     [ObservableProperty]
     private string? _busyMessage;
 
-    /// <summary>Package name for the npm route.</summary>
+    /// <summary>Narrows both lists. Empty shows everything.</summary>
     [ObservableProperty]
-    private string _npmPackage = string.Empty;
-
-    /// <summary>Repository url for the git route.</summary>
-    [ObservableProperty]
-    private string _gitUrl = string.Empty;
-
-    /// <summary>Name for the raw command route.</summary>
-    [ObservableProperty]
-    private string _commandName = string.Empty;
-
-    /// <summary>Executable for the raw command route.</summary>
-    [ObservableProperty]
-    private string _commandPath = string.Empty;
-
-    /// <summary>Arguments for the raw command route, split on spaces.</summary>
-    [ObservableProperty]
-    private string _commandArguments = string.Empty;
-
-    /// <summary>Whether the raw command speaks MCP.</summary>
-    [ObservableProperty]
-    private bool _commandSpeaksMcp = true;
-
-    /// <summary>Whether the raw command contributes nodes.</summary>
-    [ObservableProperty]
-    private bool _commandSpeaksNode;
+    [NotifyPropertyChangedFor(nameof(VisiblePresets))]
+    [NotifyPropertyChangedFor(nameof(VisibleInstalled))]
+    private string _filter = string.Empty;
 
     public ExtensionsViewModel(
         ExtensionRegistry registry,
@@ -95,6 +73,7 @@ public sealed partial class ExtensionsViewModel : ObservableObject
         ExtensionInstaller installer,
         PrerequisiteChecker prerequisites,
         IDialogService dialogs,
+        IAddExtensionDialog addDialog,
         IActivityFeed feed)
     {
         _registry = registry;
@@ -102,6 +81,7 @@ public sealed partial class ExtensionsViewModel : ObservableObject
         _installer = installer;
         _prerequisites = prerequisites;
         _dialogs = dialogs;
+        _addDialog = addDialog;
         _feed = feed;
 
         Presets = new ObservableCollection<ExtensionManifest>(ExtensionPresets.All);
@@ -120,6 +100,8 @@ public sealed partial class ExtensionsViewModel : ObservableObject
         {
             OnPropertyChanged(nameof(EmptyMessage));
             OnPropertyChanged(nameof(IsEmpty));
+            OnPropertyChanged(nameof(VisibleInstalled));
+            OnPropertyChanged(nameof(FilterHidesEverything));
         };
     }
 
@@ -128,6 +110,19 @@ public sealed partial class ExtensionsViewModel : ObservableObject
 
     /// <summary>What this project has registered.</summary>
     public ObservableCollection<InstalledExtension> Installed => _registry.Extensions;
+
+    /// <summary>The presets the filter leaves showing.</summary>
+    public IEnumerable<ExtensionManifest> VisiblePresets =>
+        Presets.Where(p => Matches(p.Name, p.Description, p.Id));
+
+    /// <summary>The installed extensions the filter leaves showing.</summary>
+    public IEnumerable<InstalledExtension> VisibleInstalled =>
+        Installed.Where(e => Matches(e.Manifest.Name, e.Manifest.Description, e.Manifest.Id));
+
+    /// <summary>True when the filter is hiding everything rather than the shelf being empty.</summary>
+    public bool FilterHidesEverything
+        => Filter.Length > 0
+           && (Source == ExtensionSource.Presets ? !VisiblePresets.Any() : !VisibleInstalled.Any());
 
     /// <summary>True when a project is open, which is what extensions are registered against.</summary>
     public bool HasProject => _registry.HasProject;
@@ -141,6 +136,9 @@ public sealed partial class ExtensionsViewModel : ObservableObject
     /// <summary>True when a preset is selected.</summary>
     public bool HasSelectedPreset => SelectedPreset is not null;
 
+    /// <summary>True when the details pane has nothing to show yet.</summary>
+    public bool HasNothingSelected => !HasSelection && !HasSelectedPreset;
+
     /// <summary>Whether the prerequisites of the selection are met, checked when it is shown.</summary>
     public IReadOnlyList<PrerequisiteResult> SelectedPrerequisites => Selected is null
         ? Array.Empty<PrerequisiteResult>()
@@ -150,6 +148,30 @@ public sealed partial class ExtensionsViewModel : ObservableObject
     public string EmptyMessage => HasProject
         ? "No extensions for this project yet. Install one from Presets, or add your own."
         : "Open a Unity project first. Extensions belong to a project, because what they talk to does.";
+
+    partial void OnSourceChanged(ExtensionSource value)
+    {
+        OnPropertyChanged(nameof(FilterHidesEverything));
+        OnPropertyChanged(nameof(ShowPresets));
+        OnPropertyChanged(nameof(ShowInstalled));
+    }
+
+    /// <summary>True while the presets shelf is showing.</summary>
+    public bool ShowPresets => Source == ExtensionSource.Presets;
+
+    /// <summary>True while the installed shelf is showing.</summary>
+    public bool ShowInstalled => Source == ExtensionSource.Installed;
+
+    /// <summary>Case insensitive match across the fields worth searching.</summary>
+    private bool Matches(params string?[] fields)
+    {
+        if (string.IsNullOrWhiteSpace(Filter))
+        {
+            return true;
+        }
+
+        return fields.Any(f => f is not null && f.Contains(Filter, StringComparison.OrdinalIgnoreCase));
+    }
 
     /// <summary>Installs one of the curated entries.</summary>
     [RelayCommand]
@@ -163,22 +185,29 @@ public sealed partial class ExtensionsViewModel : ObservableObject
         await AddAsync(() => Task.FromResult(_installer.FromPreset(manifest)));
     }
 
-    /// <summary>Adds an npm package.</summary>
+    /// <summary>Adds an npm package, which is what most MCP servers are.</summary>
     [RelayCommand]
     private async Task AddNpmAsync()
     {
-        var package = NpmPackage;
-        await AddAsync(() => Task.FromResult(_installer.FromNpm(package)));
-        NpmPackage = string.Empty;
+        if (_addDialog.Ask(AddExtensionMethod.Npm) is not { } request)
+        {
+            return;
+        }
+
+        await AddAsync(() => Task.FromResult(_installer.FromNpm(request.Value)));
     }
 
     /// <summary>Clones a repository and reads the manifest it carries.</summary>
     [RelayCommand]
     private async Task AddGitAsync()
     {
-        var url = GitUrl;
-        await AddAsync(ct => _installer.FromGitAsync(url, new DelegateProgress<string>(m => BusyMessage = m), ct));
-        GitUrl = string.Empty;
+        if (_addDialog.Ask(AddExtensionMethod.Git) is not { } request)
+        {
+            return;
+        }
+
+        await AddAsync(ct => _installer.FromGitAsync(
+            request.Value, new DelegateProgress<string>(m => BusyMessage = m), ct));
     }
 
     /// <summary>Adds a folder containing a manifest.</summary>
@@ -199,30 +228,68 @@ public sealed partial class ExtensionsViewModel : ObservableObject
     [RelayCommand]
     private async Task AddCommandAsync()
     {
+        if (_addDialog.Ask(AddExtensionMethod.Command) is not { } request)
+        {
+            return;
+        }
+
         var contracts = new List<ExtensionContract>();
 
-        if (CommandSpeaksMcp)
+        if (request.SpeaksMcp)
         {
             contracts.Add(ExtensionContract.Mcp);
         }
 
-        if (CommandSpeaksNode)
+        if (request.SpeaksNode)
         {
             contracts.Add(ExtensionContract.Node);
         }
 
-        var name = CommandName;
-        var path = CommandPath;
-        var arguments = CommandArguments
+        var arguments = request.Arguments
             .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .ToList();
 
-        await AddAsync(() => Task.FromResult(
-            _installer.FromCommand(name, path, arguments, null, null, contracts)));
+        await AddAsync(() => Task.FromResult(_installer.FromCommand(
+            request.Name,
+            request.Value,
+            arguments,
+            string.IsNullOrWhiteSpace(request.WorkingDirectory) ? null : request.WorkingDirectory,
+            ParseEnvironment(request.Environment),
+            contracts)));
+    }
 
-        CommandName = string.Empty;
-        CommandPath = string.Empty;
-        CommandArguments = string.Empty;
+    /// <summary>
+    /// Reads the environment box, one NAME=value per line.
+    /// </summary>
+    /// <remarks>
+    /// A line with no equals sign is skipped rather than guessed at. Somebody who typed a bare
+    /// name meant something, and inventing an empty value for it would be a worse answer than
+    /// leaving it out.
+    /// </remarks>
+    private static readonly char[] NewLines = { (char)13, (char)10 };
+
+    private static Dictionary<string, string>? ParseEnvironment(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return null;
+        }
+
+        var parsed = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var line in text.Split(NewLines, StringSplitOptions.RemoveEmptyEntries))
+        {
+            var separator = line.IndexOf('=');
+
+            if (separator <= 0)
+            {
+                continue;
+            }
+
+            parsed[line[..separator].Trim()] = line[(separator + 1)..].Trim();
+        }
+
+        return parsed.Count == 0 ? null : parsed;
     }
 
     /// <summary>

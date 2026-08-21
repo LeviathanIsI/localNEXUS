@@ -32,6 +32,20 @@
                 AutomationProperties.Name="Settings"
                 Command="{Binding OpenSettingsCommand}" />
 
+        <!--
+            Extensions is a window of its own, opened from here and left open while the work
+            carries on. It sits above the gear because it is a place rather than a setting.
+        -->
+        <Button DockPanel.Dock="Bottom"
+                Style="{StaticResource IconButton}"
+                Width="48"
+                Height="46"
+                FontSize="16"
+                Content="&#xEA86;"
+                ToolTip="Extensions: what this project adds to the application."
+                AutomationProperties.Name="Extensions"
+                Command="{Binding OpenExtensionsCommand}" />
+
         <StackPanel DockPanel.Dock="Top">
 
             <Grid ToolTip="Workspace: the canvas, its run outline and the node inspector.">

@@ -37,6 +37,7 @@ public partial class App : Application
     private CancellationTokenSource? _indexing;
     private ViewModels.NetworkViewModel? _network;
     private Services.Extensions.ExtensionHost? _extensionHost;
+    private Services.Dialogs.ExtensionsWindowService? _extensionsWindow;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -168,7 +169,11 @@ public partial class App : Application
             new ExtensionInstaller(children),
             new PrerequisiteChecker(),
             dialogs,
+            new AddExtensionDialogService(),
             feed);
+
+        var extensionsWindow = new ExtensionsWindowService();
+        _extensionsWindow = extensionsWindow;
 
         var settingsViewModel = new AppSettingsViewModel(
             config,
@@ -196,6 +201,7 @@ public partial class App : Application
             projectIndex,
             themes,
             settingsViewModel,
+            extensionsWindow,
             config,
             Dispatcher);
 
@@ -249,6 +255,7 @@ public partial class App : Application
         _network?.Dispose();
         // Before the group, so each extension is asked to stop and its connection closed rather
         // than every one of them being terminated cold.
+        _extensionsWindow?.Close();
         _extensionHost?.Dispose();
         _mesh?.Dispose();
         _llamaServers?.Dispose();
