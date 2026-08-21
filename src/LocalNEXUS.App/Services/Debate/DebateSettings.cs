@@ -33,13 +33,13 @@ public enum DebateSource
     Codebase
 }
 
-/// <summary>Which of the two models wears the arbiter's hat.</summary>
+/// <summary>Which of the two models writes the brief and judges when one is needed.</summary>
 /// <remarks>
-/// A debate has exactly two model pins, so the outside read on how far apart the two positions are
-/// has to come from one of the debaters wearing a different hat. That is weaker than a genuine
-/// third model and it is said out loud rather than presented as impartial. What it still catches
-/// is the failure it exists for: both models reporting near total agreement while a read of what
-/// they actually wrote says otherwise.
+/// Both have read the whole argument, so either will do. It is a setting rather than a third pin
+/// on a node whose whole shape is two models arguing.
+///
+/// Measuring how far apart they are does not go through here and does not go through a model at
+/// all. It is arithmetic on what the two positions name and propose.
 /// </remarks>
 public enum DebateArbiter
 {

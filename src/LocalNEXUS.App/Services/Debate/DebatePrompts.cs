@@ -121,33 +121,6 @@ public static class DebatePrompts
         return builder.ToString();
     }
 
-    /// <summary>The system prompt for the outside read on how far apart two positions are.</summary>
-    public const string ScorerSystem =
-        "You read two engineering positions and report how far apart they are. You take no side and "
-        + "you write nothing but the number asked for. You are measuring substance, not tone: two "
-        + "positions that are polite about each other while proposing different architectures are far "
-        + "apart, and two that argue about wording while proposing the same thing are close.";
-
-    /// <summary>The message asking for that number.</summary>
-    public static string ScorerMessage(string first, string second)
-    {
-        var builder = new StringBuilder();
-
-        builder.AppendLine("First position:");
-        builder.AppendLine();
-        builder.AppendLine(first.Trim());
-        builder.AppendLine();
-        builder.AppendLine("Second position:");
-        builder.AppendLine();
-        builder.AppendLine(second.Trim());
-        builder.AppendLine();
-        builder.AppendLine("How much do these two agree on the approach to take? Answer with one line "
-                           + "and nothing else, in this form:");
-        builder.AppendLine("AGREEMENT: <a whole number from 0 to 100>");
-
-        return builder.ToString();
-    }
-
     /// <summary>The system prompt for turning a settled debate into something a coder can use.</summary>
     public const string SummarySystem =
         "You turn a resolved technical discussion into a brief for whoever implements it. You write "

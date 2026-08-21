@@ -66,7 +66,7 @@ public sealed partial class DebateNode : NodeBase
     [ObservableProperty]
     private JudgeMode _fallbackJudgeMode = JudgeMode.Combine;
 
-    /// <summary>Which of the two models reads the positions from outside and scores them.</summary>
+    /// <summary>Which of the two models writes the final brief, and judges when one is needed.</summary>
     [ObservableProperty]
     private DebateArbiter _arbiter = DebateArbiter.Second;
 
@@ -203,10 +203,7 @@ public sealed partial class DebateNode : NodeBase
         Record(ctx, 1, (NodeBase)first, firstPosition, null);
         Record(ctx, 1, (NodeBase)second, secondPosition, null);
 
-        var scored = await DebateJudge
-            .ScoreAsync(arbiter, arbiterContext, firstPosition, secondPosition, ct)
-            .ConfigureAwait(false);
-
+        var scored = ConvergenceMeter.Measure(firstPosition, secondPosition);
         ReportConvergence(ctx, 1, scored, null, null);
 
         var round = 1;
@@ -243,10 +240,7 @@ public sealed partial class DebateNode : NodeBase
             Record(ctx, round, (NodeBase)first, firstPosition, firstSelf);
             Record(ctx, round, (NodeBase)second, secondPosition, secondSelf);
 
-            scored = await DebateJudge
-                .ScoreAsync(arbiter, arbiterContext, firstPosition, secondPosition, ct)
-                .ConfigureAwait(false);
-
+            scored = ConvergenceMeter.Measure(firstPosition, secondPosition);
             ReportConvergence(ctx, round, scored, firstSelf, secondSelf);
         }
 
@@ -262,7 +256,7 @@ public sealed partial class DebateNode : NodeBase
 
             if (resolved is { } verdict)
             {
-                LastOutcome = $"Judged after {round} round(s) at {Describe(scored)}";
+                    LastOutcome = $"Judged after {round} round(s) at {scored.Text}";
                 StatusMessage = LastOutcome;
                 return NodeResult.FromPin(Brief, verdict);
             }
@@ -279,8 +273,8 @@ public sealed partial class DebateNode : NodeBase
             .ConfigureAwait(false);
 
         LastOutcome = converged
-            ? $"Settled after {round} round(s) at {Describe(scored)}"
-            : $"Ran out after {round} round(s) at {Describe(scored)}, and went on anyway";
+            ? $"Settled after {round} round(s) at {scored.Text}"
+            : $"Ran out after {round} round(s) at {scored.Text}, and went on anyway";
 
         StatusMessage = LastOutcome;
         ctx.Feed.Add(ActivityKind.NodeCompleted, $"{Title}: {LastOutcome}", brief, Id);
@@ -305,7 +299,7 @@ public sealed partial class DebateNode : NodeBase
         string firstPosition,
         string secondPosition,
         int rounds,
-        int? scored,
+        Convergence scored,
         TimeSpan elapsed,
         TimeSpan budget,
         CancellationToken ct)
@@ -318,7 +312,7 @@ public sealed partial class DebateNode : NodeBase
         {
             ctx.Feed.Info(
                 $"{Title}: a judge is deciding",
-                $"The two positions are at {Describe(scored)} and {why}. "
+                $"The two positions are at {scored.Text} and {why}. "
                 + $"{((NodeBase)arbiter).Title} will {Describe(FallbackJudgeMode)}.");
 
             return await DebateJudge
@@ -327,7 +321,7 @@ public sealed partial class DebateNode : NodeBase
         }
 
         var question =
-            $"{Title} could not get its two models to agree. They are at {Describe(scored)} and {why}."
+            $"{Title} could not get its two models to agree. They are at {scored.Text} and {why}."
             + $"{Environment.NewLine}{Environment.NewLine}"
             + $"Say which way to go, or anything that would settle it, and the debate will take it as the "
             + $"deciding word. Proceed without answering and a judge will decide instead.";
@@ -426,7 +420,7 @@ public sealed partial class DebateNode : NodeBase
         return summary.Length == 0 ? map : $"{map}{Environment.NewLine}{Environment.NewLine}{summary}";
     }
 
-    private bool Settled(int? scored) => scored is { } value && value >= ConvergenceThreshold;
+    private bool Settled(Convergence scored) => scored.Score is { } value && value >= ConvergenceThreshold;
 
     private static IModelHandle Require(NodeExecutionContext ctx, Pin pin, string which)
         => ctx.GetSourceNode(pin) as IModelHandle
@@ -454,18 +448,24 @@ public sealed partial class DebateNode : NodeBase
             Id);
     }
 
-    private void ReportConvergence(NodeExecutionContext ctx, int round, int? scored, int? firstSelf, int? secondSelf)
+    private void ReportConvergence(
+        NodeExecutionContext ctx,
+        int round,
+        Convergence scored,
+        int? firstSelf,
+        int? secondSelf)
     {
         // Both measurements, side by side, because the gap between them is the interesting number.
-        // Two models each claiming ninety while a read of what they wrote says forty means they are
-        // being agreeable rather than agreeing, and only the scored one gates anything.
+        // Two models each claiming ninety while a count of what they actually named says forty
+        // means they are being agreeable rather than agreeing, and only the measured one gates.
         var selves = firstSelf is null && secondSelf is null
             ? "Neither said how far it had come."
             : $"They put themselves at {Describe(firstSelf)} and {Describe(secondSelf)}.";
 
         ctx.Feed.Info(
-            $"{Title}: after round {round}, {Describe(scored)} apart is scored as agreement",
-            $"{selves} The scored number is what decides, and the threshold is {ConvergenceThreshold} percent.");
+            $"{Title}: after round {round}, measured at {scored.Text}",
+            $"{selves} The measured number is what decides, and the threshold is {ConvergenceThreshold} percent."
+            + $"{Environment.NewLine}{Environment.NewLine}{scored.Breakdown()}");
     }
 
     private static string Describe(int? value) => value is { } v ? $"{v} percent" : "not measured";

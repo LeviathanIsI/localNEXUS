@@ -6,7 +6,7 @@ using LocalNEXUS.App.Services.Execution;
 namespace LocalNEXUS.App.Services.Debate;
 
 /// <summary>
-/// Deciding between two positions, and reading how far apart they are.
+/// Deciding between two positions.
 /// </summary>
 /// <remarks>
 /// One implementation, two ways in. A judge is configured inside a debate as what happens when the
@@ -61,26 +61,6 @@ public static class DebateJudge
         {
             return null;
         }
-    }
-
-    /// <summary>
-    /// Asks a model how far apart two positions are.
-    /// </summary>
-    /// <returns>A number from 0 to 100, or null when the reply could not be read as one.</returns>
-    public static async Task<int?> ScoreAsync(
-        IModelHandle arbiter,
-        NodeExecutionContext arbiterContext,
-        string first,
-        string second,
-        CancellationToken ct)
-    {
-        ArgumentNullException.ThrowIfNull(arbiter);
-
-        var reply = await arbiter
-            .AnswerAsync(DebatePrompts.ScorerSystem, DebatePrompts.ScorerMessage(first, second), arbiterContext, ct)
-            .ConfigureAwait(false);
-
-        return ReadAgreement(reply);
     }
 
     /// <summary>
