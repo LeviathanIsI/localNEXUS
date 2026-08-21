@@ -49,7 +49,7 @@ wrote. Everything else is more nodes in the middle of that.
 | Prompt         | Holds what you typed. Feeds Triage or Model                                            |
 | Triage         | Reads the project index, ranks existing files, decides edit or create, orders the work |
 | Model          | Calls an LLM. Local, mesh, or OpenRouter                                               |
-| Patch          | Applies a rule to code. Find and replace, or a Roslyn expression                       |
+| Reshape        | Reshapes the text going by. Inject standing text, extract what matters, replace, trim  |
 | Compiler check | Compiles against the project's real references, hands failures back for repair         |
 | Output         | Writes files, subject to the Unity binding rules                                       |
 

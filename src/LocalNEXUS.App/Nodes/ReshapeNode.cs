@@ -26,10 +26,16 @@ namespace LocalNEXUS.App.Nodes;
 /// a model, so a patch is fast and repeatable and the code never leaves the machine to be
 /// reformatted.
 ///
-/// Regex mode is the default and the one that has to work everywhere. Template mode covers
-/// wrapping or lightly editing a value. Script mode exists for everything else and is compiled
-/// through Roslyn; compilation is cached against the expression text, so a graph that runs the
-/// same transform repeatedly pays for it once.
+/// Five modes, all mechanical. Inject puts standing text around whatever passes through, which is
+/// the most common thing anybody wants and beats editing five system prompts. Extract keeps the
+/// part that matches, because model output is always more than was asked for. Replace is the
+/// general case, Trim cuts to a context budget, and Script is the escape hatch, compiled through
+/// Roslyn and cached against the expression text.
+///
+/// This node used to exist mainly to take a markdown fence off a model reply, which made it
+/// mandatory in every graph: boilerplate wired every time to undo an artifact of how models format
+/// text. That moved into the model node, where it is a setting rather than a wire, so what is left
+/// here is the reshaping somebody actually asked for.
 ///
 /// It passes repair requests through rather than answering them, because it did not write the
 /// code and cannot fix it. Its own upstream is asked, and whatever comes back is put through this
@@ -37,31 +43,10 @@ namespace LocalNEXUS.App.Nodes;
 /// strips a markdown fence from a model reply: without the pass through, a repaired reply would
 /// arrive at the compiler still wrapped in one and could never compile.
 /// </remarks>
-public sealed partial class PatchNode : NodeBase, ICodeRepairSource
+public sealed partial class ReshapeNode : NodeBase, ICodeRepairSource
 {
     /// <summary>The placeholder replaced with the incoming value in template mode.</summary>
     public const string InputPlaceholder = "{{input}}";
-
-    /// <summary>
-    /// The starting pattern. Model replies often arrive wrapped in a markdown code fence even when
-    /// the prompt asks otherwise, and a fenced reply is not a valid C# file, so the default unwraps
-    /// one when it is present and leaves anything else untouched.
-    /// </summary>
-    /// <remarks>
-    /// A pattern rather than a script, and that is the fix for a real failure. This same rule used
-    /// to be a Roslyn expression, and the script compiler cannot be built inside a single file
-    /// executable, so every published build shipped a Patch node that quietly did nothing and a
-    /// repair loop that handed fenced replies to a compiler. The regular expression engine needs
-    /// nothing but itself and is there in every build.
-    ///
-    /// The surrounding whitespace is absorbed by the pattern rather than trimmed afterwards, so a
-    /// rule meant to preserve whitespace is never quietly overruled.
-    /// </remarks>
-    public const string DefaultRegexPattern =
-        @"(?s)\A\s*```[A-Za-z0-9#+_-]*[ \t]*\r?\n(.*?)\r?\n?```\s*\z";
-
-    /// <summary>What the default pattern puts back: the contents of the fence and nothing else.</summary>
-    public const string DefaultRegexReplacement = "$1";
 
     /// <summary>
     /// How long a pattern may run before it is abandoned.
@@ -128,20 +113,42 @@ public sealed partial class PatchNode : NodeBase, ICodeRepairSource
 
     /// <summary>Which transform is applied.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsRegexMode))]
-    [NotifyPropertyChangedFor(nameof(IsTemplateMode))]
+    [NotifyPropertyChangedFor(nameof(IsInjectMode))]
+    [NotifyPropertyChangedFor(nameof(IsExtractMode))]
+    [NotifyPropertyChangedFor(nameof(IsReplaceMode))]
+    [NotifyPropertyChangedFor(nameof(IsTrimMode))]
     [NotifyPropertyChangedFor(nameof(IsScriptMode))]
-    private PatchMode _mode = PatchMode.Regex;
+    private ReshapeMode _mode = ReshapeMode.Inject;
 
-    /// <summary>The pattern matched in regex mode.</summary>
+    /// <summary>Standing text put in front of whatever passes through, in inject mode.</summary>
     [ObservableProperty]
-    private string _regexPattern = DefaultRegexPattern;
+    private string _injectBefore = string.Empty;
 
-    /// <summary>What a match is replaced with in regex mode.</summary>
+    /// <summary>Standing text put after whatever passes through, in inject mode.</summary>
     [ObservableProperty]
-    private string _regexReplacement = DefaultRegexReplacement;
+    private string _injectAfter = string.Empty;
 
-    /// <summary>The template applied in template mode. Occurrences of <c>{{input}}</c> are substituted.</summary>
+    /// <summary>The pattern whose match is kept, in extract mode.</summary>
+    [ObservableProperty]
+    private string _extractPattern = string.Empty;
+
+    /// <summary>The pattern matched in replace mode.</summary>
+    [ObservableProperty]
+    private string _regexPattern = string.Empty;
+
+    /// <summary>What a match is replaced with in replace mode.</summary>
+    [ObservableProperty]
+    private string _regexReplacement = string.Empty;
+
+    /// <summary>The most characters allowed through, in trim mode.</summary>
+    [ObservableProperty]
+    private int _maximumCharacters = 8000;
+
+    /// <summary>Which end a trim cuts from.</summary>
+    [ObservableProperty]
+    private TrimFrom _trimFrom = TrimFrom.End;
+
+    /// <summary>The template applied when a rule arrives as one. Occurrences of <c>{{input}}</c> are substituted.</summary>
     [ObservableProperty]
     private string _template = InputPlaceholder;
 
@@ -152,15 +159,11 @@ public sealed partial class PatchNode : NodeBase, ICodeRepairSource
     private ScriptRunner<object>? _compiled;
     private string? _compiledFor;
 
-    public PatchNode()
-        : base("Patch")
+    public ReshapeNode()
+        : base("Reshape")
     {
         Source = AddInput("Code", PinType.Code);
         Rule = AddInput("Rule", PinType.Text);
-
-        // Appended last, never inserted. A saved graph matches its pins by name and falls back to
-        // position, so anything put in front of these would take their saved identity with it.
-        Author = AddInput("Model", PinType.Model);
         Result = AddOutput("Code", PinType.Code);
     }
 
@@ -170,47 +173,49 @@ public sealed partial class PatchNode : NodeBase, ICodeRepairSource
     /// <summary>
     /// Receives the rule to apply. Optional: with nothing wired, the rule on the node is used.
     /// </summary>
-    public Pin Rule { get; }
-
-    /// <summary>
-    /// A model asked to turn the rule on this node into a concrete one, when a rule is not
-    /// already arriving on the pin above.
-    /// </summary>
     /// <remarks>
-    /// Optional, and the default path never touches it. With nothing wired here this node does
-    /// exactly what v1.2 settled it should do: applies its rule mechanically, without inference,
-    /// so stripping a fence stays fast, repeatable and local.
+    /// This is how a model authors a rule, and it is the only way one does. A prompt describing a
+    /// change feeds a model, the model writes a pattern, and this node applies it. The call happens
+    /// in the model node, where it is visible on the canvas and where every other model call in
+    /// this application happens.
     ///
-    /// Wiring a model is an explicit request for the other behaviour, which is why it is a wire
-    /// rather than a setting. It costs a model call per run and sends the rule, not the code, so
-    /// what leaves the machine is the instruction rather than the file.
+    /// This node had a Model pin of its own for one version and it has been taken off again. It
+    /// bought slightly less wiring and gave up the only guarantee that made this node worth
+    /// leaving in the middle of a graph: that it costs nothing, behaves identically every time,
+    /// and never sends anything anywhere.
     /// </remarks>
-    public Pin Author { get; }
+    public Pin Rule { get; }
 
     /// <summary>Carries the rewritten value onwards.</summary>
     public Pin Result { get; }
 
-    /// <summary>Literal substitutions applied after the template is filled.</summary>
+    /// <summary>Literal substitutions applied after a template is filled.</summary>
     public ObservableCollection<FindReplacePair> Replacements { get; } = new();
 
     /// <inheritdoc />
-    public override string TypeKey => "Patch";
+    public override string TypeKey => "Reshape";
 
-    /// <summary>True when regex mode is selected. Drives which editor is shown.</summary>
-    public bool IsRegexMode => Mode == PatchMode.Regex;
+    /// <summary>True when inject mode is selected. Drives which editor is shown.</summary>
+    public bool IsInjectMode => Mode == ReshapeMode.Inject;
 
-    /// <summary>True when template mode is selected. Drives which editor is shown.</summary>
-    public bool IsTemplateMode => Mode == PatchMode.Template;
+    /// <summary>True when extract mode is selected.</summary>
+    public bool IsExtractMode => Mode == ReshapeMode.Extract;
+
+    /// <summary>True when replace mode is selected.</summary>
+    public bool IsReplaceMode => Mode == ReshapeMode.Replace;
+
+    /// <summary>True when trim mode is selected.</summary>
+    public bool IsTrimMode => Mode == ReshapeMode.Trim;
 
     /// <summary>True when script mode is selected.</summary>
-    public bool IsScriptMode => Mode == PatchMode.Script;
+    public bool IsScriptMode => Mode == ReshapeMode.Script;
 
     /// <inheritdoc />
     public override async Task<NodeResult> ExecuteAsync(NodeExecutionContext ctx, CancellationToken ct)
     {
         var input = ctx.GetText(Source);
         var wired = ctx.GetSourceNode(Rule) is not null;
-        var rule = await ResolveRuleAsync(ctx, ct).ConfigureAwait(false);
+        var rule = ResolveRule(ctx);
 
         var output = await ApplyAsync(rule, input, ct).ConfigureAwait(false);
 
@@ -236,8 +241,13 @@ public sealed partial class PatchNode : NodeBase, ICodeRepairSource
         return new JsonObject
         {
             ["mode"] = Mode.ToString(),
+            ["injectBefore"] = InjectBefore,
+            ["injectAfter"] = InjectAfter,
+            ["extractPattern"] = ExtractPattern,
             ["regexPattern"] = RegexPattern,
             ["regexReplacement"] = RegexReplacement,
+            ["maximumCharacters"] = MaximumCharacters,
+            ["trimFrom"] = TrimFrom.ToString(),
             ["template"] = Template,
             ["scriptExpression"] = ScriptExpression,
             ["replacements"] = replacements
@@ -247,15 +257,20 @@ public sealed partial class PatchNode : NodeBase, ICodeRepairSource
     /// <inheritdoc />
     public override void LoadSettings(JsonObject settings)
     {
-        if (Enum.TryParse<PatchMode>(settings["mode"]?.GetValue<string>(), out var mode))
-        {
-            Mode = mode;
-        }
+        Mode = ReadMode(settings["mode"]?.GetValue<string>());
 
-        RegexPattern = settings["regexPattern"]?.GetValue<string>() ?? DefaultRegexPattern;
-        RegexReplacement = settings["regexReplacement"]?.GetValue<string>() ?? DefaultRegexReplacement;
+        InjectBefore = settings["injectBefore"]?.GetValue<string>() ?? string.Empty;
+        InjectAfter = settings["injectAfter"]?.GetValue<string>() ?? string.Empty;
+        ExtractPattern = settings["extractPattern"]?.GetValue<string>() ?? string.Empty;
+        RegexPattern = settings["regexPattern"]?.GetValue<string>() ?? string.Empty;
+        RegexReplacement = settings["regexReplacement"]?.GetValue<string>() ?? string.Empty;
+        MaximumCharacters = settings["maximumCharacters"]?.GetValue<int>() ?? 8000;
         Template = settings["template"]?.GetValue<string>() ?? InputPlaceholder;
         ScriptExpression = settings["scriptExpression"]?.GetValue<string>() ?? DefaultScriptExpression;
+
+        TrimFrom = Enum.TryParse<TrimFrom>(settings["trimFrom"]?.GetValue<string>(), out var from)
+            ? from
+            : TrimFrom.End;
 
         Replacements.Clear();
         if (settings["replacements"] is JsonArray array)
@@ -312,113 +327,138 @@ public sealed partial class PatchNode : NodeBase, ICodeRepairSource
 
         // The revised reply goes through this transform exactly as the first one did, so whatever
         // this node is for, unwrapping a fence or renaming a symbol, still applies to the fix.
-        return await ApplyAsync(await ResolveRuleAsync(ctx, ct).ConfigureAwait(false), revised, ct)
-            .ConfigureAwait(false);
+        return await ApplyAsync(ResolveRule(ctx), revised, ct).ConfigureAwait(false);
     }
 
     /// <summary>
     /// The rule in force: whatever arrived on the pin, or the one typed on the node.
     /// </summary>
-    /// <param name="wired">True when the rule came from the pin rather than from the node.</param>
     /// <remarks>
-    /// A pin with nothing connected reads as absent rather than as an empty rule, which is what
-    /// keeps the default path working with no prompt and no model in front of it. A pin that is
+    /// Two sources, and no third. A rule arriving on the Rule pin wins, because something upstream
+    /// already produced one. Otherwise the node's own settings are the rule.
+    ///
+    /// Nothing here calls a model. That is the whole value of this node: it costs nothing, it does
+    /// the same thing every time, and nothing passing through it leaves the machine. A model can
+    /// still author the rule, through a prompt and a model wired into the Rule pin, which puts the
+    /// call in the node whose job it is and draws it on the canvas where it can be seen.
+    ///
+    /// A pin with nothing connected reads as absent rather than as an empty rule. A pin that is
     /// connected and produced nothing is a different thing and is refused, because that is a
-    /// wiring mistake and silently patching nothing would hide it.
+    /// wiring mistake and silently reshaping nothing would hide it.
     /// </remarks>
-    /// <summary>The rule typed on this node, in whichever form the mode says.</summary>
-    private PatchRule OwnRule() => new(Mode, Mode switch
-    {
-        PatchMode.Template => Template ?? string.Empty,
-        PatchMode.Script => ScriptExpression ?? string.Empty,
-        _ => RegexPattern ?? string.Empty
-    }, RegexReplacement ?? string.Empty);
+    private ReshapeRule ResolveRule(NodeExecutionContext ctx)
+        => ctx.GetSourceNode(Rule) is null
+            ? OwnRule()
+            : ReshapeRule.Parse(ctx.GetText(Rule), Mode, RegexReplacement ?? string.Empty);
 
     /// <summary>
-    /// The rule, having given a wired model the chance to write one.
+    /// The rule typed on this node, in whichever form the mode says.
     /// </summary>
     /// <remarks>
-    /// Three sources, in this order. A rule arriving on the Rule pin wins, because something
-    /// upstream already produced one and asking a model to produce a second would be work nobody
-    /// asked for. Failing that, a model wired to the Model pin is asked to turn the rule on this
-    /// node into a concrete one. Failing that, the rule on the node is used as it stands, which is
-    /// the default path and touches no model at all.
-    ///
-    /// What is sent is the instruction, never the code. The point of doing this mechanically was
-    /// that a file should not leave the machine to be reformatted, and that still holds: the model
-    /// sees what the change is meant to be and answers with a pattern.
-    ///
-    /// A model that answers with something unusable fails the node, for the same reason a
-    /// malformed rule does. Quietly falling back to the rule on the node would mean the graph did
-    /// something other than what it was wired to do, and reported success.
+    /// Inject composes its two fields into a template, so that the mode with the friendliest
+    /// editor and the rule form a model is most likely to write are the same thing underneath.
     /// </remarks>
-    private async Task<PatchRule> ResolveRuleAsync(NodeExecutionContext ctx, CancellationToken ct)
+    private ReshapeRule OwnRule() => Mode switch
     {
-        if (ctx.GetSourceNode(Rule) is not null)
-        {
-            return PatchRule.Parse(ctx.GetText(Rule), Mode, RegexReplacement ?? string.Empty);
-        }
+        ReshapeMode.Inject => new ReshapeRule(
+            ReshapeMode.Inject,
+            $"{InjectBefore}{InputPlaceholder}{InjectAfter}",
+            string.Empty),
 
-        // From the wire, not from what it carried, for the same reason triage does: a model
-        // handed over for reference may run after the node that uses it.
-        if (ctx.GetSourceNode(Author) is not IModelHandle author)
-        {
-            return OwnRule();
-        }
+        ReshapeMode.Extract => new ReshapeRule(ReshapeMode.Extract, ExtractPattern ?? string.Empty, string.Empty),
 
-        if (!author.CanAnswer(out var whyNot))
-        {
-            throw new PatchRuleException($"{Title} cannot ask for a rule: {whyNot}");
-        }
+        ReshapeMode.Trim => new ReshapeRule(
+            ReshapeMode.Trim,
+            MaximumCharacters.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            TrimFrom.ToString()),
 
-        var instruction = OwnRule().Primary;
+        ReshapeMode.Script => new ReshapeRule(ReshapeMode.Script, ScriptExpression ?? string.Empty, string.Empty),
 
-        if (string.IsNullOrWhiteSpace(instruction))
-        {
-            throw new PatchRuleException(
-                $"{Title} has a model wired but nothing to ask it for. Describe the change on the node.");
-        }
-
-        var authorNode = author as NodeBase
-            ?? throw new PatchRuleException($"{Title} found something that is not a node on its Model pin.");
-
-        ctx.Feed.Info($"{Title}: asking {authorNode.Title} for a rule", instruction);
-
-        var reply = await author
-            .AnswerAsync(RuleAuthorSystemPrompt, BuildRuleRequest(instruction), ctx.ForNode(authorNode), ct)
-            .ConfigureAwait(false);
-
-        var rule = PatchRule.Parse(reply, Mode, RegexReplacement ?? string.Empty);
-
-        ctx.Feed.Info($"{Title}: the rule it wrote", rule.Primary);
-
-        return rule;
-    }
-
-    /// <summary>The voice a model authoring a rule answers in.</summary>
-    private const string RuleAuthorSystemPrompt =
-        "You write one text transformation rule and nothing else. No explanation, no commentary, "
-        + "no markdown fences. Your entire answer is the rule.";
-
-    /// <summary>What a model is asked when it is authoring the rule.</summary>
-    private string BuildRuleRequest(string instruction) => Mode switch
-    {
-        PatchMode.Template => $"Write a template that performs this change. Use {InputPlaceholder} where the "
-                              + $"incoming text goes. The change:{Environment.NewLine}{instruction}",
-        PatchMode.Script => $"Write one C# expression that performs this change. The incoming text is available "
-                            + $"as input. The change:{Environment.NewLine}{instruction}",
-        _ => "Write a .NET regular expression that performs this change, then a newline, then what a match "
-             + $"is replaced with. The change:{Environment.NewLine}{instruction}"
+        _ => new ReshapeRule(ReshapeMode.Replace, RegexPattern ?? string.Empty, RegexReplacement ?? string.Empty)
     };
 
     /// <summary>Applies a rule to a value, mechanically and without asking anything.</summary>
-    private async Task<string> ApplyAsync(PatchRule rule, string input, CancellationToken ct)
+    private async Task<string> ApplyAsync(ReshapeRule rule, string input, CancellationToken ct)
         => rule.Kind switch
         {
-            PatchMode.Template => ApplyTemplate(rule.Primary, input),
-            PatchMode.Script => await RunScriptAsync(rule.Primary, input, ct).ConfigureAwait(false),
+            ReshapeMode.Inject => ApplyTemplate(rule.Primary, input),
+            ReshapeMode.Extract => ApplyExtract(rule, input),
+            ReshapeMode.Trim => ApplyTrim(rule, input),
+            ReshapeMode.Script => await RunScriptAsync(rule.Primary, input, ct).ConfigureAwait(false),
             _ => ApplyPattern(rule, input)
         };
+
+    /// <summary>
+    /// Keeps the part that matches and drops the rest.
+    /// </summary>
+    /// <remarks>
+    /// The first capturing group when the pattern has one, and the whole match when it does not,
+    /// because a pattern written to find a plan usually brackets the plan and a pattern written to
+    /// find a line usually does not.
+    ///
+    /// A pattern that finds nothing passes the text through. Extracting nothing from a reply that
+    /// simply did not contain the shape asked for would hand an empty file to whatever is next,
+    /// and an empty file compiles.
+    /// </remarks>
+    private string ApplyExtract(ReshapeRule rule, string input)
+    {
+        if (string.IsNullOrEmpty(rule.Primary))
+        {
+            throw new ReshapeRuleException(
+                $"{Title} has nothing to extract with. Give it a pattern, or wire a rule into it.");
+        }
+
+        try
+        {
+            var match = Regex.Match(input, rule.Primary, RegexOptions.None, PatternTimeout);
+
+            if (!match.Success)
+            {
+                return input;
+            }
+
+            return match.Groups.Count > 1 && match.Groups[1].Success
+                ? match.Groups[1].Value
+                : match.Value;
+        }
+        catch (ArgumentException ex)
+        {
+            throw new ReshapeRuleException(
+                $"{Title} could not read its pattern: {ex.Message}{Environment.NewLine}{rule.Primary}", ex);
+        }
+        catch (RegexMatchTimeoutException ex)
+        {
+            throw new ReshapeRuleException(
+                $"{Title} gave up on its pattern after {PatternTimeout.TotalSeconds:0} seconds. "
+                + $"It matches this input too slowly to use:{Environment.NewLine}{rule.Primary}", ex);
+        }
+    }
+
+    /// <summary>
+    /// Cuts to a length, from whichever end was asked for.
+    /// </summary>
+    /// <remarks>
+    /// Nothing is added to say it was cut. This feeds a context budget, and a marker would be one
+    /// more thing counted against the budget it exists to respect.
+    /// </remarks>
+    private string ApplyTrim(ReshapeRule rule, string input)
+    {
+        if (!int.TryParse(rule.Primary, System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture, out var limit) || limit <= 0)
+        {
+            throw new ReshapeRuleException(
+                $"{Title} was given \"{rule.Primary}\" as a length to trim to, which is not a number of characters.");
+        }
+
+        if (input.Length <= limit)
+        {
+            return input;
+        }
+
+        return string.Equals(rule.Replacement, nameof(Nodes.TrimFrom.Start), StringComparison.OrdinalIgnoreCase)
+            ? input[^limit..]
+            : input[..limit];
+    }
 
     /// <summary>
     /// Matches the pattern and replaces what it finds.
@@ -428,11 +468,11 @@ public sealed partial class PatchNode : NodeBase, ICodeRepairSource
     /// this particular input, and the code passes through. A pattern that will not compile, or one
     /// that runs away, is a failure, because neither can be what anybody meant.
     /// </remarks>
-    private string ApplyPattern(PatchRule rule, string input)
+    private string ApplyPattern(ReshapeRule rule, string input)
     {
         if (string.IsNullOrEmpty(rule.Primary))
         {
-            throw new PatchRuleException($"{Title} has no pattern to apply. Type one, or wire a rule into it.");
+            throw new ReshapeRuleException($"{Title} has no pattern to apply. Type one, or wire a rule into it.");
         }
 
         try
@@ -441,12 +481,12 @@ public sealed partial class PatchNode : NodeBase, ICodeRepairSource
         }
         catch (ArgumentException ex)
         {
-            throw new PatchRuleException(
+            throw new ReshapeRuleException(
                 $"{Title} could not read its pattern: {ex.Message}{Environment.NewLine}{rule.Primary}", ex);
         }
         catch (RegexMatchTimeoutException ex)
         {
-            throw new PatchRuleException(
+            throw new ReshapeRuleException(
                 $"{Title} gave up on its pattern after {PatternTimeout.TotalSeconds:0} seconds. "
                 + $"It matches this input too slowly to use:{Environment.NewLine}{rule.Primary}", ex);
         }
@@ -493,7 +533,7 @@ public sealed partial class PatchNode : NodeBase, ICodeRepairSource
         object? value;
         try
         {
-            value = await runner(new PatchScriptGlobals { input = input }, ct).ConfigureAwait(false);
+            value = await runner(new ReshapeScriptGlobals { input = input }, ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -524,7 +564,7 @@ public sealed partial class PatchNode : NodeBase, ICodeRepairSource
 
         try
         {
-            var script = CSharpScript.Create<object>(expression, options, typeof(PatchScriptGlobals));
+            var script = CSharpScript.Create<object>(expression, options, typeof(ReshapeScriptGlobals));
             _compiled = script.CreateDelegate();
             _compiledFor = expression;
             return _compiled;
@@ -536,6 +576,35 @@ public sealed partial class PatchNode : NodeBase, ICodeRepairSource
             var diagnostics = string.Join("; ", ex.Diagnostics.Select(d => d.GetMessage()));
             throw new InvalidOperationException($"{Title} script did not compile: {diagnostics}", ex);
         }
+    }
+
+    /// <summary>
+    /// The mode a saved node asked for, including the two names that no longer exist.
+    /// </summary>
+    /// <remarks>
+    /// Regex became Replace and Template became Inject, so a graph saved before the presets opens
+    /// on the mode that does what it used to do rather than falling back to the default and
+    /// silently changing what the node is for. That is the same rule the type keys follow: a
+    /// rename is only free if every name it ever had still resolves.
+    /// </remarks>
+    private static ReshapeMode ReadMode(string? saved)
+    {
+        if (saved is null)
+        {
+            return ReshapeMode.Inject;
+        }
+
+        if (Enum.TryParse<ReshapeMode>(saved, ignoreCase: true, out var mode))
+        {
+            return mode;
+        }
+
+        return saved.ToLowerInvariant() switch
+        {
+            "regex" => ReshapeMode.Replace,
+            "template" => ReshapeMode.Inject,
+            _ => ReshapeMode.Inject
+        };
     }
 
     partial void OnScriptExpressionChanged(string value)

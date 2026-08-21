@@ -70,7 +70,7 @@ Nothing here attaches it.
 Drop a **Compiler check** node between the model and the Output node:
 
 ```
-Prompt -> Model -> Patch -> Compiler check -> Output
+Prompt -> Model -> Compiler check -> Output
 ```
 
 It compiles what passes through it and only lets it onward if it compiles. Nothing is written
@@ -101,7 +101,7 @@ the compiler errors. It repeats until the code compiles or the **retry limit** i
 by default. Every attempt appears in the activity feed with its number and the errors it was
 given, so a loop is never silent.
 
-A Patch node in between is not in the way: it passes the request further upstream and applies
+A Reshape node in between is not in the way: it passes the request further upstream and applies
 itself to whatever comes back, so a repaired reply gets its markdown fence stripped exactly as
 the first one did.
 

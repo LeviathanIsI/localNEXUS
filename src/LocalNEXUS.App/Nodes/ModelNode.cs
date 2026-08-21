@@ -114,6 +114,21 @@ public sealed partial class ModelNode : NodeBase, ICodeRepairSource, IModelHandl
     [ObservableProperty]
     private string _systemPrompt = DefaultSystemPrompt;
 
+    /// <summary>
+    /// Whether a reply that is nothing but a markdown code fence is unwrapped before it leaves.
+    /// </summary>
+    /// <remarks>
+    /// On by default, because a model asked for a file wraps it in a fence whatever the prompt
+    /// says, and a fenced reply is not a valid C# file. It used to take a node wired into every
+    /// graph to undo that, which is boilerplate for an artifact of how models format text.
+    ///
+    /// A setting rather than a law, because this is a general model call. One feeding a planner
+    /// produces a plan, one feeding a debate produces an argument, and one writing documentation
+    /// is supposed to keep its code blocks. Turning it off is the right answer for all three.
+    /// </remarks>
+    [ObservableProperty]
+    private bool _stripCodeFences = true;
+
     /// <summary>Sampling temperature.</summary>
     [ObservableProperty]
     private double _temperature = 0.4d;
@@ -478,9 +493,21 @@ public sealed partial class ModelNode : NodeBase, ICodeRepairSource, IModelHandl
     /// </remarks>
     private NodeResult Emit(object? produced) => NodeResult.FromValues(new Dictionary<Guid, object?>
     {
-        [Completion.Id] = produced,
+        [Completion.Id] = produced is string reply ? Clean(reply) : produced,
         [Self.Id] = this
     });
+
+    /// <summary>
+    /// The reply as it leaves this node, with its code fence off when that is wanted.
+    /// </summary>
+    /// <remarks>
+    /// A setting rather than a law, and on by default. This is a general model call: one feeding
+    /// triage produces a plan, one feeding a debate produces an argument, and one writing
+    /// documentation is supposed to keep its code blocks. Stripping any of those would be wrong.
+    /// What is right by default is the common case, a model that was asked for a file and wrapped
+    /// it in a fence nobody asked for.
+    /// </remarks>
+    private string Clean(string reply) => StripCodeFences ? Infrastructure.CodeFence.Strip(reply) : reply;
 
     /// <inheritdoc />
     public bool CanAnswer(out string reason) => HasUsableModel(out reason);
@@ -591,6 +618,7 @@ public sealed partial class ModelNode : NodeBase, ICodeRepairSource, IModelHandl
         ["openRouterModel"] = OpenRouterModel,
         ["selfHostedModelId"] = SelfHostedModelId,
         ["systemPrompt"] = SystemPrompt,
+        ["stripCodeFences"] = StripCodeFences,
         ["temperature"] = Temperature,
         ["maxTokens"] = MaxTokens,
         ["contextSize"] = ContextSize,
@@ -634,6 +662,11 @@ public sealed partial class ModelNode : NodeBase, ICodeRepairSource, IModelHandl
         OpenRouterModel = settings["openRouterModel"]?.GetValue<string>() ?? string.Empty;
         SelfHostedModelId = settings["selfHostedModelId"]?.GetValue<string>() ?? string.Empty;
         SystemPrompt = settings["systemPrompt"]?.GetValue<string>() ?? DefaultSystemPrompt;
+
+        // Absent in a graph saved before this existed, and true is right for those: every
+        // one of them has a node in front of the compiler whose whole job was stripping the
+        // fence, and that node passing clean text through unchanged is harmless.
+        StripCodeFences = settings["stripCodeFences"]?.GetValue<bool>() ?? true;
         Temperature = settings["temperature"]?.GetValue<double>() ?? 0.4d;
         MaxTokens = settings["maxTokens"]?.GetValue<int>() ?? 4096;
         ContextSize = settings["contextSize"]?.GetValue<int>() ?? LlamaLaunchOptions.DefaultContextSize;

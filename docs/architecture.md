@@ -9,7 +9,7 @@ directional: a `Text` output still cannot reach a `Code` input, so prose cannot 
 straight into a file writer. The rule lives in one place,
 `Models/PinTypeCompatibility.cs`.
 
-**Patch script mode** evaluates a single C# expression through Roslyn with the
+**Reshape script mode** evaluates a single C# expression through Roslyn with the
 incoming value bound to `input`. `System`, `System.Linq`, `System.Text` and
 `System.Text.RegularExpressions` are imported. Compilation is cached per expression, and
 compile errors surface in the activity feed when the node runs.
@@ -23,7 +23,7 @@ between nodes, so it never interrupts a model mid stream.
 ```
 src/LocalNEXUS.App/
   Models/          NodeBase, Pin, Connection, GraphModel, pin typing and validation
-  Nodes/           PromptNode, TriageNode, ModelNode, PatchNode, CompilerCheckNode,
+  Nodes/           PromptNode, TriageNode, ModelNode, ReshapeNode, CompilerCheckNode,
                    OutputNode, NodeFactory
   Services/
     Execution/     GraphExecutor, RunContext, RunState, topological sort

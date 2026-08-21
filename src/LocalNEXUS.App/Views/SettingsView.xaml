@@ -208,7 +208,7 @@
                                 <Rectangle Width="3" Height="18" Margin="0,0,7,0" Fill="{DynamicResource NodeType.Prompt.Brush}" />
                                 <Rectangle Width="3" Height="18" Margin="0,0,7,0" Fill="{DynamicResource NodeType.Triage.Brush}" />
                                 <Rectangle Width="3" Height="18" Margin="0,0,7,0" Fill="{DynamicResource NodeType.Model.Brush}" />
-                                <Rectangle Width="3" Height="18" Margin="0,0,7,0" Fill="{DynamicResource NodeType.Patch.Brush}" />
+                                <Rectangle Width="3" Height="18" Margin="0,0,7,0" Fill="{DynamicResource NodeType.Reshape.Brush}" />
                                 <Rectangle Width="3" Height="18" Margin="0,0,7,0" Fill="{DynamicResource NodeType.CompilerCheck.Brush}" />
                                 <Rectangle Width="3" Height="18" Margin="0,0,14,0" Fill="{DynamicResource NodeType.Output.Brush}" />
                                 <TextBlock Style="{StaticResource MutedText}" VerticalAlignment="Center" Text="the six node accents" />

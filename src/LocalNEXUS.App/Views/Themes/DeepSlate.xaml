@@ -33,7 +33,7 @@
     <Color x:Key="NodeType.PromptColor">#FF58A6FF</Color>
     <Color x:Key="NodeType.TriageColor">#FF79C0FF</Color>
     <Color x:Key="NodeType.ModelColor">#FFBC8CFF</Color>
-    <Color x:Key="NodeType.PatchColor">#FF3FB950</Color>
+    <Color x:Key="NodeType.ReshapeColor">#FF3FB950</Color>
     <Color x:Key="NodeType.CompilerCheckColor">#FFFF7B72</Color>
     <Color x:Key="NodeType.OutputColor">#FFD29922</Color>
 

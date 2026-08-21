@@ -463,12 +463,15 @@ public partial class App : Application
 
         ReportBundledFont(feed);
 
+        // No longer load bearing. Fence stripping is a regular expression inside the model node
+        // now, so a build without a script compiler loses one Reshape mode rather than losing the
+        // thing the repair loop depends on.
         feed.Info(
-            PatchNode.CanCompileScripts ? "Script transforms ready" : "Script transforms unavailable",
-            PatchNode.CanCompileScripts
-                ? "A Patch node can run a C# expression, which is what strips a markdown fence off a model reply."
-                : "The script compiler could not be built in this build, so a Patch node can only use find and replace. "
-                  + "Fence stripping, which the repair loop relies on, will not work.");
+            ReshapeNode.CanCompileScripts ? "Script mode ready" : "Script mode unavailable",
+            ReshapeNode.CanCompileScripts
+                ? "A Reshape node can run a C# expression for anything its four presets do not cover."
+                : "The script compiler cannot be built into a single file executable, so a Reshape node has its "
+                  + "four other modes and not this one. Nothing else is affected.");
     }
 
     /// <summary>

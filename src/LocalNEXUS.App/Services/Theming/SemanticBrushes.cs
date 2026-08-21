@@ -77,7 +77,7 @@ public static class SemanticBrushes
         ("NodeType.Prompt.Brush", "NodeType.PromptColor"),
         ("NodeType.Triage.Brush", "NodeType.TriageColor"),
         ("NodeType.Model.Brush", "NodeType.ModelColor"),
-        ("NodeType.Patch.Brush", "NodeType.PatchColor"),
+        ("NodeType.Reshape.Brush", "NodeType.ReshapeColor"),
         ("NodeType.CompilerCheck.Brush", "NodeType.CompilerCheckColor"),
         ("NodeType.Output.Brush", "NodeType.OutputColor"),
 

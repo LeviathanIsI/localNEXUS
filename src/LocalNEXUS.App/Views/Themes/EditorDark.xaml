@@ -40,7 +40,7 @@
     <Color x:Key="NodeType.PromptColor">#FF569CD6</Color>
     <Color x:Key="NodeType.TriageColor">#FF4FC1FF</Color>
     <Color x:Key="NodeType.ModelColor">#FFC586C0</Color>
-    <Color x:Key="NodeType.PatchColor">#FF4EC9B0</Color>
+    <Color x:Key="NodeType.ReshapeColor">#FF4EC9B0</Color>
     <Color x:Key="NodeType.CompilerCheckColor">#FFD16D9E</Color>
     <Color x:Key="NodeType.OutputColor">#FFDCDCAA</Color>
 

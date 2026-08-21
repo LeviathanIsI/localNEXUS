@@ -21,8 +21,8 @@
         <settings:ModelNodeSettingsView />
     </DataTemplate>
 
-    <DataTemplate DataType="{x:Type nodes:PatchNode}">
-        <settings:PatchNodeSettingsView />
+    <DataTemplate DataType="{x:Type nodes:ReshapeNode}">
+        <settings:ReshapeNodeSettingsView />
     </DataTemplate>
 
     <DataTemplate DataType="{x:Type nodes:CompilerCheckNode}">

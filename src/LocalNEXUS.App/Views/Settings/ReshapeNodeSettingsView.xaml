@@ -1,0 +1,141 @@
+<UserControl x:Class="LocalNEXUS.App.Views.Settings.ReshapeNodeSettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:nodes="clr-namespace:LocalNEXUS.App.Nodes"
+             d:DataContext="{d:DesignInstance Type=nodes:ReshapeNode}"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d">
+
+    <!--
+        Five modes, in the order they get used rather than the order they were built. Inject and
+        Extract are first and are one click away, because standing instructions and keeping the
+        part of a reply that was asked for are what people actually want. The rest are the general
+        case and the escape hatch.
+    -->
+
+    <StackPanel>
+        <TextBlock Style="{StaticResource SectionHeader}" Text="What it does" />
+        <TextBlock Style="{StaticResource HintText}"
+                   TextWrapping="Wrap"
+                   Text="All of these are mechanical. Nothing here calls a model and nothing passing through leaves the machine. A model can still write the rule, through a prompt and a model wired into the Rule pin." />
+
+        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+            <RadioButton Content="Inject"
+                         GroupName="ReshapeMode"
+                         ToolTip="Put standing text before or after whatever passes through."
+                         IsChecked="{Binding Mode, Converter={StaticResource EnumToBoolean}, ConverterParameter=Inject}" />
+            <RadioButton Content="Extract"
+                         GroupName="ReshapeMode"
+                         Margin="12,0,0,0"
+                         ToolTip="Keep the part that matches and drop the rest."
+                         IsChecked="{Binding Mode, Converter={StaticResource EnumToBoolean}, ConverterParameter=Extract}" />
+            <RadioButton Content="Replace"
+                         GroupName="ReshapeMode"
+                         Margin="12,0,0,0"
+                         ToolTip="Find and replace, by pattern."
+                         IsChecked="{Binding Mode, Converter={StaticResource EnumToBoolean}, ConverterParameter=Replace}" />
+            <RadioButton Content="Trim"
+                         GroupName="ReshapeMode"
+                         Margin="12,0,0,0"
+                         ToolTip="Cut to a length, so what leaves fits a context budget."
+                         IsChecked="{Binding Mode, Converter={StaticResource EnumToBoolean}, ConverterParameter=Trim}" />
+            <RadioButton Content="Script"
+                         GroupName="ReshapeMode"
+                         Margin="12,0,0,0"
+                         ToolTip="A C# expression, for anything the presets do not cover."
+                         IsChecked="{Binding Mode, Converter={StaticResource EnumToBoolean}, ConverterParameter=Script}" />
+        </StackPanel>
+
+        <!-- Inject -->
+        <StackPanel Visibility="{Binding IsInjectMode, Converter={StaticResource BooleanToVisibility}}">
+            <TextBlock Style="{StaticResource FieldLabel}" Text="Before" />
+            <TextBox Style="{StaticResource MonoTextBox}"
+                     AcceptsReturn="True"
+                     TextWrapping="Wrap"
+                     MinHeight="60"
+                     Text="{Binding InjectBefore, UpdateSourceTrigger=LostFocus}" />
+
+            <TextBlock Style="{StaticResource FieldLabel}" Text="After" />
+            <TextBox Style="{StaticResource MonoTextBox}"
+                     AcceptsReturn="True"
+                     TextWrapping="Wrap"
+                     MinHeight="60"
+                     Text="{Binding InjectAfter, UpdateSourceTrigger=LostFocus}" />
+
+            <TextBlock Style="{StaticResource HintText}"
+                       TextWrapping="Wrap"
+                       Text="A house rule on the way into a coder, without editing its system prompt, and without editing five of them when the rule changes. Leave both empty and the text passes through untouched." />
+        </StackPanel>
+
+        <!-- Extract -->
+        <StackPanel Visibility="{Binding IsExtractMode, Converter={StaticResource BooleanToVisibility}}">
+            <TextBlock Style="{StaticResource FieldLabel}" Text="Keep what matches" />
+            <TextBox Style="{StaticResource MonoTextBox}"
+                     AcceptsReturn="True"
+                     TextWrapping="Wrap"
+                     MinHeight="60"
+                     Text="{Binding ExtractPattern, UpdateSourceTrigger=LostFocus}" />
+
+            <TextBlock Style="{StaticResource HintText}"
+                       TextWrapping="Wrap"
+                       Text="Model output is always more than was asked for. This keeps the first bracketed group when the pattern has one, and the whole match when it does not. A pattern that finds nothing passes the text through rather than handing an empty file to whatever is next." />
+        </StackPanel>
+
+        <!-- Replace -->
+        <StackPanel Visibility="{Binding IsReplaceMode, Converter={StaticResource BooleanToVisibility}}">
+            <TextBlock Style="{StaticResource FieldLabel}" Text="Find" />
+            <TextBox Style="{StaticResource MonoTextBox}"
+                     AcceptsReturn="True"
+                     TextWrapping="Wrap"
+                     MinHeight="60"
+                     Text="{Binding RegexPattern, UpdateSourceTrigger=LostFocus}" />
+
+            <TextBlock Style="{StaticResource FieldLabel}" Text="Replace with" />
+            <TextBox Style="{StaticResource MonoTextBox}"
+                     Text="{Binding RegexReplacement, UpdateSourceTrigger=LostFocus}" />
+
+            <TextBlock Style="{StaticResource HintText}"
+                       TextWrapping="Wrap"
+                       Text="A pattern that matches nothing passes the text through. One that will not compile fails the node, because a node that exists to change what goes through it should not report success having changed nothing." />
+        </StackPanel>
+
+        <!-- Trim -->
+        <StackPanel Visibility="{Binding IsTrimMode, Converter={StaticResource BooleanToVisibility}}">
+            <TextBlock Style="{StaticResource FieldLabel}" Text="Longest allowed, in characters" />
+            <TextBox Text="{Binding MaximumCharacters, UpdateSourceTrigger=LostFocus}"
+                     AutomationProperties.Name="Longest allowed in characters" />
+
+            <TextBlock Style="{StaticResource FieldLabel}" Text="Cut from" />
+            <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                <RadioButton Content="The end"
+                             GroupName="TrimFrom"
+                             ToolTip="Keep the beginning."
+                             IsChecked="{Binding TrimFrom, Converter={StaticResource EnumToBoolean}, ConverterParameter=End}" />
+                <RadioButton Content="The start"
+                             GroupName="TrimFrom"
+                             Margin="12,0,0,0"
+                             ToolTip="Keep the end."
+                             IsChecked="{Binding TrimFrom, Converter={StaticResource EnumToBoolean}, ConverterParameter=Start}" />
+            </StackPanel>
+
+            <TextBlock Style="{StaticResource HintText}"
+                       TextWrapping="Wrap"
+                       Text="Nothing is added to say it was cut. This feeds a context budget, and a marker would be one more thing counted against the budget it exists to respect." />
+        </StackPanel>
+
+        <!-- Script -->
+        <StackPanel Visibility="{Binding IsScriptMode, Converter={StaticResource BooleanToVisibility}}">
+            <TextBlock Style="{StaticResource FieldLabel}" Text="Expression" />
+            <TextBox Style="{StaticResource MonoTextBox}"
+                     AcceptsReturn="True"
+                     TextWrapping="Wrap"
+                     MinHeight="80"
+                     Text="{Binding ScriptExpression, UpdateSourceTrigger=LostFocus}" />
+
+            <TextBlock Style="{StaticResource HintText}"
+                       TextWrapping="Wrap"
+                       Text="One C# expression, with the incoming text available as input. This is the only mode that can be unavailable: the script compiler needs the runtime assemblies as files and a single file build keeps them inside itself." />
+        </StackPanel>
+    </StackPanel>
+</UserControl>

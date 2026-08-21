@@ -349,6 +349,18 @@
                  MinHeight="120"
                  MaxHeight="260" />
 
+        <!--
+            On by default, because a model asked for a file wraps it in a fence whatever the prompt
+            says. It used to take a node wired into every graph to undo that.
+        -->
+        <CheckBox Content="Take a markdown code fence off the reply"
+                  Margin="0,10,0,0"
+                  IsChecked="{Binding StripCodeFences}" />
+
+        <TextBlock Style="{StaticResource HintText}"
+                   TextWrapping="Wrap"
+                   Text="Only when the whole reply is one fenced block, so an explanation with code in it is left alone. Turn it off for a model that is meant to produce prose, a plan, or documentation that keeps its code blocks." />
+
         <TextBlock Style="{StaticResource SectionHeader}" Margin="0,20,0,0" Text="Edits" />
 
         <StackPanel Margin="0,6,0,0">

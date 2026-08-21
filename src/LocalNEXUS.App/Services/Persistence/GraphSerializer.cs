@@ -88,7 +88,8 @@ public sealed class GraphSerializer
 
         target.Clear();
 
-        var restored = RestoreNodes(document["nodes"] as JsonArray, target, warnings);
+        var renames = new List<string>();
+        var restored = RestoreNodes(document["nodes"] as JsonArray, target, warnings, renames);
         RestoreConnections(document["connections"] as JsonArray, target, restored, warnings);
 
         // Last, once the graph is whole. A migration reads wires, so it cannot run before they
@@ -98,7 +99,8 @@ public sealed class GraphSerializer
         // Deliberately not added to the warnings. A warning is reported as an error, and a graph
         // that opened correctly and was brought up to date has nothing wrong with it. Saying so in
         // red would teach somebody to ignore the one thing that means a wire was lost.
-        Migrations = GraphMigrations.Apply(target);
+        renames.AddRange(GraphMigrations.Apply(target));
+        Migrations = renames;
 
         return warnings;
     }
@@ -166,7 +168,11 @@ public sealed class GraphSerializer
         return array;
     }
 
-    private Dictionary<Guid, Pin> RestoreNodes(JsonArray? nodes, GraphModel target, List<string> warnings)
+    private Dictionary<Guid, Pin> RestoreNodes(
+        JsonArray? nodes,
+        GraphModel target,
+        List<string> warnings,
+        List<string> renames)
     {
         var pinsById = new Dictionary<Guid, Pin>();
 
@@ -212,6 +218,15 @@ public sealed class GraphSerializer
             node.Title = element["title"]?.GetValue<string>() ?? node.Title;
             node.X = element["x"]?.GetValue<double>() ?? 0d;
             node.Y = element["y"]?.GetValue<double>() ?? 0d;
+
+            // A key that resolved to a node calling itself something else is a rename this build
+            // knows about. Noted rather than warned about: the graph opened whole, and the new key
+            // is what the next save writes. Nothing here names a node type, so the next rename
+            // reports itself without this being touched.
+            if (!string.Equals(typeKey, node.TypeKey, StringComparison.Ordinal) && node is not UnavailableNode)
+            {
+                renames.Add($"{typeKey} is now called {node.TypeKey}. Saving this graph writes the new name.");
+            }
 
             RestorePinIds(node.Inputs, element["inputs"] as JsonArray);
             RestorePinIds(node.Outputs, element["outputs"] as JsonArray);

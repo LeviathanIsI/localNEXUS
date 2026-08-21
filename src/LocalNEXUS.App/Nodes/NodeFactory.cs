@@ -108,7 +108,7 @@ public sealed class NodeFactory
         new NodeDescriptor("Prompt", "Prompt", "Sends on what you typed in the chat box."),
         new NodeDescriptor("Triage", "Triage", "Reads your project and decides which files to leave alone, edit, or write new."),
         new NodeDescriptor("Model", "Model", "Asks a model, local or hosted, and sends on its reply."),
-        new NodeDescriptor("Patch", "Patch", "Applies a change to the code passing through it."),
+        new NodeDescriptor("Reshape", "Reshape", "Reshapes the text passing through it. Inject standing instructions, keep the part you want, find and replace, trim, or run an expression."),
         new NodeDescriptor("CompilerCheck", "Compiler check", "Compiles the code and asks the model to fix whatever does not build."),
         new NodeDescriptor("Output", "Output", "Writes the finished files into your project.")
     };
@@ -122,7 +122,7 @@ public sealed class NodeFactory
     /// once already, when the palette offered <c>Compile</c> while the node saved itself as
     /// <c>CompileCheck</c>.
     ///
-    /// The old names are: Input for Prompt, Plan for Triage, Transform for Patch, and both
+    /// The old names are: Input for Prompt, Plan for Triage, Patch and Transform for Reshape, and both
     /// CompileCheck and Compile for Compiler check.
     /// </remarks>
     /// <exception cref="NotSupportedException">The type key is not one this build has ever used.</exception>
@@ -139,7 +139,7 @@ public sealed class NodeFactory
         // No key is seeded, because a node no longer holds one. It names a provider and the key
         // is looked up from the store when a run needs it.
         "Model" => new ModelNode(_catalog, _mesh, _dialogs, _toolset, _credentials),
-        "Patch" or "Transform" => new PatchNode(),
+        "Patch" or "Transform" => new ReshapeNode(),
         "CompilerCheck" or "CompileCheck" or "Compile" => new CompilerCheckNode { RetryLimit = _config.DefaultRetryLimit },
         "Output" => new OutputNode(),
         _ => CreateContributed(typeKey)
