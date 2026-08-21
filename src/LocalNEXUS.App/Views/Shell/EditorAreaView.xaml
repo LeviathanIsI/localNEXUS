@@ -55,23 +55,118 @@
         </Border>
 
         <!--
-            What the run is executing. Before a run it says what to do; during one it is the
-            request itself, so the transcript below always has its question above it.
-        -->
-        <Border DockPanel.Dock="Top"
-                Background="{DynamicResource Surface.Window.Brush}"
-                BorderBrush="{DynamicResource Surface.Border.Brush}"
-                BorderThickness="0,0,0,1"
-                Padding="16,7">
-            <Grid>
-                <TextBlock Text="{Binding Feed.RequestText}"
-                           TextTrimming="CharacterEllipsis"
-                           Visibility="{Binding Feed.RequestText, Converter={StaticResource StringToVisibility}}" />
+            The request box, under the canvas it drives.
 
-                <TextBlock Text="Describe a request below, then press Run or Ctrl+Enter."
-                           Foreground="{DynamicResource Text.Muted.Brush}"
-                           Visibility="{Binding Feed.RequestText, Converter={StaticResource StringToVisibility}, ConverterParameter=Invert}" />
-            </Grid>
+            It used to sit at the very bottom of the window, below the output dock, where it read
+            as part of that dock. What it actually feeds is the graph above it, so it belongs in
+            the same region as the tabs and the canvas. Being here rather than in the window's
+            bottom row is also what keeps it on screen when the output dock is collapsed: the
+            transcript can be put away and a request still sent.
+
+            No visibility of its own. The editor area is only on screen in the Workspace, which is
+            the condition the binding it used to carry was expressing.
+        -->
+        <Border DockPanel.Dock="Bottom"
+                Background="{DynamicResource Surface.Panel.Brush}"
+                BorderBrush="{DynamicResource Surface.Border.Brush}"
+                BorderThickness="0,1,0,0"
+                Padding="16,10">
+            <StackPanel>
+
+                <!--
+                    What the last run could not finish, above the box that resolves it.
+                    Here rather than in a dialog because the answer is typed, and the
+                    thing being answered should be readable while it is being typed.
+                -->
+                <Border Margin="0,0,0,10"
+                        Padding="12,9"
+                        CornerRadius="4"
+                        Background="{DynamicResource Surface.Card.Brush}"
+                        BorderThickness="1"
+                        BorderBrush="{DynamicResource Surface.Border.Brush}"
+                        Visibility="{Binding Feed.Staging.HasPending, Converter={StaticResource BooleanToVisibility}}">
+                    <StackPanel>
+                        <DockPanel>
+                            <Button DockPanel.Dock="Right"
+                                    Style="{StaticResource SmallButton}"
+                                    Content="Discard all"
+                                    Command="{Binding Feed.DiscardAllStagedCommand}" />
+
+                            <TextBlock FontWeight="SemiBold"
+                                       VerticalAlignment="Center"
+                                       Foreground="{DynamicResource Status.Warning.Brush}"
+                                       Text="{Binding Feed.Staging.Summary}" />
+                        </DockPanel>
+
+                        <TextBlock Style="{StaticResource HintText}"
+                                   Margin="0,4,0,0"
+                                   TextWrapping="Wrap"
+                                   Text="Everything that compiled is already written. Say what to do about these below and run again; they are kept with the project, so closing the application does not lose them." />
+
+                        <ItemsControl ItemsSource="{Binding Feed.Staging.Pending}" Margin="0,8,0,0">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <DockPanel Margin="0,0,0,5">
+                                        <Button DockPanel.Dock="Right"
+                                                Style="{StaticResource IconButton}"
+                                                Content="&#xE711;"
+                                                ToolTip="Discard this one"
+                                                AutomationProperties.Name="Discard this file"
+                                                Command="{Binding DataContext.Feed.DiscardStagedCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                CommandParameter="{Binding}" />
+
+                                        <StackPanel>
+                                            <TextBlock Style="{StaticResource MonoText}"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Text="{Binding Summary}" />
+                                            <TextBlock Style="{StaticResource HintText}"
+                                                       TextWrapping="Wrap"
+                                                       Text="{Binding ReasonText}" />
+                                        </StackPanel>
+                                    </DockPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="10" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                <Grid Grid.Column="0">
+                    <TextBox Text="{Binding Feed.RequestText, UpdateSourceTrigger=PropertyChanged}"
+                             AcceptsReturn="True"
+                             TextWrapping="Wrap"
+                             VerticalScrollBarVisibility="Auto"
+                             MinHeight="34"
+                             MaxHeight="120"
+                             Padding="10,7" />
+
+                    <!--
+                        The instruction, on the box it is about. It used to be a line above the
+                        canvas, which was only ever compensating for the box being somewhere else,
+                        and a watermark says the same thing where somebody is already looking.
+                    -->
+                    <TextBlock Text="Describe a request, then press Run or Ctrl+Enter."
+                               Margin="11,0,0,0"
+                               VerticalAlignment="Center"
+                               IsHitTestVisible="False"
+                               Foreground="{DynamicResource Text.Muted.Brush}"
+                               Visibility="{Binding Feed.RequestText, Converter={StaticResource StringToVisibility}, ConverterParameter=Invert}" />
+                </Grid>
+
+                <Button Grid.Column="2"
+                        Style="{StaticResource PrimaryButton}"
+                        MinWidth="96"
+                        VerticalAlignment="Stretch"
+                        Content="Run"
+                        Command="{Binding Feed.RunCommand}" />
+                </Grid>
+            </StackPanel>
         </Border>
 
         <!--

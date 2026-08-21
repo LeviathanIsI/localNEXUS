@@ -80,7 +80,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [NotifyCanExecuteChangedFor(nameof(TogglePanelCommand))]
     [NotifyCanExecuteChangedFor(nameof(ShowPanelTabCommand))]
     [NotifyPropertyChangedFor(nameof(IsPanelShowing))]
-    [NotifyPropertyChangedFor(nameof(IsChatShowing))]
     [NotifyPropertyChangedFor(nameof(PanelRowHeight))]
     [NotifyPropertyChangedFor(nameof(InspectorContent))]
     [NotifyPropertyChangedFor(nameof(InspectorHeader))]
@@ -296,9 +295,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// table instead of to an empty transcript.
     /// </summary>
     public bool IsPanelShowing => IsPanelVisible && IsWorkspace;
-
-    /// <summary>True while the chat box is showing, which is whenever the Workspace is.</summary>
-    public bool IsChatShowing => IsWorkspace;
 
     /// <summary>
     /// The height of the panel row. Bound two way so the splitter writes the dragged height back
