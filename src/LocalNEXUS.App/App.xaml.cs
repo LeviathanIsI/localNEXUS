@@ -41,6 +41,18 @@ public partial class App : Application
     private Services.Dialogs.ExtensionsWindowService? _extensionsWindow;
     private Services.Credentials.DpapiCredentialStore? _credentials;
 
+    /// <summary>
+    /// The window's view model, held here rather than reached through the window.
+    /// </summary>
+    /// <remarks>
+    /// Cleanup runs on the ProcessExit thread as well as on the dispatcher, and
+    /// <c>Application.MainWindow</c> verifies thread access on the way in. Reading it from
+    /// there threw on every ordinary exit and wrote a crash report for it, which is the worst
+    /// place to spend a crash report: one that arrives every single time is one nobody reads
+    /// when something has actually gone wrong.
+    /// </remarks>
+    private ViewModels.MainViewModel? _mainViewModel;
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
@@ -228,6 +240,8 @@ public partial class App : Application
 
         ReportEnvironment(feed, catalog);
 
+        _mainViewModel = mainViewModel;
+
         var window = new MainWindow { DataContext = mainViewModel };
         MainWindow = window;
         window.Show();
@@ -272,7 +286,7 @@ public partial class App : Application
         // every process they started is actually gone and closes the job that guarantees it.
         _provisioning?.Cancel();
         _indexing?.Cancel();
-        (MainWindow?.DataContext as MainViewModel)?.Dispose();
+        _mainViewModel?.Dispose();
         _network?.Dispose();
         // Before the group, so each extension is asked to stop and its connection closed rather
         // than every one of them being terminated cold.
