@@ -430,6 +430,23 @@ public sealed partial class RunHistoryStore : ObservableObject, IAsyncDisposable
 
         Execute(connection, "CREATE INDEX IF NOT EXISTS snapshots_run ON snapshots(run_id);");
 
+        Execute(connection, """
+            CREATE TABLE IF NOT EXISTS turns (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                turn_id TEXT NOT NULL UNIQUE,
+                thread_id TEXT NOT NULL,
+                role TEXT NOT NULL,
+                text TEXT NOT NULL,
+                at TEXT NOT NULL,
+                run_id TEXT);
+            """);
+
+        Execute(connection, "CREATE INDEX IF NOT EXISTS turns_thread ON turns(thread_id, id);");
+
+        // Which conversation is being talked in. One row, so that starting fresh survives a
+        // restart rather than quietly resuming the thread it was meant to leave.
+        Execute(connection, "CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);");
+
         // The index is a fraction of the content and is what makes a search over years of runs
         // return in milliseconds. A semantic layer, if one were ever wanted, would attach here:
         // a second table of vectors keyed by the same run_id, consulted alongside this one rather

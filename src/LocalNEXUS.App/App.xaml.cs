@@ -54,6 +54,7 @@ public partial class App : Application
     private ViewModels.MainViewModel? _mainViewModel;
     private Services.History.RunHistoryStore? _history;
     private Services.Dialogs.IHistoryWindow? _historyWindow;
+    private Services.History.ConversationService? _conversation;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -172,10 +173,19 @@ public partial class App : Application
         // until a run starts anyway.
         var history = new Services.History.RunHistoryStore();
         _history = history;
-        _ = history.OpenProjectAsync(unityProject.ProjectPath, CancellationToken.None);
 
         var recorder = new Services.History.RunRecorder(history, config);
         recorder.Attach(feed);
+
+        // The conversation lives in the same database, so the transcript and the record are two
+        // views of one thing rather than two copies that can drift.
+        var conversation = new Services.History.ConversationService(history, Dispatcher);
+        _conversation = conversation;
+
+        // Not awaited: opening a database is not something the window should wait behind, and
+        // nothing can be said or recorded until it is on screen anyway. The conversation is read
+        // back after the store, because it reads from it.
+        _ = OpenRecordAsync(history, conversation, unityProject.ProjectPath);
 
         var historyWindow = new Services.Dialogs.HistoryWindowService();
         _historyWindow = historyWindow;
@@ -195,6 +205,7 @@ public partial class App : Application
             feed,
             staging,
             history,
+            conversation,
             extensions,
             new ToolSupportProbe(OpenAiCompatibleClient.CreateDefaultHttpClient()),
             credentials,
@@ -204,7 +215,7 @@ public partial class App : Application
         };
         var executor = new GraphExecutor(services);
 
-        var feedViewModel = new ActivityFeedViewModel(executor, graph, feed, Dispatcher, cost, staging, recorder);
+        var feedViewModel = new ActivityFeedViewModel(executor, graph, feed, Dispatcher, cost, staging, recorder, conversation, history);
         var catalogViewModel = new ModelCatalogViewModel(catalog, dialogs);
         var pythonViewModel = new PythonEnvironmentViewModel(pythonEnvironment, dialogs);
         var networkViewModel = new NetworkViewModel(mesh, catalog, config, feed, dialogs);
@@ -383,6 +394,26 @@ public partial class App : Application
         catch (Exception ex)
         {
             CrashLog.Write("PythonProvisioning", ex);
+        }
+    }
+
+    /// <summary>
+    /// Opens a project's record and the conversation kept inside it, in that order.
+    /// </summary>
+    /// <remarks>
+    /// One place, because the order matters and getting it wrong reads back an empty thread from
+    /// a database that had not been opened yet.
+    /// </remarks>
+    private static async Task OpenRecordAsync(
+        Services.History.RunHistoryStore history,
+        Services.History.ConversationService conversation,
+        string? projectPath)
+    {
+        await history.OpenProjectAsync(projectPath, CancellationToken.None).ConfigureAwait(false);
+
+        if (history.IsOpen)
+        {
+            await conversation.OpenProjectAsync(CancellationToken.None).ConfigureAwait(false);
         }
     }
 

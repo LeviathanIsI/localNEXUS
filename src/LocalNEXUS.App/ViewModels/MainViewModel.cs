@@ -628,6 +628,17 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// may not do and a view model may: this is the shell deciding what to show, not the engine
     /// deciding what to execute.
     /// </remarks>
+    /// <summary>Reads the newly opened project's record and its conversation, in that order.</summary>
+    private async Task ReopenRecordAsync()
+    {
+        await _history.OpenProjectAsync(UnityProject.ProjectPath, CancellationToken.None).ConfigureAwait(true);
+
+        if (_history.IsOpen && Feed.Conversation is { } conversation)
+        {
+            await conversation.OpenProjectAsync(CancellationToken.None).ConfigureAwait(true);
+        }
+    }
+
     private void RefreshCompilerReachability()
     {
         foreach (var node in Graph.Nodes.OfType<CompilerCheckNode>())
@@ -717,9 +728,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             RefreshCompilerReachability();
             Feed.Staging.OpenProject(UnityProject.ProjectPath);
 
-            // The record belongs to a project too, and for the same reason. Not awaited: opening
-            // a database is not something a property change should wait behind.
-            _ = _history.OpenProjectAsync(UnityProject.ProjectPath, CancellationToken.None);
+            // The record and the conversation kept inside it belong to a project too, and for
+            // the same reason. Not awaited: opening a database is not something a property change
+            // should wait behind.
+            _ = ReopenRecordAsync();
         }
     }
 

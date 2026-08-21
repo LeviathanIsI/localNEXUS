@@ -266,6 +266,7 @@ public sealed partial class RunHistoryStore
     public void ClearHistory() => Enqueue(connection =>
     {
         Execute(connection, "DELETE FROM snapshots;");
+        Execute(connection, "DELETE FROM turns;");
         Execute(connection, "DELETE FROM files;");
         Execute(connection, "DELETE FROM events;");
         Execute(connection, "DELETE FROM search;");

@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using LocalNEXUS.App.Infrastructure;
 using LocalNEXUS.App.Models;
 using LocalNEXUS.App.Services.Execution;
+using LocalNEXUS.App.Services.History;
 using LocalNEXUS.App.Services.Planning;
 using LocalNEXUS.App.Services.ProjectIndex;
 
@@ -160,13 +161,20 @@ public sealed partial class TriageNode : NodeBase
             $"{Title}: planning with {plannerNode.Title}",
             "The model that writes the files is the one that plans them.");
 
+        var message = PlanPrompt.BuildPlannerMessage(request, map, summary, budget);
+
         var reply = await planner
-            .AnswerAsync(
-                PlanPrompt.PlannerSystemPrompt,
-                PlanPrompt.BuildPlannerMessage(request, map, summary, budget),
-                ctx.ForNode(plannerNode),
-                ct)
+            .AnswerAsync(PlanPrompt.PlannerSystemPrompt, message, ctx.ForNode(plannerNode), ct)
             .ConfigureAwait(false);
+
+        // One round, and only one. A node that keeps asking is worse than one that guesses,
+        // because guessing at least finishes. Whatever comes back from here is planned with.
+        var questions = ClarificationParser.Parse(reply);
+
+        if (questions.Count > 0)
+        {
+            reply = await ResolveAsync(ctx, planner, plannerNode, message, questions, ct).ConfigureAwait(false);
+        }
 
         var parsed = PlanParser.Parse(reply);
         var plan = BuildPlan(ctx, index, project.ProjectPath!, parsed, map, summary, budget);
@@ -181,6 +189,71 @@ public sealed partial class TriageNode : NodeBase
 
         StatusMessage = plan.Summary;
         return NodeResult.FromPin(Plan, plan.Tasks);
+    }
+
+    /// <summary>
+    /// Puts the planner's questions to the person and plans again with whatever comes back.
+    /// </summary>
+    /// <remarks>
+    /// The run pauses here, in the sense that this task is awaiting one the interface completes.
+    /// It is the same shape as asking for a confirmation, which this application has done since
+    /// v0.4, and it is why the executor needs no part in it: nothing above this node knows that a
+    /// node can want something, only that a node has not returned yet. Resuming is not a concept
+    /// that has to exist, because nothing stopped.
+    ///
+    /// Nobody answering is a valid outcome rather than a failure. The run proceeds on the first
+    /// option of each question and says so, in the chat and in the feed, because an assumption
+    /// that cannot be seen is exactly the confidently wrong answer this was meant to prevent.
+    /// </remarks>
+    private async Task<string> ResolveAsync(
+        NodeExecutionContext ctx,
+        IPlanningModel planner,
+        NodeBase plannerNode,
+        string originalMessage,
+        IReadOnlyList<ClarificationQuestion> questions,
+        CancellationToken ct)
+    {
+        var conversation = ctx.Services.Conversation;
+        var asked = ClarificationParser.Format(questions);
+
+        ctx.Feed.Add(
+            ActivityKind.Confirmation,
+            $"{Title} needs {(questions.Count == 1 ? "an answer" : "some answers")}",
+            asked,
+            Id);
+
+        StatusMessage = questions.Count == 1 ? "Waiting on an answer" : $"Waiting on {questions.Count} answers";
+
+        var outcome = conversation is null
+            ? ClarificationOutcome.Unanswered
+            : await conversation
+                .AskAsync(asked, ctx.RunId, ConversationService.AnswerTimeout, ct)
+                .ConfigureAwait(false);
+
+        string followUp;
+
+        if (outcome.Answered)
+        {
+            followUp = ClarificationParser.DescribeAnswers(questions, outcome.Text);
+            ctx.Feed.Info($"{Title}: planning with the answers", outcome.Text);
+        }
+        else
+        {
+            var assumed = ClarificationParser.DescribeAssumption(questions);
+            followUp = $"{assumed}{Environment.NewLine}{Environment.NewLine}Plan now. Do not ask again.";
+
+            StatusMessage = "Proceeding on an assumption";
+            ctx.Feed.Info($"{Title}: nobody answered, so it assumed", assumed);
+            conversation?.Report(assumed, ctx.RunId);
+        }
+
+        return await planner
+            .AnswerAsync(
+                PlanPrompt.PlannerSystemPrompt,
+                $"{originalMessage}{Environment.NewLine}{Environment.NewLine}{followUp}",
+                ctx.ForNode(plannerNode),
+                ct)
+            .ConfigureAwait(false);
     }
 
     /// <inheritdoc />

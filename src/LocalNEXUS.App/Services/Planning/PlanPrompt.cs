@@ -60,6 +60,25 @@ public static class PlanPrompt
         builder.AppendLine("Do not create a type that already exists above. Edit its file, or write something that references it.");
         builder.AppendLine("A MonoBehaviour file name must match its class name exactly.");
         builder.AppendLine("Write as many files as the request genuinely needs, and no more.");
+        builder.AppendLine();
+
+        // The bar for asking is set here, in the prompt, because this is the only place that can
+        // set it. A model that is invited to ask will ask about everything unless it is told very
+        // plainly what does not count, and a tool that asks about everything is not used twice.
+        builder.AppendLine("If, and only if, you cannot plan without knowing something that this project does not tell you,");
+        builder.AppendLine("answer instead with a single section:");
+        builder.AppendLine();
+        builder.AppendLine("QUESTIONS");
+        builder.AppendLine("One row per question, in this format:");
+        builder.AppendLine("question | first option | second option | further options");
+        builder.AppendLine();
+        builder.AppendLine("Ask only about a fork you cannot settle from what is listed above, where choosing wrong means writing the file twice.");
+        builder.AppendLine("Two existing types are equally plausible to extend, or the request names something that maps to more than one file above: ask.");
+        builder.AppendLine("Never ask for confirmation of something you have already worked out.");
+        builder.AppendLine("Never ask about naming, formatting, style or preference. Choose, and say so in the plan row.");
+        builder.AppendLine("Never ask whether to proceed.");
+        builder.AppendLine("Every question must name at least two concrete alternatives that exist in the project above. If you cannot name two, you do not have a real question, so plan instead.");
+        builder.AppendLine("Ask everything you need at once. You get one opportunity.");
 
         return ContextBudget.Fit(builder.ToString(), budget.TotalCharacters, "the planning prompt");
     }

@@ -27,6 +27,8 @@ public sealed partial class ActivityFeedViewModel : ObservableObject
     private readonly RunCostTracker _cost;
     private readonly Services.Files.StagingStore _staging;
     private readonly Services.History.RunRecorder? _recorder;
+    private readonly Services.History.ConversationService? _conversation;
+    private readonly Services.History.RunHistoryStore? _history;
 
     private CancellationTokenSource? _runCancellation;
     private RunContext? _run;
@@ -73,8 +75,13 @@ public sealed partial class ActivityFeedViewModel : ObservableObject
         Dispatcher dispatcher,
         RunCostTracker? cost = null,
         Services.Files.StagingStore? staging = null,
-        Services.History.RunRecorder? recorder = null)
+        Services.History.RunRecorder? recorder = null,
+        Services.History.ConversationService? conversation = null,
+        Services.History.RunHistoryStore? history = null)
     {
+        _conversation = conversation;
+        _history = history;
+
         // The run lifecycle is owned here, so this is where a run gets its identity in the record.
         // Doing it in the executor would put knowledge of the record into the one component that
         // is meant to know only how to order nodes.
@@ -111,6 +118,17 @@ public sealed partial class ActivityFeedViewModel : ObservableObject
     /// <summary>The work the last run left behind, for the box to show and the next run to read.</summary>
     public Services.Files.StagingStore Staging => _staging;
 
+    /// <summary>The running conversation for this project, which the transcript binds to.</summary>
+    public Services.History.ConversationService? Conversation => _conversation;
+
+    /// <summary>Starts a fresh conversation without losing a word of the old one.</summary>
+    [RelayCommand]
+    private void NewConversation() => _conversation?.StartNew();
+
+    /// <summary>Lets a run that asked something carry on unanswered.</summary>
+    [RelayCommand]
+    private void ProceedWithoutAnswering() => _conversation?.ProceedWithoutAnswering();
+
     /// <summary>
     /// The request the run is given: what was typed, and what is still waiting.
     /// </summary>
@@ -123,18 +141,66 @@ public sealed partial class ActivityFeedViewModel : ObservableObject
     /// Appended rather than substituted, and clearly labelled, so the typed request stays the
     /// request. Nothing is added when nothing is waiting.
     /// </remarks>
-    private string ComposeRequest()
+    /// <summary>
+    /// What the graph says back once a run ends.
+    /// </summary>
+    /// <remarks>
+    /// Short on purpose. The transcript is the conversation, not a second copy of the feed, and
+    /// somebody scrolling it wants to know how each attempt ended rather than to read it again.
+    /// </remarks>
+    private string DescribeOutcome()
     {
-        var typed = RequestText;
+        var staged = _staging.HasPending ? $" {_staging.Summary}." : string.Empty;
 
-        if (!_staging.HasPending)
+        return RunState switch
         {
-            return typed;
+            RunState.Completed => $"Done.{staged}",
+            RunState.Unresolved => $"Finished with work left over.{staged}",
+            RunState.Faulted => "Stopped. The activity panel says where.",
+            _ => $"Ended as {RunState}.{staged}"
+        };
+    }
+
+    private async Task<string> ComposeRequestAsync(string typed)
+    {
+        var builder = new System.Text.StringBuilder(typed);
+
+        if (_conversation is { } conversation)
+        {
+            var turns = conversation.Turns.ToList();
+            var recent = Services.History.ConversationContext.Recent(turns);
+            var carried = recent.Select(t => t.Id).ToHashSet(StringComparer.Ordinal);
+
+            var recalled = _history is null
+                ? Array.Empty<Services.History.ConversationTurn>()
+                : await _history
+                    .RecallAsync(
+                        conversation.ThreadId,
+                        typed,
+                        carried,
+                        Services.History.ConversationContext.RecalledTurns,
+                        CancellationToken.None)
+                    .ConfigureAwait(true);
+
+            var context = Services.History.ConversationContext.Build(turns, recalled);
+
+            if (context.Length > 0)
+            {
+                builder.AppendLine();
+                builder.AppendLine();
+                builder.Append(context);
+            }
         }
 
-        return $"{typed}{Environment.NewLine}{Environment.NewLine}"
-               + $"Work left unfinished by an earlier run, still waiting:{Environment.NewLine}"
-               + _staging.Describe();
+        if (_staging.HasPending)
+        {
+            builder.AppendLine();
+            builder.AppendLine();
+            builder.AppendLine("Work left unfinished by an earlier run, still waiting:");
+            builder.Append(_staging.Describe());
+        }
+
+        return builder.ToString();
     }
 
     /// <summary>Forgets a staged file, because it is no longer wanted.</summary>
@@ -155,13 +221,32 @@ public sealed partial class ActivityFeedViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanRun))]
     private async Task RunAsync()
     {
-        var request = ComposeRequest();
+        var typed = RequestText;
+
+        // A message sent while a run is waiting on a question is the answer to it, not a new
+        // request. The box means the obvious thing, which is the whole reason the questions are
+        // asked here rather than in a dialog of their own.
+        if (_conversation is { IsAwaitingAnswer: true })
+        {
+            _conversation.Say(typed);
+            RequestText = string.Empty;
+            return;
+        }
 
         _runCancellation?.Dispose();
         _runCancellation = new CancellationTokenSource();
 
-        // Begun before the first entry, so everything the run says lands under it.
-        var runId = _recorder?.BeginRun(request, "graph", _graph.Nodes.Count, _graph.Connections.Count);
+        // Begun before the first entry, so everything the run says lands under it. What is
+        // recorded as the request is what the person actually typed, not the assembled prompt:
+        // the history list is a list of things somebody asked for.
+        var runId = _recorder?.BeginRun(typed, "graph", _graph.Nodes.Count, _graph.Connections.Count);
+
+        // Said before the context is assembled, because the assembly reads the thread and this
+        // message is the newest thing in it.
+        _conversation?.Say(typed, runId);
+        RequestText = string.Empty;
+
+        var request = await ComposeRequestAsync(typed).ConfigureAwait(true);
 
         _feed.Add(ActivityKind.Request, "Request", request);
 
@@ -197,6 +282,10 @@ public sealed partial class ActivityFeedViewModel : ObservableObject
                     "Run cost",
                     $"{RunCost.Format(_cost.Total)} across {_cost.Calls} call(s).");
             }
+
+            // What the graph has to say back, which is what makes the next message a follow up
+            // rather than a fresh start.
+            _conversation?.Report(DescribeOutcome(), runId);
 
             // Last, so the cost entry above is inside the run it belongs to.
             _recorder?.EndRun(RunState.ToString(), _cost.Total, _cost.Calls);

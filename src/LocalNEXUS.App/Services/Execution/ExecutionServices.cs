@@ -27,6 +27,7 @@ public sealed class ExecutionServices
         IActivityFeed feed,
         StagingStore? staging = null,
         History.RunHistoryStore? history = null,
+        History.ConversationService? conversation = null,
         ExtensionRegistry? extensions = null,
         ToolSupportProbe? toolSupport = null,
         ICredentialStore? credentials = null,
@@ -45,6 +46,7 @@ public sealed class ExecutionServices
         FileWriter = fileWriter;
         Staging = staging ?? new StagingStore();
         History = history ?? new History.RunHistoryStore();
+        Conversation = conversation;
         Feed = feed;
     }
 
@@ -89,6 +91,16 @@ public sealed class ExecutionServices
     /// first. Reading the record is the history window's business, not a node's.
     /// </remarks>
     public History.RunHistoryStore History { get; }
+
+    /// <summary>
+    /// The running conversation, or null when nothing is driving one.
+    /// </summary>
+    /// <remarks>
+    /// Reached by a node that has a question it cannot answer from the project. Awaiting the reply
+    /// is what pauses the run, and it pauses the same way a confirmation does: this node's task
+    /// has not returned. Nothing above it is involved.
+    /// </remarks>
+    public History.ConversationService? Conversation { get; }
 
     /// <summary>The extensions registered against the open project, or null when none is open.</summary>
     public ExtensionRegistry? Extensions { get; }
