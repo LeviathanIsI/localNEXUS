@@ -40,7 +40,6 @@
         </Setter>
     </Style>
 
-    <!-- Window controls. Close goes red on hover, the others take the ordinary hover. -->
     <!--
         The strip down the inner edge of a side panel, carrying the chevron that collapses it.
 
@@ -75,6 +74,7 @@
         </Setter>
     </Style>
 
+    <!-- Window controls. Close goes red on hover, the others take the ordinary hover. -->
     <Style x:Key="WindowButton" TargetType="Button" BasedOn="{StaticResource IconButton}">
         <Setter Property="Width" Value="42" />
         <Setter Property="Height" Value="30" />
@@ -401,10 +401,29 @@
     </Style>
 
     <!-- The dot that carries a state. One shape, every state enum. -->
+    <!--
+        A state dot, sitting beside the label it belongs to.
+
+        The nudge downward is the whole of it. Centring the dot on the line box puts it visibly
+        high, because a line box is sized for ascenders and descenders while the text next to it is
+        mostly lowercase, so the mass the eye reads as the middle of the label sits below the
+        middle of its box. A tenth of the type size is the usual correction and one pixel is that
+        at every size this dot is drawn.
+
+        It is a render transform rather than a margin for two reasons. A margin set here is
+        overridden by the margin nearly every one of these sets for its own spacing, and a render
+        transform does not take part in layout, so the dot moves without anything beside it
+        shifting to follow.
+    -->
     <Style x:Key="StateDot" TargetType="Ellipse">
         <Setter Property="Width" Value="7" />
         <Setter Property="Height" Value="7" />
         <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="RenderTransform">
+            <Setter.Value>
+                <TranslateTransform Y="1" />
+            </Setter.Value>
+        </Setter>
     </Style>
 
 </ResourceDictionary>
