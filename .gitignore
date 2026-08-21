@@ -129,3 +129,6 @@ vendor/python/__pycache__/
 # ---------------------------------------------------------------------------
 .claude/settings.local.json
 *.tmp
+
+# The compiled installer, which is build output like everything else in dist.
+dist/installer/
