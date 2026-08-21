@@ -6,9 +6,9 @@ This is what stops people. The repository does not contain the inference engines
 large, GPU specific, and carry their own licences, so you fetch them into folders that
 already exist and are gitignored.
 
-If you only want to run the application rather than work on it, the installer does this for you:
-build it with `.\release.ps1` and it fetches whichever engines you tick. This section is for
-working from a clone.
+If you only want to run the application rather than work on it, do not do any of this: take the
+installer from a release and tick the engines you want, and it fetches them for you. This
+section is for working from a clone.
 
 The app builds and runs without them. It just cannot do anything, and the feed says so on
 startup.
@@ -37,27 +37,33 @@ dotnet build
 dotnet run --project src/LocalNEXUS.App
 ```
 
-One solution, one project.
+One solution, two projects. The second one is the installer.
 
 ```
 LocalNEXUS.sln
-src/LocalNEXUS.App/     everything
-vendor/                 engine binaries you fetch, plus committed Python lockfiles
-docs/                   documentation
-publish.ps1             produces the runnable exe
-release.ps1             produces the installer and the zip
-src/LocalNEXUS.Installer  the installer, a WPF app of its own
-dist/                   build output, gitignored
+src/LocalNEXUS.App/          the application
+src/LocalNEXUS.Installer/    the installer, a WPF app of its own
+vendor/                      engine binaries you fetch, plus committed Python lockfiles
+docs/                        documentation
+publish.ps1                  produces the runnable exe
+release.ps1                  produces the installer and the zip
+dist/                        build output, gitignored
 ```
 
 `.\publish.ps1` is the real build. It publishes a self contained single file exe to `dist\`
 and copies whatever engines you have into `dist\vendor\` with paths intact.
 
-`.\release.ps1` produces what a release consists of: the installer and the plain zip,
-both into `dist\release\`. It calls `publish.ps1` rather than reimplementing it, so a
-release build and a development build are the same build.
-The installer is a WPF application in `src\LocalNEXUS.Installer`, which is why it
-looks like the product rather than like a setup utility.
+`.\release.ps1` produces what a release consists of, the installer and the plain zip, both
+into `dist\release\`. It calls `publish.ps1` rather than reimplementing it, so a release build
+and a development build are the same build. It also copies the published exe into the
+installer's `Payload/` folder, because the installer carries the application inside itself and
+only fetches the engines.
+
+The installer is WPF rather than a setup tool, which is why it looks like the product. It
+reuses the application's conventions and its own theme dictionary, so the no colour literals
+rule applies there exactly as it does here. Inno Setup was tried first and could not produce
+the design: its page structure is fixed and its styling skins existing controls rather than
+letting new ones be laid out.
 
 **"It compiles" is not the bar. "The exe in `dist\` runs and does the thing" is.** Single
 file publishing has traps, the sharpest being that `Assembly.Location` is empty inside a
@@ -145,7 +151,8 @@ A good one does one thing, explains why in the description rather than what, bui
 says how you verified it. Be honest about what you did not exercise. "Could not test the mesh
 path, no second machine" is useful and nobody will hold it against you. For anything touching
 startup, paths, process handling or resource loading, confirm `.\publish.ps1` produced an exe
-that runs.
+that runs. For anything touching the installer, confirm `.\release.ps1` produced one that
+installs, because the installer is published single file too and has the same traps.
 
 Commits should build individually. Subject under 70 characters, body when it needs explaining.
 

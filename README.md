@@ -75,9 +75,13 @@ Pre-1.0. No automated tests. Interfaces still move.
 Windows 11. No Linux or macOS build.
 
 A GPU is strongly recommended. Developed against an RTX 4080 Laptop with 12 GB. llama.cpp
-ships Vulkan builds for AMD and Intel, and a CPU build that works slowly.
+ships Vulkan builds for AMD and Intel, and a CPU build that works slowly. The installer picks
+the right one by reading your driver version, and lets you override it.
 
-About 1 GB for the app and engines, plus whatever your models weigh.
+The application is about 180 MB. The engines are what varies: llama.cpp is 33 MB for Vulkan and
+513 MB for CUDA, because CUDA needs its runtime as a second download. Mesh LLM is 51 MB and uv
+is 19 MB, and both are optional. Then whatever your models weigh, which is usually more than all
+of it put together.
 
 First launch builds a Python environment in the background so safetensors models can be
 served. Roughly 3 GB on NVIDIA because it pulls a CUDA torch, a few hundred megabytes
@@ -110,7 +114,8 @@ See the status table before relying on this.
 git clone https://github.com/You-Know-Its-Me-Studios/LocalNEXUS.git
 cd LocalNEXUS
 dotnet build
-.\publish.ps1
+.\publish.ps1     # the runnable exe, into dist\
+.\release.ps1     # the installer and the zip, into dist\release\
 ```
 
 The engine binaries are not in the repository. Fetch them into `vendor/` first or the app
