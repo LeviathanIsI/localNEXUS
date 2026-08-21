@@ -7,7 +7,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
-             Background="{DynamicResource Surface.Window.Brush}">
+             Background="Transparent">
 
     <!--
         Every model the network can serve, one per row, sortable.
@@ -20,6 +20,13 @@
         Four columns say "not reported" instead of a number. The mesh does not tell us a model's
         size on disk or its throughput, and a table that made those up would be lying exactly where
         somebody would trust it.
+    -->
+
+    <!--
+        No fill of its own, so the window base layer shows behind the table and a theme that can
+        be seen through is seen through here as it is on the canvas. The status strip, the column
+        headings and the note underneath keep the fill they were inheriting and stay opaque, the
+        same treatment the tab strip and the request bar get on the Workspace.
     -->
 
     <UserControl.Resources>
@@ -40,6 +47,7 @@
 
         <!-- What the mesh itself is doing, above the table. -->
         <Border DockPanel.Dock="Top"
+                Background="{DynamicResource Surface.Window.Brush}"
                 BorderBrush="{DynamicResource Surface.Border.Brush}"
                 BorderThickness="0,0,0,1"
                 Padding="16,9">
@@ -74,6 +82,7 @@
 
         <!-- What the list amounts to, under the table. -->
         <Border DockPanel.Dock="Bottom"
+                Background="{DynamicResource Surface.Window.Brush}"
                 BorderBrush="{DynamicResource Surface.Border.Brush}"
                 BorderThickness="0,1,0,0"
                 Padding="16,7">
@@ -84,6 +93,7 @@
 
         <!-- Column headings. -->
         <Border DockPanel.Dock="Top"
+                Background="{DynamicResource Surface.Window.Brush}"
                 BorderBrush="{DynamicResource Surface.Border.Brush}"
                 BorderThickness="0,0,0,1"
                 Padding="16,0">
