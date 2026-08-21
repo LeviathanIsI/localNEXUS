@@ -100,6 +100,7 @@ public sealed partial class ExtensionsViewModel : ObservableObject
         {
             OnPropertyChanged(nameof(EmptyMessage));
             OnPropertyChanged(nameof(IsEmpty));
+            OnPropertyChanged(nameof(ShowEmptyMessage));
             OnPropertyChanged(nameof(VisibleInstalled));
             OnPropertyChanged(nameof(FilterHidesEverything));
         };
@@ -130,6 +131,15 @@ public sealed partial class ExtensionsViewModel : ObservableObject
     /// <summary>True when the installed list is empty, which is an ordinary state.</summary>
     public bool IsEmpty => _registry.Extensions.Count == 0;
 
+    /// <summary>
+    /// True when the empty message should be drawn.
+    /// </summary>
+    /// <remarks>
+    /// Only on the installed shelf. The presets shelf is never empty, so a message saying
+    /// nothing is installed has nothing to do with it and drew straight over the list.
+    /// </remarks>
+    public bool ShowEmptyMessage => ShowInstalled && IsEmpty;
+
     /// <summary>True when something is selected in the installed list.</summary>
     public bool HasSelection => Selected is not null;
 
@@ -154,6 +164,7 @@ public sealed partial class ExtensionsViewModel : ObservableObject
         OnPropertyChanged(nameof(FilterHidesEverything));
         OnPropertyChanged(nameof(ShowPresets));
         OnPropertyChanged(nameof(ShowInstalled));
+        OnPropertyChanged(nameof(ShowEmptyMessage));
     }
 
     /// <summary>True while the presets shelf is showing.</summary>

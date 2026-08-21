@@ -191,7 +191,7 @@
                                TextWrapping="Wrap"
                                VerticalAlignment="Top"
                                Text="{Binding EmptyMessage}"
-                               Visibility="{Binding IsEmpty, Converter={StaticResource BooleanToVisibility}}" />
+                               Visibility="{Binding ShowEmptyMessage, Converter={StaticResource BooleanToVisibility}}" />
 
                     <TextBlock Style="{StaticResource HintText}"
                                Margin="16"
