@@ -18,17 +18,19 @@ namespace LocalNEXUS.App.Services.Compilation;
 /// Nothing here is written to; the project folder is only read, which is what lets a check run
 /// while the Unity editor has the same project open.
 ///
-/// Every way of not finding Unity falls through to
-/// <see cref="FrameworkReferenceResolver"/> rather than refusing to compile. No project open, no
-/// editor installed, an editor whose assemblies will not read: in all three the check still runs
-/// against the framework and still catches every syntax error and every misuse of the standard
-/// library. What changes is the reference state, which is what stops a pass being read as more
-/// than it is and stops a missing type being read as a mistake.
+/// Every way of not finding Unity falls through rather than refusing to compile. A project that
+/// is not a Unity project at all goes to <see cref="ProjectReferenceResolver"/>, which reads its
+/// own source and its restored packages. A Unity project with no editor installed, or one whose
+/// assemblies will not read, falls to <see cref="FrameworkReferenceResolver"/> and still catches
+/// every syntax error and every misuse of the standard library. What changes is the reference
+/// state, which is what stops a pass being read as more than it is and stops a missing type being
+/// read as a mistake.
 /// </remarks>
 public sealed class UnityReferenceResolver
 {
     private readonly object _sync = new();
     private readonly FrameworkReferenceResolver _framework;
+    private readonly ProjectReferenceResolver _project = new();
 
     private CompileReferenceSet? _cached;
     private string? _cachedProject;
@@ -54,6 +56,15 @@ public sealed class UnityReferenceResolver
             // syntax error and every misuse of the standard library, which is the difference
             // between this being a Unity tool and being a tool that Unity is one target of.
             return _framework.Resolve();
+        }
+
+        // A project that is not a Unity project gets its own source and its own packages, which
+        // is the whole of v1.41. Gated on what the project is rather than on whether a Unity
+        // install turned up, so a Unity project can never take this path and the Unity numbers
+        // cannot move because of it.
+        if (Files.ProjectService.Detect(projectPath) != Files.ProjectKind.Unity)
+        {
+            return _project.Resolve(projectPath, _framework.Resolve(), CancellationToken.None);
         }
 
         var install = UnityInstallLocator.Resolve(projectPath, out var exactVersion);

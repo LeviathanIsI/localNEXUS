@@ -139,7 +139,9 @@ public sealed partial class CompilerCheckNode : NodeBase
 
     /// <summary>True when what it can reach is short of what the code may legitimately use.</summary>
     public bool ReachabilityIsPartial
-        => Reachability is CompileReferenceState.ProjectNotCompiled or CompileReferenceState.FrameworkOnly;
+        => Reachability is CompileReferenceState.ProjectNotCompiled
+            or CompileReferenceState.ProjectNotRestored
+            or CompileReferenceState.FrameworkOnly;
 
     /// <summary>
     /// Asks the compiler what it can reach and records the answer, without compiling anything.

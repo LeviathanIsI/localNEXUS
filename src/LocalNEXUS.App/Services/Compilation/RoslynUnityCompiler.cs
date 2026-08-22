@@ -62,7 +62,8 @@ public sealed class RoslynUnityCompiler : ICodeCompiler
         }
 
         // Roslyn is synchronous and CPU bound. Running it on the pool keeps a long compile off
-        // the thread the caller is on, which during a run is the one streaming to the feed.
+        // the thread the caller is on, which during a run is the one streaming to the feed. The
+        // project's source is parsed on this thread too, the first time and after an edit.
         return Task.Run(() => Compile(sources, referenceSet, ct), ct);
     }
 
@@ -102,20 +103,24 @@ public sealed class RoslynUnityCompiler : ICodeCompiler
     {
         var stopwatch = Stopwatch.StartNew();
 
+        var parseOptions = new CSharpParseOptions(referenceSet.Language);
+
         var trees = sources
             .Select(s => CSharpSyntaxTree.ParseText(
                 SourceText.From(s.Source),
-                new CSharpParseOptions(UnityLanguageVersion),
+                parseOptions,
                 path: s.FileName,
                 cancellationToken: ct))
             .ToList();
 
         var fileName = sources.Count > 0 ? sources[^1].FileName : "Generated.cs";
 
+        var references = WithProject(referenceSet, trees, ct);
+
         var compilation = CSharpCompilation.Create(
             "LocalNEXUS.CompileCheck",
             trees,
-            referenceSet.References,
+            references,
             new CSharpCompilationOptions(
                 OutputKind.DynamicallyLinkedLibrary,
                 allowUnsafe: true,
@@ -140,6 +145,45 @@ public sealed class RoslynUnityCompiler : ICodeCompiler
             stopwatch.Elapsed,
             referenceSet.State,
             referenceSet.Summary);
+    }
+
+    /// <summary>
+    /// The reference set, plus the open project itself when there is one to add.
+    /// </summary>
+    /// <remarks>
+    /// The project goes in as a reference and the files being checked stay as sources, which is
+    /// what keeps an error in somebody's existing code from failing the compile of a file that has
+    /// nothing to do with it.
+    ///
+    /// Anything the checked files declare is left out of that reference. A generated Coupon and a
+    /// Coupon already on disk are one type declared twice, and the compiler would be right to say
+    /// so about a situation that does not exist.
+    ///
+    /// Nothing here happens on the Unity path, which carries no project source: it gets the
+    /// project's types from the assemblies Unity compiled, exactly as it did.
+    /// </remarks>
+    private static IReadOnlyList<MetadataReference> WithProject(
+        CompileReferenceSet referenceSet,
+        IReadOnlyList<SyntaxTree> trees,
+        CancellationToken ct)
+    {
+        if (referenceSet.ProjectSources is not { Count: > 0 } sources)
+        {
+            return referenceSet.References;
+        }
+
+        var declared = trees
+            .SelectMany(t => t.GetRoot(ct)
+                .DescendantNodes()
+                .OfType<Microsoft.CodeAnalysis.CSharp.Syntax.BaseTypeDeclarationSyntax>()
+                .Select(d => d.Identifier.ValueText))
+            .ToHashSet(StringComparer.Ordinal);
+
+        var project = sources.AsReference(declared, referenceSet.References, referenceSet.Language);
+
+        return project is null
+            ? referenceSet.References
+            : referenceSet.References.Append(project).ToList();
     }
 
     private static CompileDiagnostic Translate(Diagnostic diagnostic, string fileName, bool referencesArePartial)

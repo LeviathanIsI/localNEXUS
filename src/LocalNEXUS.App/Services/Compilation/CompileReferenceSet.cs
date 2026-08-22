@@ -15,12 +15,16 @@ public sealed class CompileReferenceSet
         IReadOnlyList<MetadataReference> references,
         CompileReferenceState state,
         string summary,
-        string? unityVersion)
+        string? unityVersion,
+        ProjectSourceSet? projectSources = null,
+        Microsoft.CodeAnalysis.CSharp.LanguageVersion language = Microsoft.CodeAnalysis.CSharp.LanguageVersion.CSharp9)
     {
         References = references;
         State = state;
         Summary = summary;
         UnityVersion = unityVersion;
+        ProjectSources = projectSources;
+        Language = language;
     }
 
     /// <summary>The assemblies themselves.</summary>
@@ -35,9 +39,34 @@ public sealed class CompileReferenceSet
     /// <summary>The editor version these came from, or null when there was none.</summary>
     public string? UnityVersion { get; }
 
+    /// <summary>
+    /// The open project's own source, when it was read, so a check can see the types around it.
+    /// </summary>
+    /// <remarks>
+    /// Not a reference yet, because which of its files have to be left out depends on what is
+    /// being written. It becomes one per check.
+    ///
+    /// Null on the Unity path, which gets the project's types from its compiled assemblies
+    /// instead and is not changed by any of this.
+    /// </remarks>
+    public ProjectSourceSet? ProjectSources { get; }
+
+    /// <summary>
+    /// The language version to parse and compile at.
+    /// </summary>
+    /// <remarks>
+    /// C# 9 for Unity, because that is what Unity accepts and compiling at anything newer would
+    /// let syntax through here that Unity then rejects. Anywhere else that reasoning does not
+    /// apply and holding a modern project to C# 9 would invent errors about file scoped
+    /// namespaces and records that its own build is perfectly happy with.
+    /// </remarks>
+    public Microsoft.CodeAnalysis.CSharp.LanguageVersion Language { get; }
+
     /// <summary>True when there is enough here to attempt a compile at all.</summary>
     public bool CanCompile => State is CompileReferenceState.Complete
         or CompileReferenceState.ProjectNotCompiled
+        or CompileReferenceState.ProjectResolved
+        or CompileReferenceState.ProjectNotRestored
         or CompileReferenceState.FrameworkOnly;
 
     /// <summary>
@@ -48,13 +77,23 @@ public sealed class CompileReferenceSet
     /// wrong; under a partial one it means the code is wrong or the reference is absent, and those
     /// two are indistinguishable from the diagnostic alone.
     /// </remarks>
-    public bool IsPartial => State is CompileReferenceState.ProjectNotCompiled or CompileReferenceState.FrameworkOnly;
+    /// <remarks>
+    /// Resolved is not partial, and that is the whole of what v1.41 bought. With the project's own
+    /// source and its restored packages present, a type that cannot be found is a type that is not
+    /// there, which is the difference between a check that proves something and one that reports
+    /// it could not tell.
+    /// </remarks>
+    public bool IsPartial => State is CompileReferenceState.ProjectNotCompiled
+        or CompileReferenceState.ProjectNotRestored
+        or CompileReferenceState.FrameworkOnly;
 
     /// <summary>What the node says about what it can reach, before anything has run.</summary>
     public string Reachability => State switch
     {
         CompileReferenceState.Complete => UnityVersion is null ? "Full reference set" : $"Full reference set, Unity {UnityVersion}",
         CompileReferenceState.ProjectNotCompiled => UnityVersion is null ? "Partial reference set" : $"Partial reference set, Unity {UnityVersion}",
+        CompileReferenceState.ProjectResolved => "The project's own types and packages",
+        CompileReferenceState.ProjectNotRestored => "The project's own types, but it has not been restored",
         CompileReferenceState.FrameworkOnly => "Framework only, no Unity",
         CompileReferenceState.NoFrameworkReferences => "Nothing to compile against",
         _ => "Not checked yet"
@@ -69,7 +108,7 @@ public sealed class CompileReferenceSet
     /// the user would have assumed.
     /// </remarks>
     public CompileReferenceSet WithNote(string note)
-        => new(References, State, $"{note} {Summary}", UnityVersion);
+        => new(References, State, $"{note} {Summary}", UnityVersion, ProjectSources, Language);
 
     /// <summary>An empty set that explains why it is empty.</summary>
     public static CompileReferenceSet Unavailable(CompileReferenceState state, string summary)

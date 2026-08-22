@@ -33,6 +33,28 @@ public enum CompileReferenceState
     /// </remarks>
     FrameworkOnly,
 
+    /// <summary>
+    /// The open project's own source and its restored packages were both read, so the check sees
+    /// what a real build of that project would see.
+    /// </summary>
+    /// <remarks>
+    /// The non Unity counterpart of <see cref="Complete"/>, and the point of it is that a missing
+    /// type under this state means the code is wrong rather than that the check was short of
+    /// something. What it still does not have is whatever the project's source generators and
+    /// analyzers would contribute, which is the same thing the Unity path gives up.
+    /// </remarks>
+    ProjectResolved,
+
+    /// <summary>
+    /// The project's own source was read, but nothing has restored it, so its packages are absent.
+    /// </summary>
+    /// <remarks>
+    /// An ordinary state rather than a failure: a project nobody has built yet has no restore
+    /// record, and there is nothing wrong with that. Types the project declares resolve; a type
+    /// from a package does not, so a missing type is still not trusted here.
+    /// </remarks>
+    ProjectNotRestored,
+
     /// <summary>No Unity project is open, so there is nothing to compile against.</summary>
     NoProject,
 
