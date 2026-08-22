@@ -178,6 +178,101 @@ public sealed partial class AppSettingsViewModel : ObservableObject
     public void UseHistory(Services.History.RunHistoryStore history) => History = history;
 
     private Services.Mcp.McpBridgeServer? _mcp;
+    private Services.Files.ProjectSettingsService? _projectSettings;
+
+    /// <summary>Points this panel at the open project's settings, which App owns.</summary>
+    public void UseProjectSettings(Services.Files.ProjectSettingsService settings)
+    {
+        _projectSettings = settings;
+
+        settings.PropertyChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(ScriptsFolder));
+            OnPropertyChanged(nameof(ProjectKind));
+            OnPropertyChanged(nameof(ProjectKindNote));
+            OnPropertyChanged(nameof(ProjectMcpEnabled));
+            OnPropertyChanged(nameof(ShareProjectSettings));
+            OnPropertyChanged(nameof(ProjectSharingNote));
+            OnPropertyChanged(nameof(ProjectFolders));
+        };
+
+        OnPropertyChanged(nameof(ProjectSettings));
+    }
+
+    /// <summary>The open project's settings, for the panel to bind its visibility to.</summary>
+    public Services.Files.ProjectSettingsService? ProjectSettings => _projectSettings;
+
+    /// <summary>Folders the project has, for the list to choose from.</summary>
+    public IReadOnlyList<string> ProjectFolders => _projectSettings?.ExistingFolders() ?? Array.Empty<string>();
+
+    /// <summary>Both kinds, for the override.</summary>
+    public IReadOnlyList<Services.Files.ProjectKind> ProjectKinds { get; } =
+        new[] { Services.Files.ProjectKind.Unity, Services.Files.ProjectKind.Plain };
+
+    /// <summary>Where generated code goes in this project.</summary>
+    public string ScriptsFolder
+    {
+        get => _projectSettings?.ScriptsFolder ?? string.Empty;
+        set => SetProject(s => s.ScriptsFolder = Normalise(value));
+    }
+
+    /// <summary>What this project is, detected or overridden.</summary>
+    public Services.Files.ProjectKind ProjectKind
+    {
+        get => _projectSettings?.Kind ?? Services.Files.ProjectKind.None;
+        set => SetProject(s => s.Kind = value, nameof(ProjectKindNote));
+    }
+
+    /// <summary>What the kind means for what will be refused.</summary>
+    public string ProjectKindNote => ProjectKind == Services.Files.ProjectKind.Unity
+        ? "The Unity write rules are in force: a file name has to match its MonoBehaviour, and a type, "
+          + "namespace or serialized field cannot quietly change name."
+        : "The Unity write rules do not apply, so a rename that would break a scene is not refused.";
+
+    /// <summary>Whether tool calls are answered while this project is open.</summary>
+    public bool ProjectMcpEnabled
+    {
+        get => _projectSettings?.McpServerEnabled == true;
+        set => SetProject(s => s.McpServerEnabled = value);
+    }
+
+    /// <summary>Whether the conventions are committed.</summary>
+    public bool ShareProjectSettings
+    {
+        get => _projectSettings?.ShareSettings == true;
+        set => SetProject(s => s.ShareSettings = value, nameof(ProjectSharingNote));
+    }
+
+    /// <summary>Where the answers are written, and which of them.</summary>
+    public string ProjectSharingNote => ShareProjectSettings
+        ? $"{Services.Files.ProjectSettings.SharedFileName} holds the folder and the project kind, for everybody "
+          + $"working on this project. Your model choice and the tool call switch stay in "
+          + $"{Services.Files.ProjectSettings.LocalFileName}, which is never committed."
+        : $"Everything is in {Services.Files.ProjectSettings.LocalFileName}, which is added to .gitignore if this "
+          + "project has one.";
+
+    /// <summary>A folder as the settings store it: forward slashes, no leading or trailing one.</summary>
+    private static string Normalise(string? value)
+        => (value ?? string.Empty).Trim().Replace(Path.DirectorySeparatorChar, '/').Trim('/');
+
+    private void SetProject(Action<Services.Files.ProjectSettingsService> assign, string? alsoChanged = null,
+        [System.Runtime.CompilerServices.CallerMemberName] string? property = null)
+    {
+        if (_projectSettings is not { } settings)
+        {
+            return;
+        }
+
+        assign(settings);
+        settings.Save();
+
+        OnPropertyChanged(property);
+
+        if (alsoChanged is not null)
+        {
+            OnPropertyChanged(alsoChanged);
+        }
+    }
 
     /// <summary>Points this panel at the MCP server, which App owns.</summary>
     public void UseMcpServer(Services.Mcp.McpBridgeServer server)

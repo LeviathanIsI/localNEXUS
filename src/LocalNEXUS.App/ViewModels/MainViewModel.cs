@@ -143,7 +143,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         IHistoryWindow historyWindow,
         Services.Execution.BreakpointService breakpoints,
         Services.Extensions.ExtensionRegistry extensions,
-        Services.Extensions.ExtensionHost extensionHost)
+        Services.Extensions.ExtensionHost extensionHost,
+        ProjectSettingsService projectSettings)
     {
         Breakpoints = breakpoints;
         _compiler = compiler;
@@ -170,6 +171,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // The tab, and the one thing it can do to the Workspace: put text in the request box. It
         // arrives the way anything typed arrives, so nothing in the Workspace knows or cares that
         // a tab sent it.
+        ProjectSettings = projectSettings;
+        ProjectSetup = new ProjectSetupViewModel(projectSettings, catalog.Models);
+
         Spec = new SpecViewModel(extensions, extensionHost, feed, text =>
         {
             Feed.RequestText = text;
@@ -254,6 +258,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     /// <summary>The Spec tab, which is only reachable when its extension is installed.</summary>
     public SpecViewModel Spec { get; }
+
+    /// <summary>The questions asked the first time a project is opened.</summary>
+    public ProjectSetupViewModel ProjectSetup { get; }
+
+    /// <summary>What this project has been told about itself.</summary>
+    public ProjectSettingsService ProjectSettings { get; }
 
     /// <summary>What the open project contains, shown under the explorer.</summary>
     public ProjectIndexService ProjectIndex { get; }
@@ -660,6 +670,23 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     private bool CanSaveAsTemplate() => IsWorkspace && Graph.Nodes.Count > 0;
 
+    /// <summary>
+    /// Reads this project's own settings, and asks the first open questions if it has never been asked.
+    /// </summary>
+    /// <remarks>
+    /// The asking happens once per project per machine and nothing waits on it. Somebody who
+    /// dismisses it has the defaults, which is the state every project was in before this existed.
+    /// </remarks>
+    public void OnProjectOpened()
+    {
+        ProjectSettings.Open(Project.ProjectPath, Project.Kind);
+
+        if (ProjectSettings.NeedsSetUp)
+        {
+            ProjectSetup.Open(Project.ProjectName ?? "this project", Project.Kind);
+        }
+    }
+
     /// <summary>Opens the search where a wire was let go over empty canvas.</summary>
     private void OpenSearchFromPin(Pin source)
         => NodeSearch.OpenFrom(source, LastCanvasPoint.X, LastCanvasPoint.Y);
@@ -762,6 +789,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                     ? $"{Project.ProjectPath}. The Unity write rules are in force: a file name has to match "
                       + "its MonoBehaviour, and a type, namespace or serialized field cannot quietly change name."
                     : $"{Project.ProjectPath}. An ordinary C# project, so the Unity write rules do not apply.");
+
+            OnProjectOpened();
         }
         catch (DirectoryNotFoundException ex)
         {

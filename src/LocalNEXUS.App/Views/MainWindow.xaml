@@ -343,6 +343,13 @@
                                 because the section cannot be selected without it.
                             -->
                             <shell:SpecView Visibility="{Binding IsSpec, Converter={StaticResource BooleanToVisibility}}" />
+
+                            <!--
+                                The first open questions, over whichever section is showing. Last in
+                                the panel so it is on top of everything, and it collapses to nothing
+                                once answered or skipped.
+                            -->
+                            <views:ProjectSetupView />
                         </Grid>
 
                         <GridSplitter Grid.Column="4"

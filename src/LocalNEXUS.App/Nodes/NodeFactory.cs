@@ -3,6 +3,7 @@ using LocalNEXUS.App.Services.Credentials;
 using LocalNEXUS.App.Services.Dialogs;
 using LocalNEXUS.App.Services.Distributed;
 using LocalNEXUS.App.Services.Extensions;
+using LocalNEXUS.App.Services.Files;
 using LocalNEXUS.App.Services.Persistence;
 
 namespace LocalNEXUS.App.Nodes;
@@ -26,6 +27,7 @@ public sealed class NodeFactory
     private readonly ExtensionHost _host;
     private readonly ExtensionToolset _toolset;
     private readonly ICredentialStore _credentials;
+    private readonly ProjectSettingsService? _project;
 
     public NodeFactory(
         ModelCatalog catalog,
@@ -34,8 +36,10 @@ public sealed class NodeFactory
         AppConfig config,
         ExtensionRegistry extensions,
         ExtensionHost host,
-        ICredentialStore credentials)
+        ICredentialStore credentials,
+        ProjectSettingsService? project = null)
     {
+        _project = project;
         _credentials = credentials;
         _catalog = catalog;
         _mesh = mesh;
@@ -205,7 +209,16 @@ public sealed class NodeFactory
             "Output",
             "Writes the finished files into your project.",
             Array.Empty<string>(),
-            _ => new OutputNode())
+
+            // Seeded from the project rather than from the constant, so a plain C# project stops
+            // being handed Unity's folder. Nothing reaches back into a graph already saved: the
+            // value belongs to the node and travels with it.
+            factory => new OutputNode
+            {
+                TargetSubfolder = factory._project?.ScriptsFolder is { Length: > 0 } folder
+                    ? folder
+                    : OutputNode.DefaultSubfolder
+            })
     };
 
     /// <summary>

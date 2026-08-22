@@ -412,9 +412,61 @@
                                Text="Dollars. What a run is measured against is a ceiling, being the whole input plus the most each node is allowed to write, so the real cost is usually lower and can be higher. Set it to zero to never be asked. Local models cost nothing and never trigger it." />
                 </StackPanel>
 
-                <!-- Unity -->
-                <StackPanel Visibility="{Binding Section, Converter={StaticResource EnumToVisibility}, ConverterParameter=Unity}">
-                    <TextBlock Style="{StaticResource SectionHeader}" FontSize="{StaticResource Font.Size.Title}" Text="Unity" />
+                <!-- Project -->
+                <StackPanel Visibility="{Binding Section, Converter={StaticResource EnumToVisibility}, ConverterParameter=Project}">
+                    <TextBlock Style="{StaticResource SectionHeader}" FontSize="{StaticResource Font.Size.Title}" Text="Project" />
+
+                    <!--
+                        Everything the setup window asked, editable afterwards. It is here rather
+                        than in a window of its own because this section was already about the open
+                        project, and somebody looking for what the application thinks about their
+                        project should find all of it in one place.
+                    -->
+                    <StackPanel Visibility="{Binding ProjectSettings.ProjectPath, Converter={StaticResource StringToVisibility}}">
+
+                        <TextBlock Style="{StaticResource FieldLabel}" Text="Where generated code goes" />
+                        <ComboBox Margin="0,2,0,0"
+                                  IsEditable="True"
+                                  ItemsSource="{Binding ProjectFolders}"
+                                  Text="{Binding ScriptsFolder, UpdateSourceTrigger=LostFocus}" />
+                        <TextBlock Style="{StaticResource HintText}"
+                                   Margin="0,4,0,14"
+                                   TextWrapping="Wrap"
+                                   Text="Relative to the project root. This is what a newly added Output node starts from. It does not move anything in a graph you have already saved, because that value belongs to the node and was saved with it; open the node and change it there." />
+
+                        <TextBlock Style="{StaticResource FieldLabel}" Text="Project kind" />
+                        <ComboBox Margin="0,2,0,0"
+                                  ItemsSource="{Binding ProjectKinds}"
+                                  SelectedItem="{Binding ProjectKind}" />
+                        <TextBlock Style="{StaticResource HintText}"
+                                   Margin="0,4,0,14"
+                                   TextWrapping="Wrap"
+                                   Text="{Binding ProjectKindNote}" />
+
+                        <TextBlock Style="{StaticResource FieldLabel}" Text="Answer MCP tool calls for this project" />
+                        <CheckBox Margin="0,2,0,0"
+                                  IsChecked="{Binding ProjectMcpEnabled}"
+                                  Content="Allow tool calls while this project is open" />
+                        <TextBlock Style="{StaticResource HintText}"
+                                   Margin="0,4,0,14"
+                                   TextWrapping="Wrap"
+                                   Text="Both this and the switch below have to be on. The one below decides whether this installation answers at all; this one decides whether it answers about this project." />
+
+                        <TextBlock Style="{StaticResource FieldLabel}" Text="Share these settings" />
+                        <CheckBox Margin="0,2,0,0"
+                                  IsChecked="{Binding ShareProjectSettings}"
+                                  Content="Commit the folder and the project kind with the repository" />
+                        <TextBlock Style="{StaticResource HintText}"
+                                   Margin="0,4,0,14"
+                                   TextWrapping="Wrap"
+                                   Text="{Binding ProjectSharingNote}" />
+                    </StackPanel>
+
+                    <TextBlock Style="{StaticResource HintText}"
+                               Margin="0,0,0,14"
+                               TextWrapping="Wrap"
+                               Text="No project is open, so there is nothing here to set. Open one from the File menu."
+                               Visibility="{Binding ProjectSettings.ProjectPath, Converter={StaticResource StringToVisibility}, ConverterParameter=Invert}" />
 
                     <!--
                         The one setting that changes what this installation will do when nobody is

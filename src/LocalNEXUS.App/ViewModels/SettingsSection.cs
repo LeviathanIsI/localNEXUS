@@ -11,8 +11,16 @@ public enum SettingsSection
     /// <summary>Where models are looked for, and how cloud providers are reached.</summary>
     Models,
 
-    /// <summary>The open Unity project and what is known about its contents.</summary>
-    Unity,
+    /// <summary>
+    /// The open project: what it is, where its generated code goes, and what is known about it.
+    /// </summary>
+    /// <remarks>
+    /// Called Unity until v1.45, which stopped being accurate in v1.37 when a project stopped
+    /// having to be one. It is where the per project settings belong rather than a second section
+    /// beside it saying almost the same thing: somebody looking for what this application thinks
+    /// about their project looks in one place.
+    /// </remarks>
+    Project,
 
     /// <summary>The Python environment and the mesh node.</summary>
     Runtime,

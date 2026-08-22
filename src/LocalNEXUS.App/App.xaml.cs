@@ -136,7 +136,12 @@ public partial class App : Application
         var extensionHost = new ExtensionHost(children, feed);
         _extensionHost = extensionHost;
 
-        var factory = new NodeFactory(catalog, mesh, dialogs, config, extensions, extensionHost, credentials);
+        // What the project has been told about itself, as opposed to what was guessed. Before the
+        // factory, because a newly added Output node is seeded from it.
+        var projectSettings = new Services.Files.ProjectSettingsService(feed);
+
+        var factory = new NodeFactory(
+            catalog, mesh, dialogs, config, extensions, extensionHost, credentials, projectSettings);
         var serializer = new GraphSerializer(factory);
 
         // Restoring the node is deliberately not awaited: composition must not block on a
@@ -256,6 +261,7 @@ public partial class App : Application
         // The settings panel reports what the record holds, so it is pointed at the same one the
         // recorder writes to rather than at a second instance of nothing.
         settingsViewModel.UseHistory(history);
+        settingsViewModel.UseProjectSettings(projectSettings);
 
         var mainViewModel = new MainViewModel(
             graph,
@@ -279,7 +285,8 @@ public partial class App : Application
             historyWindow,
             services.Breakpoints,
             extensions,
-            extensionHost);
+            extensionHost,
+            projectSettings);
 
         // The MCP server, if this installation answers to other tools. Built whatever the setting
         // says so the toggle has something to start, and started only when it is on.
@@ -313,6 +320,12 @@ public partial class App : Application
         ReportEnvironment(feed, catalog);
 
         _mainViewModel = mainViewModel;
+
+        // A project restored from the last session gets the same treatment as one just opened:
+        // its own settings are read, and it is asked the first open questions if this machine has
+        // never been asked about it. The window is shown first, because the questions are drawn
+        // over it.
+        mainViewModel.OnProjectOpened();
 
         var window = new MainWindow { DataContext = mainViewModel };
         MainWindow = window;

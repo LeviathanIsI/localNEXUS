@@ -76,12 +76,25 @@ public sealed partial class ProjectService : ObservableObject
     ///
     /// Static and side effect free so that anything needing the answer about a path it was handed,
     /// rather than about the open project, can ask without going through the open one.
+    ///
+    /// An override in the project's own settings wins over both signals, because detection is a
+    /// guess made from folder names and somebody who has told the application what their project
+    /// is has more information than the guess does.
     /// </remarks>
     public static ProjectKind Detect(string? folder)
     {
         if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder))
         {
             return ProjectKind.None;
+        }
+
+        // What somebody said, before what the folders suggest. Detection is right most of the
+        // time and the answer decides which write rules apply, so being able to correct it
+        // matters more than being able to argue with it: a project told it is not Unity when it
+        // is loses the refusals that stop a scene quietly losing its scripts.
+        if (ProjectSettings.Load(folder).KindOverride is { } overridden)
+        {
+            return overridden;
         }
 
         if (File.Exists(Path.Combine(folder, "ProjectSettings", "ProjectVersion.txt")))

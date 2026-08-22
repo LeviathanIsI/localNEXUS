@@ -32,7 +32,19 @@ namespace LocalNEXUS.App.Nodes;
 /// </remarks>
 public sealed partial class OutputNode : NodeBase
 {
-    /// <summary>Where Unity keeps script assets, and therefore the default destination.</summary>
+    /// <summary>
+    /// What a node starts from when nothing has said otherwise.
+    /// </summary>
+    /// <remarks>
+    /// Still Unity's own folder, because a node built with no project in sight has to start
+    /// somewhere and this is where the application began. What changed in v1.45 is that a project
+    /// which has been set up seeds its own answer through the factory, so a plain C# project stops
+    /// having an Assets/Scripts folder created in it that has no business being there.
+    ///
+    /// The value lives on the node and is saved with the graph, which is why changing the project's
+    /// answer does not move a graph somebody already saved. It changes what the next node added
+    /// starts from, and the settings panel says so.
+    /// </remarks>
     public const string DefaultSubfolder = "Assets/Scripts";
 
     /// <summary>Folder relative to the project root that the file is written into.</summary>
