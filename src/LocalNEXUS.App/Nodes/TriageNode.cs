@@ -176,17 +176,47 @@ public sealed partial class TriageNode : NodeBase
 
         var message = PlanPrompt.BuildPlannerMessage(request, map, summary, budget);
 
-        var reply = await planner
-            .AnswerAsync(PlanPrompt.PlannerSystemPrompt, message, ctx.ForNode(plannerNode), ct)
-            .ConfigureAwait(false);
+        string reply;
 
-        // One round, and only one. A node that keeps asking is worse than one that guesses,
-        // because guessing at least finishes. Whatever comes back from here is planned with.
-        var questions = ClarificationParser.Parse(reply);
+        // Whether there is anything to plan from is settled here, before the model is asked, and
+        // it is settled against the index rather than by the model's judgement. Two attempts at
+        // wording it into asking both failed: a coder model has no concept of declining to answer,
+        // so it planned an edit to all five files of a project and invented a method on one of
+        // them rather than ask what "make it faster" referred to.
+        //
+        // The prompt still invites it to ask about a genuine fork and that is left alone. This is
+        // a floor beneath it, for the case where the request names nothing at all.
+        var unplannable = RequestScope.IsPlannable(request, index)
+            ? Array.Empty<ClarificationQuestion>()
+            : RequestScope.AskWhichOne(request, index, candidates);
 
-        if (questions.Count > 0)
+        if (unplannable.Count > 0)
         {
-            reply = await ResolveAsync(ctx, planner, plannerNode, message, questions, ct).ConfigureAwait(false);
+            ctx.Feed.Info(
+                $"{Title}: nothing in the request names anything in this project",
+                "Asking rather than guessing which of them was meant. Planning from a request that "
+                + "names nothing means choosing files on the model's behalf, which is how working "
+                + "code gets rewritten.");
+
+            // Straight to the same asking path a model's own question takes, so nothing about
+            // pausing, the cap, the timeout or proceeding on a stated assumption changes. The
+            // model is not asked to plan first, because there is nothing yet to plan from.
+            reply = await ResolveAsync(ctx, planner, plannerNode, message, unplannable, ct).ConfigureAwait(false);
+        }
+        else
+        {
+            reply = await planner
+                .AnswerAsync(PlanPrompt.PlannerSystemPrompt, message, ctx.ForNode(plannerNode), ct)
+                .ConfigureAwait(false);
+
+            // One round, and only one. A node that keeps asking is worse than one that guesses,
+            // because guessing at least finishes. Whatever comes back from here is planned with.
+            var questions = ClarificationParser.Parse(reply);
+
+            if (questions.Count > 0)
+            {
+                reply = await ResolveAsync(ctx, planner, plannerNode, message, questions, ct).ConfigureAwait(false);
+            }
         }
 
         var parsed = PlanParser.Parse(reply);

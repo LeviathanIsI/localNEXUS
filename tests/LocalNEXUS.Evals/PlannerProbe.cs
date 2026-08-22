@@ -98,6 +98,14 @@ public sealed class PlannerProbe : IDisposable
         var summary = ProjectDigest.BuildCandidateSummary(candidates, budget);
         var message = PlanPrompt.BuildPlannerMessage(task.Request, map, summary, budget);
 
+        // What the application decides before the model is asked anything. A request that names
+        // nothing never reaches the planner in a real run, so showing the model's answer without
+        // this would describe a path that no longer happens.
+        var plannable = RequestScope.IsPlannable(task.Request, index);
+        var asked = plannable
+            ? Array.Empty<App.Services.History.ClarificationQuestion>()
+            : RequestScope.AskWhichOne(task.Request, index, candidates).ToArray();
+
         var result = await client
             .StreamChatAsync(
                 new ModelEndpoint(endpoint.BaseUrl, endpoint.ModelId, null),
@@ -118,6 +126,19 @@ public sealed class PlannerProbe : IDisposable
         text.AppendLine($"## {task.Id}");
         text.AppendLine();
         text.AppendLine($"**Request:** {task.Request}");
+        text.AppendLine();
+        text.AppendLine($"**Does the request name anything?** {(plannable ? "Yes, so it is planned." : "No, so the run asks instead of planning.")}");
+
+        foreach (var question in asked)
+        {
+            text.AppendLine();
+            text.AppendLine($"> {question.Text}");
+            text.AppendLine($"> Options: {string.Join(", ", question.Options)}");
+        }
+
+        text.AppendLine();
+        text.AppendLine("Everything below is what the planner would have said had it been asked, which is what this "
+            + "probe sends it regardless, so the two can be compared.");
         text.AppendLine();
         text.AppendLine($"**Finish reason:** {result.FinishReason}. **Reply length:** {reply.Length} characters.");
         text.AppendLine();
