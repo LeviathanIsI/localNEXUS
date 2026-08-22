@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!--
+        A console application rather than a test project, and that is the whole point. Tests are
+        pass or fail and belong in a runner; an eval produces numbers that move and belongs
+        somewhere a person runs deliberately when they want numbers.
+
+        Windows and WPF for the same reason the test project is: the thing being measured is a WPF
+        application and several of its services take a Dispatcher.
+    -->
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>LocalNEXUS.Evals</RootNamespace>
+    <AssemblyName>LocalNEXUS.Evals</AssemblyName>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\LocalNEXUS.App\LocalNEXUS.App.csproj" />
+  </ItemGroup>
+
+</Project>
