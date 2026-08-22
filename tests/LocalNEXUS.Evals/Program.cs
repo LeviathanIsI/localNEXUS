@@ -45,6 +45,18 @@ if (models.Count == 0)
     return 2;
 }
 
+if (options.DebateOnly)
+{
+    using var probe = new DebateProbe(options);
+
+    await probe.RunAsync(
+        models[0],
+        Path.Combine(options.OutputDirectory, "debate-transcript.md"),
+        CancellationToken.None);
+
+    return 0;
+}
+
 var tasks = TaskSet.Select(options.Tasks);
 
 if (tasks.Count == 0)

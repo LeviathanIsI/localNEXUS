@@ -45,3 +45,24 @@ the question is asked, which is the same pattern v1.24 established. No decision 
 A three task smoke of the new shapes already turned up two things worth the morning:
 `ambiguous-request` planned five files for "Make it faster." without asking anything, and
 `routine-enum` planned five files for a three value enum.
+
+### 3. Model comparison, not done
+
+`qwen2.5-0.5b-instruct-q4_k_m` is not on this machine. The models folder holds exactly one GGUF,
+the 7B coder, and downloading is forbidden, so the comparison cannot be run.
+
+There is an Ollama store at `~/.ollama` which may hold other weights. Reading it, or copying
+anything out of it into the models folder, is outside what tonight's rules allow: nothing outside
+the repository except the eval's own temp folders, and nothing in the LocalNEXUS data folder beyond
+reading the models directory. So it was left alone. If a 0.5B is wanted for this comparison the
+cheapest route in the morning is to put one GGUF in
+`%LOCALAPPDATA%\LocalNEXUS\models\gguf` and run:
+
+    dotnet run --project tests/LocalNEXUS.Evals -c Release -- --repeats 1
+
+The harness runs every model it finds, so both appear in the same results folder and `history.csv`
+carries the model on every row, which is what makes the side by side possible without any further
+work.
+
+What the section wanted to establish, a documented floor for what the application does when the
+model is not capable enough, is therefore still unknown.

@@ -49,6 +49,16 @@ public sealed class EvalOptions
     /// <summary>How many times the compiler check may ask for a fix.</summary>
     public int RetryLimit { get; init; } = 2;
 
+    /// <summary>
+    /// Run one debate and one judgement and print the transcript, instead of the task set.
+    /// </summary>
+    /// <remarks>
+    /// Separate from the scored tasks because a debate produces a brief rather than a file, so
+    /// there is nothing on disk afterwards for a task to measure. What it produces is something
+    /// to read.
+    /// </remarks>
+    public bool DebateOnly { get; init; }
+
     /// <summary>Everything the models folder holds, in a stable order.</summary>
     public static IReadOnlyList<string> DiscoverModels()
     {
@@ -121,6 +131,7 @@ public sealed class EvalOptions
         var maxTokens = 4096;
         var temperature = 0.2d;
         var retries = 2;
+        var debate = false;
 
         for (var i = 0; i < args.Length; i++)
         {
@@ -173,6 +184,10 @@ public sealed class EvalOptions
                     int.TryParse(Value(), out retries);
                     break;
 
+                case "--debate":
+                    debate = true;
+                    break;
+
                 default:
                     options = new EvalOptions();
                     error = $"Unrecognised argument '{name}'.";
@@ -190,7 +205,8 @@ public sealed class EvalOptions
             GpuLayers = gpuLayers,
             MaxTokens = maxTokens,
             Temperature = temperature,
-            RetryLimit = retries
+            RetryLimit = retries,
+            DebateOnly = debate
         };
 
         error = null;
@@ -218,6 +234,9 @@ public sealed class EvalOptions
           --max-tokens <n>    Ceiling on one reply.
           --temperature <n>   Sampling temperature for the coder.
           --retries <n>       How many times the compiler check may ask for a fix.
+          --debate            Run one debate and one judgement and print the transcript,
+                              instead of the task set. Nothing is scored and nothing is
+                              written into a project; the output is something to read.
 
         This is not a gate and not part of any build. It is slow, it needs a model present, and it
         downloads nothing. Run it when you want numbers.

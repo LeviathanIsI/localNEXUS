@@ -340,7 +340,25 @@ public static class ResultWriter
             "unexpected_files", "fences_left", "model_calls", "prompt_tokens", "completion_tokens",
             "cost_usd", "wall_seconds", "model_seconds", "first_token_seconds", "truncated", "generated_chars");
 
+        // A header that no longer describes the rows is worse than no history at all, because
+        // every column after the first added one silently shifts and the file still reads.
+        // Columns get added whenever a new thing becomes measurable, so this is not a rare case:
+        // it happened the first time it could, and the numbers it produced looked plausible.
+        //
+        // The old file is kept rather than dropped. It is somebody's record of earlier runs and it
+        // is still correct against its own header; it just cannot be appended to any more.
         var existed = File.Exists(path);
+
+        if (existed && !string.Equals(File.ReadLines(path).FirstOrDefault(), header, StringComparison.Ordinal))
+        {
+            var retired = Path.Combine(
+                Path.GetDirectoryName(path)!,
+                $"{Path.GetFileNameWithoutExtension(path)}-until-{DateTimeOffset.Now:yyyyMMdd-HHmmss}.csv");
+
+            File.Move(path, retired);
+            existed = false;
+        }
+
         using var writer = new StreamWriter(path, append: true, Encoding.UTF8);
 
         if (!existed)
