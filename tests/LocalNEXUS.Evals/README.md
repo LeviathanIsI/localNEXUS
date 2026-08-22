@@ -19,10 +19,11 @@ Per task, per repeat:
 | | |
 |---|---|
 | First pass compile rate | files that compiled with no repair |
-| Repair attempts, and whether it compiled in the end | |
-| Duplicate creation | a type now declared in two files, read off disk |
+| Repair attempts, and whether it compiled in the end | read off the file the check emitted |
+| Duplicate creation | whether the planner went for a second copy of a type the project already had |
+| Reuse | whether it changed the existing type when that was the right answer |
 | Plan completion | how much of the plan actually landed |
-| Guardrail firing | whether a Unity refusal triggered, and whether it should have |
+| Guardrail firing | which rule refused which file, and whether it was the rule the task was built to trip |
 | Tokens, cost, wall time | plus model time and time to first token separately |
 
 And, because they were cheap and each one has been a real failure at some point: files nobody asked
@@ -33,10 +34,21 @@ Everything is either counted directly or read off disk afterwards. Nothing reads
 to decide whether it did well, because a harness cannot know that, and a number derived that way
 would be confidently wrong while looking like a quality score.
 
-One exception, stated because it is the weakest thing here: **repair attempts are counted from the
-activity feed**, by matching the title of an entry. The compiler check keeps a per file repair count
-internally and does not put it on the file it emits, so there is nowhere else to read it. If that
-title is reworded, this number silently goes to zero.
+Nothing here reads the activity feed. It used to: repair attempts were counted by matching the
+wording of a log entry, and refusals were counted from the staging list, which could say that a
+write had been refused but not which of seven rules had refused it. Both were reading prose. The
+application now records the repair count on the file it emits and files every refusal and every
+planning verdict on the run as structured decisions, so the harness reads values.
+
+Two measurements are worth understanding before trusting them:
+
+- **Duplicate creation is measured at the point it is decided, not where it would land.** Measuring
+  it on disk gave zero every time, because the write guard stops a duplicate reaching disk. A
+  prevented attempt is still the planner being wrong and the guard covering for it, which is worth
+  knowing separately from the planner being right.
+- **Reuse by reference is not measured.** A plan that writes a new file which calls an existing type
+  is doing the right thing, and nothing links a plan row to the candidate verdict that named the
+  symbol. Inventing that link would be a guess, so the verdicts are reported raw instead.
 
 ## The task set
 

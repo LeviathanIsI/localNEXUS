@@ -205,6 +205,18 @@ public sealed partial class OutputNode : NodeBase
             {
                 staging.Stage(Stage(file, StagedReason.RefusedByProjectRules, ex.Message));
                 Record(ctx, file.RelativePath, Services.History.FileOutcome.Refused, ex.Message);
+
+                // Which rule, not merely that something refused. Seven quite different mistakes
+                // arrive here and each has a different fix, and until the rule travelled with the
+                // exception the only way to tell them apart was to read the sentence.
+                ctx.Record(new RunDecision(
+                    RunDecisionKind.WriteRefused,
+                    ex.Rule.ToString(),
+                    file.RelativePath,
+                    file.Task.TypeName,
+                    null,
+                    ex.Message));
+
                 staged++;
 
                 // Deliberately not an error entry. This file compiles; it was refused, which is a

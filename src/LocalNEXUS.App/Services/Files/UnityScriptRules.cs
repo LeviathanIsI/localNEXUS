@@ -90,6 +90,7 @@ public static class UnityScriptRules
         var names = string.Join(", ", behaviours.Select(t => t.Name));
 
         throw new UnityScriptRuleException(
+            ProjectWriteRule.FileNameMustMatchBehaviour,
             $"{relativePath} declares the MonoBehaviour {names}, and Unity only binds a component when the file name "
             + $"matches its class name exactly. Name the file {behaviours[0].Name}.cs, or rename the class to {fileName}.");
     }
@@ -117,6 +118,7 @@ public static class UnityScriptRules
             }
 
             throw new UnityScriptRuleException(
+                ProjectWriteRule.TypeMayNotDisappear,
                 $"{relativePath} currently declares {was.Name} and the new content does not. "
                 + "Scenes and prefabs reference a script by the GUID of its file and resolve the type by name, so removing "
                 + $"or renaming it breaks every object using it with no compiler error. Keep {was.Name}, or add "
@@ -152,6 +154,7 @@ public static class UnityScriptRules
             var to = now.Namespace.Length == 0 ? "the global namespace" : now.Namespace;
 
             throw new UnityScriptRuleException(
+                ProjectWriteRule.NamespaceMayNotChange,
                 $"{relativePath} moves {was.Name} from {from} to {to}. Unity resolves a serialized reference by namespace "
                 + "and class name together, so every scene and prefab using it would lose its script. Keep the namespace, or add "
                 + $"[MovedFrom(true, sourceNamespace: \"{was.Namespace}\", sourceClassName: \"{was.Name}\")].");
@@ -187,6 +190,7 @@ public static class UnityScriptRules
                 }
 
                 throw new UnityScriptRuleException(
+                    ProjectWriteRule.SerializedFieldMayNotBeRenamed,
                     $"{relativePath} removes or renames the serialized field {was.Name}.{field.Name}. "
                     + "Unity stores serialized values by field name, so whatever is set on it in every scene and prefab would be lost. "
                     + $"Keep the field, or mark its replacement with [FormerlySerializedAs(\"{field.Name}\")].");
@@ -213,6 +217,7 @@ public static class UnityScriptRules
             }
 
             throw new UnityScriptRuleException(
+                ProjectWriteRule.BehaviourMustStayBehaviour,
                 $"{relativePath} stops {was.Name} deriving from MonoBehaviour. Any GameObject with it attached would lose "
                 + "the component, and nothing about that is a compiler error. Keep the base type.");
         }

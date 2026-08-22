@@ -24,6 +24,23 @@ public static class DuplicateTypeGuard
     public readonly record struct Verdict(bool Allowed, string? ExistingPath, string Message);
 
     /// <summary>
+    /// One type the guard refused to let a plan create a second copy of.
+    /// </summary>
+    /// <remarks>
+    /// The single failure this application exists to prevent, so it is worth more than a sentence.
+    /// Refusals used to be returned as formatted strings, which read well in the feed and meant
+    /// that nothing could tell how often the guard had fired, or on what, without reading English.
+    /// </remarks>
+    /// <param name="TypeName">The type the plan wanted to create.</param>
+    /// <param name="PlannedPath">Where it wanted to put it.</param>
+    /// <param name="ExistingPath">Where the type already lives, or null when the collision is with an earlier row of this same plan.</param>
+    /// <param name="Message">What to say about it.</param>
+    public sealed record Refusal(string TypeName, string PlannedPath, string? ExistingPath, string Message)
+    {
+        public override string ToString() => Message;
+    }
+
+    /// <summary>
     /// Whether a new type of this name may be created.
     /// </summary>
     /// <param name="index">The project index, which is the authority on what exists.</param>
@@ -88,12 +105,12 @@ public static class DuplicateTypeGuard
     /// refused. Ordering is preserved, so a task allowed only because an earlier one creates its
     /// dependency is judged after that one.
     /// </summary>
-    public static (IReadOnlyList<CodeTask> Allowed, IReadOnlyList<string> Blocked) Filter(
+    public static (IReadOnlyList<CodeTask> Allowed, IReadOnlyList<Refusal> Blocked) Filter(
         ProjectIndexService index,
         IReadOnlyList<CodeTask> tasks)
     {
         var allowed = new List<CodeTask>();
-        var blocked = new List<string>();
+        var blocked = new List<Refusal>();
         var planned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var task in tasks)
@@ -114,7 +131,7 @@ public static class DuplicateTypeGuard
                 continue;
             }
 
-            blocked.Add(verdict.Message);
+            blocked.Add(new Refusal(task.TypeName, task.RelativePath, verdict.ExistingPath, verdict.Message));
         }
 
         return (allowed, blocked);

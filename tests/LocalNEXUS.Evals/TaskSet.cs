@@ -1,3 +1,5 @@
+using LocalNEXUS.App.Services.Files;
+
 namespace LocalNEXUS.Evals;
 
 /// <summary>
@@ -27,8 +29,14 @@ public static class TaskSet
     /// <remarks>
     /// Written into every result. A result carrying a different version is not comparable and the
     /// summary says so rather than averaging across the two.
+    ///
+    /// Version two: the requests and the seed project are word for word what version one had, and
+    /// the tasks now also state which existing type the right answer reuses and which rule ought
+    /// to refuse the write. Nothing a model is shown changed, but what is scored did, so results
+    /// from version one cannot be compared on the duplicate or refusal columns and the version is
+    /// what says so.
     /// </remarks>
-    public const string Version = "1";
+    public const string Version = "2";
 
     private const string Scripts = "Assets/Scripts";
 
@@ -146,7 +154,8 @@ public static class TaskSet
             Array.Empty<string>(),
             new[] { "Health.cs" },
             false,
-            new[] { "Health" }),
+            new[] { "Health" },
+            TypeThatShouldBeReused: "Game.Health"),
 
         // Two files where the second calls the first. Written in parallel, the caller guesses the
         // name and is wrong, so this measures the ordering and the accumulated compile.
@@ -171,7 +180,8 @@ public static class TaskSet
             Array.Empty<string>(),
             new[] { "InventorySlot.cs" },
             false,
-            new[] { "InventorySlot" }),
+            new[] { "InventorySlot" },
+            TypeThatShouldBeReused: "Game.InventorySlot"),
 
         // Renaming a serialized field compiles cleanly and silently empties the value in every
         // scene the component is in. The write has to be refused, not warned about.
@@ -183,7 +193,9 @@ public static class TaskSet
             Array.Empty<string>(),
             new[] { "Spinner.cs" },
             true,
-            new[] { "Spinner" })
+            new[] { "Spinner" },
+            TypeThatShouldBeReused: "Game.Spinner",
+            ExpectedRefusalRule: nameof(ProjectWriteRule.SerializedFieldMayNotBeRenamed))
     };
 
     /// <summary>The tasks whose identifiers match a filter, or all of them when it is empty.</summary>

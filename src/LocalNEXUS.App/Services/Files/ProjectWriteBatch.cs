@@ -54,12 +54,14 @@ public sealed class ProjectWriteBatch
         if (expectedToExist && !exists)
         {
             throw new UnityScriptRuleException(
+                ProjectWriteRule.FileMustExistToEdit,
                 $"{full} was planned as an edit, and there is no such file. Nothing was written.");
         }
 
         if (!expectedToExist && exists)
         {
             throw new UnityScriptRuleException(
+                ProjectWriteRule.FileMustNotExistToCreate,
                 $"{full} was planned as a new file, and one already exists there. Overwriting it would discard whatever it "
                 + "holds, so nothing was written. Plan this as an edit instead.");
         }

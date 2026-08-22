@@ -318,7 +318,7 @@ public sealed partial class CompilerCheckNode : NodeBase
 
         if (result.Succeeded)
         {
-            return new CheckedFile(file with { Check = FileCheckState.Compiled }, 0);
+            return new CheckedFile(file with { Check = FileCheckState.Compiled, Repairs = 0 }, 0);
         }
 
         if (result.IsInconclusive)
@@ -329,7 +329,8 @@ public sealed partial class CompilerCheckNode : NodeBase
                 file with
                 {
                     Check = FileCheckState.Inconclusive,
-                    CheckDetail = result.FormatDiagnostics(DiagnosticsShown)
+                    CheckDetail = result.FormatDiagnostics(DiagnosticsShown),
+                    Repairs = 0
                 },
                 0);
         }
@@ -399,7 +400,7 @@ public sealed partial class CompilerCheckNode : NodeBase
                 if (result.Succeeded)
                 {
                     return new CheckedFile(
-                        file with { Content = current, Check = FileCheckState.Compiled },
+                        file with { Content = current, Check = FileCheckState.Compiled, Repairs = attempts },
                         attempts);
                 }
             }
@@ -414,7 +415,8 @@ public sealed partial class CompilerCheckNode : NodeBase
                 {
                     Content = current,
                     Check = FileCheckState.Inconclusive,
-                    CheckDetail = result.FormatDiagnostics(DiagnosticsShown)
+                    CheckDetail = result.FormatDiagnostics(DiagnosticsShown),
+                    Repairs = attempts
                 },
                 attempts);
         }
@@ -445,7 +447,8 @@ public sealed partial class CompilerCheckNode : NodeBase
             {
                 Content = current,
                 Check = FileCheckState.DidNotCompile,
-                CheckDetail = listing
+                CheckDetail = listing,
+                Repairs = attempts
             },
             attempts);
     }

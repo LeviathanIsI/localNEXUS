@@ -327,6 +327,14 @@ public sealed partial class TriageNode : NodeBase
 
             var operation = contents is null ? FileOperation.Create : FileOperation.Edit;
 
+            // What this row reuses rather than duplicates. Read from the index, which is the
+            // authority on what the project has, and left null when there is genuinely nothing
+            // there. Nothing is decided here that was not decided already; it is written down.
+            var reused = operation == FileOperation.Edit ? existing : null;
+            var reusedType = reused?.Types
+                .FirstOrDefault(t => string.Equals(t.Name, row.TypeName, StringComparison.OrdinalIgnoreCase))
+                ?? reused?.Types.FirstOrDefault();
+
             draft.Add(new CodeTask(
                 ++order,
                 row.RelativePath,
@@ -334,14 +342,18 @@ public sealed partial class TriageNode : NodeBase
                 operation,
                 row.Intent,
                 context,
-                contents));
+                contents,
+                reusedType?.FullName,
+                reused?.RelativePath));
         }
 
         var (allowed, blocked) = DuplicateTypeGuard.Filter(index, draft);
 
         // Renumbering after the guard keeps the order contiguous, which is what the coder is shown.
         var tasks = allowed
-            .Select((t, i) => new CodeTask(i + 1, t.RelativePath, t.TypeName, t.Operation, t.Intent, t.ProjectContext, t.ExistingContent))
+            .Select((t, i) => new CodeTask(
+                i + 1, t.RelativePath, t.TypeName, t.Operation, t.Intent, t.ProjectContext, t.ExistingContent,
+                t.ExistingType, t.ExistingTypePath))
             .ToList();
 
         var creates = tasks.Count(t => t.Operation == FileOperation.Create);
@@ -392,6 +404,32 @@ public sealed partial class TriageNode : NodeBase
         LastBlocked = plan.Blocked.Count == 0
             ? string.Empty
             : string.Join(Environment.NewLine, plan.Blocked);
+
+        // Filed on the run as well as written to the feed. The feed is what somebody reads while
+        // this happens; the run is where it can be counted afterwards. Both of these are
+        // judgements the application made on the person's behalf, and until now the only record
+        // of either was a sentence.
+        foreach (var verdict in plan.Verdicts)
+        {
+            ctx.Record(new RunDecision(
+                RunDecisionKind.CandidateVerdict,
+                verdict.Decision.ToString(),
+                verdict.RelativePath,
+                verdict.Symbol,
+                null,
+                verdict.ToString()));
+        }
+
+        foreach (var refusal in plan.Blocked)
+        {
+            ctx.Record(new RunDecision(
+                RunDecisionKind.DuplicateRefused,
+                nameof(DuplicateTypeGuard),
+                refusal.PlannedPath,
+                refusal.TypeName,
+                refusal.ExistingPath,
+                refusal.Message));
+        }
 
         if (plan.Verdicts.Count > 0)
         {

@@ -67,8 +67,15 @@ public sealed record RunConditions(
 /// <param name="DeletedFiles">Files that were there before and are not now. Should always be empty.</param>
 /// <param name="ScriptsMissingMeta">Scripts whose meta sibling went missing. Should always be empty.</param>
 /// <param name="DuplicateTypes">Types now declared in more than one file. The failure that matters most.</param>
-/// <param name="BlockedByDuplicateGuard">What the guard refused during planning.</param>
-/// <param name="RefusalsFired">Writes the Unity rules refused.</param>
+/// <param name="BlockedByDuplicateGuard">What the guard refused during planning, one entry per type.</param>
+/// <param name="PlannedCreates">Rows the planner chose to write from nothing.</param>
+/// <param name="PlannedEdits">Rows the planner chose to change something the project already had.</param>
+/// <param name="ReusedTypes">The existing types those edits reuse, named.</param>
+/// <param name="CandidateVerdicts">
+/// What triage decided about each existing file it considered, as a decision rather than a
+/// sentence. This is where a plan that looked straight past an existing type becomes visible.
+/// </param>
+/// <param name="RefusalsFired">Writes a project rule refused, each naming the rule that fired.</param>
 /// <param name="RefusalWasExpected">Whether this task was one where a refusal is the right answer.</param>
 /// <param name="StagedFiles">Files kept back rather than written, for any reason.</param>
 /// <param name="FencesLeftInOutput">Files still carrying a markdown fence. Should always be zero.</param>
@@ -106,6 +113,10 @@ public sealed record TaskResult(
     IReadOnlyList<string> ScriptsMissingMeta,
     IReadOnlyList<string> DuplicateTypes,
     IReadOnlyList<string> BlockedByDuplicateGuard,
+    int PlannedCreates,
+    int PlannedEdits,
+    IReadOnlyList<string> ReusedTypes,
+    IReadOnlyList<string> CandidateVerdicts,
     IReadOnlyList<string> RefusalsFired,
     bool RefusalWasExpected,
     int StagedFiles,
@@ -128,6 +139,60 @@ public sealed record TaskResult(
     public int FilesCompiled => FilesCompiledFirstPass + FilesCompiledAfterRepair;
 
     /// <summary>
+    /// The existing type this task was supposed to reuse was reused.
+    /// </summary>
+    /// <remarks>
+    /// Read from the plan rather than from the disk, because that is where the decision is. A
+    /// plan that edited the type the project already had did the right thing whether or not the
+    /// edit then compiled, and those are two separate things to be bad at.
+    /// </remarks>
+    public bool ReusedAsIntended(EvalTask task)
+        => task.TypeThatShouldBeReused is { Length: > 0 } wanted
+           && ReusedTypes.Any(t => t.StartsWith(wanted, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// The planner went for a second copy of something the project already had.
+    /// </summary>
+    /// <remarks>
+    /// The failure this application exists to prevent, counted at the point it is decided rather
+    /// than at the point it would have landed. Counting it on disk gave zero every time, because
+    /// the write guard stops it reaching disk, and a prevented attempt is still an attempt: it is
+    /// the planner being wrong and the guard covering for it, which is worth knowing separately
+    /// from the planner being right.
+    /// </remarks>
+    public bool AttemptedDuplicate(EvalTask task)
+    {
+        if (task.TypeThatShouldBeReused is not { Length: > 0 } wanted)
+        {
+            return DuplicateTypes.Count > 0;
+        }
+
+        if (ReusedAsIntended(task))
+        {
+            return false;
+        }
+
+        var shortName = wanted[(wanted.LastIndexOf('.') + 1)..];
+
+        // Either the guard caught it, or nothing was reused and something new was written anyway.
+        return BlockedByDuplicateGuard.Any(b => b.Contains(shortName, StringComparison.OrdinalIgnoreCase))
+               || PlannedCreates > 0
+               || DuplicateTypes.Count > 0;
+    }
+
+    /// <summary>
+    /// The refusal that fired is the one this task was designed to trigger.
+    /// </summary>
+    /// <remarks>
+    /// A refusal by some other rule is a different event. The task that renames a serialized field
+    /// is refused for that, and being refused because the planner tried to create a file that
+    /// already existed would be the harness scoring a point for the wrong reason.
+    /// </remarks>
+    public bool RefusedByTheRightRule(EvalTask task)
+        => task.ExpectedRefusalRule is { Length: > 0 } rule
+           && RefusalsFired.Any(r => r.StartsWith(rule, StringComparison.Ordinal));
+
+    /// <summary>
     /// Whether the task came out the way it was supposed to.
     /// </summary>
     /// <remarks>
@@ -144,8 +209,14 @@ public sealed record TaskResult(
 
         if (task.ExpectsRefusal)
         {
-            // Landing the change is the failure here, not the success.
-            return RefusalsFired.Count > 0 && ExpectedEditsLanded == 0;
+            // Landing the change is the failure here, not the success, and it has to be the rule
+            // this task was built to trip rather than any refusal at all.
+            return RefusedByTheRightRule(task) && ExpectedEditsLanded == 0;
+        }
+
+        if (AttemptedDuplicate(task))
+        {
+            return false;
         }
 
         return !Faulted

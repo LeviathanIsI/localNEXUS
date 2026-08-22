@@ -78,8 +78,8 @@ public static class ResultWriter
 
         text.AppendLine("## Per task");
         text.AppendLine();
-        text.AppendLine("| Task | Met the bar | Plan | Plan landed | Asked for | First pass | Repaired | Never | Repairs | Dupes | Refused | Tokens out | Time |");
-        text.AppendLine("|---|---|---|---|---|---|---|---|---|---|---|---|---|");
+        text.AppendLine("| Task | Met the bar | Plan | Plan landed | Asked for | First pass | Repaired | Never | Repairs | Reused | Dupe tried | Refused by | Tokens out | Time |");
+        text.AppendLine("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|");
 
         foreach (var task in tasks)
         {
@@ -99,8 +99,9 @@ public static class ResultWriter
                     + $"| {result.FilesCompiledAfterRepair} "
                     + $"| {result.FilesNeverCompiled} "
                     + $"| {result.RepairAttempts} "
-                    + $"| {result.DuplicateTypes.Count} "
-                    + $"| {result.RefusalsFired.Count} "
+                    + $"| {Reuse(result, task)} "
+                    + $"| {(result.AttemptedDuplicate(task) ? "yes" : "no")} "
+                    + $"| {(result.RefusalsFired.Count == 0 ? "nothing" : string.Join("; ", result.RefusalsFired.Select(Rule)))} "
                     + $"| {result.CompletionTokens} "
                     + $"| {Duration(result.WallTime)} |");
             }
@@ -122,8 +123,26 @@ public static class ResultWriter
         text.AppendLine($"- **Repair attempts used:** {results.Sum(r => r.RepairAttempts)}");
         text.AppendLine($"- **Files left uncompiled:** {results.Sum(r => r.FilesNeverCompiled)}");
         text.AppendLine($"- **Files nothing could be established about:** {results.Sum(r => r.FilesInconclusive)}");
-        text.AppendLine($"- **Duplicate types created:** {results.Sum(r => r.DuplicateTypes.Count)}");
-        text.AppendLine($"- **Guardrail refusals:** {results.Sum(r => r.RefusalsFired.Count)}");
+        var reuseTasks = results.Where(r => TaskFor(r, tasks)?.TypeThatShouldBeReused is { Length: > 0 }).ToList();
+        var reused = reuseTasks.Count(r => r.ReusedAsIntended(TaskFor(r, tasks)!));
+        var attempted = results.Count(r => TaskFor(r, tasks) is { } t && r.AttemptedDuplicate(t));
+
+        var refusalTasks = results.Where(r => TaskFor(r, tasks)?.ExpectsRefusal == true).ToList();
+        var refusedRight = refusalTasks.Count(r => r.RefusedByTheRightRule(TaskFor(r, tasks)!));
+
+        text.AppendLine($"- **Reused the existing type when it should have:** {reused} of {reuseTasks.Count}");
+        text.AppendLine($"- **Went for a second copy instead:** {attempted} of {results.Count}");
+        text.AppendLine($"- **Duplicate types that reached disk:** {results.Sum(r => r.DuplicateTypes.Count)}");
+        text.AppendLine($"- **Refused by the rule the task was built to trip:** {refusedRight} of {refusalTasks.Count}");
+        text.AppendLine($"- **Guardrail refusals in total:** {results.Sum(r => r.RefusalsFired.Count)}");
+
+        foreach (var group in results
+            .SelectMany(r => r.RefusalsFired.Select(Rule))
+            .GroupBy(rule => rule, StringComparer.Ordinal)
+            .OrderByDescending(g => g.Count()))
+        {
+            text.AppendLine($"  - {group.Key}: {group.Count()}");
+        }
         text.AppendLine($"- **Runs that faulted:** {results.Count(r => r.Faulted)}");
         text.AppendLine($"- **Model calls:** {results.Sum(r => r.ModelCalls)}");
         text.AppendLine($"- **Prompt tokens:** {results.Sum(r => r.PromptTokens):n0}");
@@ -194,6 +213,22 @@ public static class ResultWriter
         return text.ToString();
     }
 
+    /// <summary>The rule name out of a recorded refusal, which reads "Rule on path".</summary>
+    private static string Rule(string refusal)
+    {
+        var at = refusal.IndexOf(" on ", StringComparison.Ordinal);
+        return at < 0 ? refusal : refusal[..at];
+    }
+
+    /// <summary>How the reuse column reads for a task that has nothing to reuse.</summary>
+    private static string Reuse(TaskResult result, EvalTask task)
+        => task.TypeThatShouldBeReused is { Length: > 0 }
+            ? result.ReusedAsIntended(task) ? "yes" : "no"
+            : "n/a";
+
+    private static EvalTask? TaskFor(TaskResult result, IReadOnlyList<EvalTask> tasks)
+        => tasks.FirstOrDefault(t => t.Id == result.TaskId);
+
     private static bool MetTheBar(TaskResult result, IReadOnlyList<EvalTask> tasks)
     {
         var task = tasks.FirstOrDefault(t => t.Id == result.TaskId);
@@ -212,7 +247,14 @@ public static class ResultWriter
 
         if (result.DuplicateTypes.Count > 0)
         {
-            reasons.Add($"a duplicate type was created ({string.Join("; ", result.DuplicateTypes)})");
+            reasons.Add($"a duplicate type reached disk ({string.Join("; ", result.DuplicateTypes)})");
+        }
+
+        if (task.TypeThatShouldBeReused is { Length: > 0 } wanted && !result.ReusedAsIntended(task))
+        {
+            reasons.Add(result.BlockedByDuplicateGuard.Count > 0
+                ? $"it went for a second {wanted} and the guard stopped it ({string.Join("; ", result.BlockedByDuplicateGuard)})"
+                : $"it did not reuse {wanted}");
         }
 
         if (result.DeletedFiles.Count > 0)
@@ -225,9 +267,11 @@ public static class ResultWriter
             reasons.Add($"a meta file was lost ({string.Join(", ", result.ScriptsMissingMeta)})");
         }
 
-        if (task.ExpectsRefusal && result.RefusalsFired.Count == 0)
+        if (task.ExpectsRefusal && !result.RefusedByTheRightRule(task))
         {
-            reasons.Add("the guardrail did not fire and it should have");
+            reasons.Add(result.RefusalsFired.Count == 0
+                ? $"nothing refused it and {task.ExpectedRefusalRule} should have"
+                : $"it was refused by {string.Join(", ", result.RefusalsFired.Select(Rule))} rather than by {task.ExpectedRefusalRule}");
         }
 
         if (!task.ExpectsRefusal && result.RefusalsFired.Count > 0)
@@ -270,7 +314,7 @@ public static class ResultWriter
         var header = string.Join(",",
             "started_at", "app_version", "task_set", "model", "quantization", "context_size", "gpu_layers",
             "temperature", "max_tokens", "task", "shape", "attempt", "met_the_bar", "faulted", "run_state",
-            "planned_files", "planned_landed", "expected_files", "landed_files", "first_pass", "repaired", "never_compiled",
+            "planned_files", "planned_landed", "planned_creates", "planned_edits", "reused_as_intended", "attempted_duplicate", "refused_by_expected_rule", "expected_files", "landed_files", "first_pass", "repaired", "never_compiled",
             "inconclusive", "repair_attempts", "duplicates", "refusals", "refusal_expected", "staged",
             "unexpected_files", "fences_left", "model_calls", "prompt_tokens", "completion_tokens",
             "cost_usd", "wall_seconds", "model_seconds", "first_token_seconds", "truncated", "generated_chars");
@@ -307,6 +351,11 @@ public static class ResultWriter
                 Csv(r.RunState),
                 r.PlannedFiles,
                 r.PlannedFilesLanded,
+                r.PlannedCreates,
+                r.PlannedEdits,
+                r.ReusedAsIntended(task) ? 1 : 0,
+                r.AttemptedDuplicate(task) ? 1 : 0,
+                r.RefusedByTheRightRule(task) ? 1 : 0,
                 task.ExpectedFileCount,
                 r.ExpectedNewFilesLanded + r.ExpectedEditsLanded,
                 r.FilesCompiledFirstPass,

@@ -10,6 +10,7 @@ namespace LocalNEXUS.App.Services.Execution;
 public sealed partial class RunContext : ObservableObject
 {
     private readonly Dictionary<Guid, object?> _pinValues = new();
+    private readonly List<RunDecision> _decisions = new();
     private readonly object _sync = new();
 
     /// <summary>Where the run currently is in its lifecycle.</summary>
@@ -54,6 +55,37 @@ public sealed partial class RunContext : ObservableObject
 
     /// <summary>True while nodes may execute, which excludes both paused and finished runs.</summary>
     public bool IsActive => State is RunState.Running or RunState.Paused;
+
+    /// <summary>
+    /// Every judgement this run made that nothing else records, in the order it made them.
+    /// </summary>
+    /// <remarks>
+    /// A refusal to create a second copy of an existing type, and a refusal to write something
+    /// that would silently break a scene, are the two things this application is for. Both used to
+    /// exist only as sentences in the activity feed, which reads well and cannot be counted, so
+    /// anything asking how often either happened got the same answer whether or not it ever had.
+    /// </remarks>
+    public IReadOnlyList<RunDecision> Decisions
+    {
+        get
+        {
+            lock (_sync)
+            {
+                return _decisions.ToList();
+            }
+        }
+    }
+
+    /// <summary>Adds one decision to the run's record.</summary>
+    public void Record(RunDecision decision)
+    {
+        ArgumentNullException.ThrowIfNull(decision);
+
+        lock (_sync)
+        {
+            _decisions.Add(decision);
+        }
+    }
 
     /// <summary>Records the value a node produced on one of its output pins.</summary>
     public void SetValue(Pin pin, object? value)

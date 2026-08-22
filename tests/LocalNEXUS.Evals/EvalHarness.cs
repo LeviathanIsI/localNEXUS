@@ -256,11 +256,13 @@ public sealed class EvalHarness : IDisposable
             ? checkedFiles as IReadOnlyList<GeneratedFile> ?? Array.Empty<GeneratedFile>()
             : Array.Empty<GeneratedFile>();
 
-        var repairs = RepairsByFile();
-        var repairAttempts = repairs.Values.Sum();
+        // Read off the file the check emitted. It used to be counted by matching the wording of an
+        // activity feed title, which was the weakest measurement in the harness and the one thing
+        // here that a reworded log line would have silently zeroed.
+        var repairAttempts = generated.Sum(f => f.Repairs);
 
         var compiledFiles = generated.Where(f => f.Check == FileCheckState.Compiled).ToList();
-        var firstPass = compiledFiles.Count(f => RepairsFor(repairs, f.RelativePath) == 0);
+        var firstPass = compiledFiles.Count(f => f.Repairs == 0);
         var repairedAndCompiled = compiledFiles.Count - firstPass;
 
         var newFiles = project.NewFiles();
@@ -276,9 +278,24 @@ public sealed class EvalHarness : IDisposable
             .Where(p => !task.ExpectedNewFiles.Any(name => p.EndsWith("/" + name, StringComparison.OrdinalIgnoreCase)))
             .ToList();
 
-        var refusals = staging.Pending
-            .Where(f => f.Reason == StagedReason.RefusedByProjectRules)
-            .Select(f => $"{f.RelativePath}: {Shorten(f.Detail)}")
+        // Read from the run rather than from the staging list. Staging says a write was refused;
+        // the run says which of seven rules refused it, which is the difference between knowing
+        // that something happened and knowing what happened.
+        var decisions = run?.Decisions ?? Array.Empty<RunDecision>();
+
+        var refusals = decisions
+            .Where(d => d.Kind == RunDecisionKind.WriteRefused)
+            .Select(d => $"{d.Rule} on {d.RelativePath}")
+            .ToList();
+
+        var blocked = decisions
+            .Where(d => d.Kind == RunDecisionKind.DuplicateRefused)
+            .Select(d => $"{d.Subject} wanted at {d.RelativePath}, already in {d.OtherPath ?? "this same plan"}")
+            .ToList();
+
+        var verdicts = decisions
+            .Where(d => d.Kind == RunDecisionKind.CandidateVerdict)
+            .Select(d => $"{d.RelativePath}: {d.Rule}{(d.Subject is { Length: > 0 } s ? $" {s}" : string.Empty)}")
             .ToList();
 
         var calls = _models.Calls;
@@ -304,7 +321,14 @@ public sealed class EvalHarness : IDisposable
             project.DeletedFiles(),
             project.ScriptsMissingTheirMeta(),
             DuplicateTypesOnDisk(project),
-            SplitLines(triage.LastBlocked),
+            blocked,
+            plan.Count(t => t.Choice == PlanChoice.CreateNew),
+            plan.Count(t => t.Choice == PlanChoice.EditExisting),
+            plan.Where(t => t.ExistingType is { Length: > 0 })
+                .Select(t => $"{t.ExistingType} in {t.ExistingTypePath}")
+                .Distinct(StringComparer.Ordinal)
+                .ToList(),
+            verdicts,
             refusals,
             task.ExpectsRefusal,
             staging.Count,
@@ -392,54 +416,8 @@ public sealed class EvalHarness : IDisposable
             .ToList();
     }
 
-    /// <summary>
-    /// How many times the coder was asked to fix each file.
-    /// </summary>
-    /// <remarks>
-    /// Read from the feed, which is the only place it is stated: the compiler check keeps a per
-    /// file repair count internally and does not put it on the file it emits. That makes this the
-    /// weakest measurement here, because it is coupled to the wording of a title rather than to a
-    /// value, and it is worth saying so rather than presenting it as solid. Everything else in the
-    /// result is either counted directly or read off disk.
-    ///
-    /// The title of a plan repair carries the file it is about, which is what lets first pass be
-    /// told apart from repaired at all.
-    /// </remarks>
-    private IReadOnlyDictionary<string, int> RepairsByFile()
-    {
-        const string marker = ", repair attempt ";
-        var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var entry in _feed.Events)
-        {
-            if (entry.Kind != ActivityKind.NodeStarted)
-            {
-                continue;
-            }
-
-            var at = entry.Title.IndexOf(marker, StringComparison.Ordinal);
-
-            if (at < 0)
-            {
-                continue;
-            }
-
-            // What sits before the marker is "<node>: <n> of <m>: <path>", so the path is
-            // whatever follows the last colon that is not part of a drive letter.
-            var head = entry.Title[..at];
-            var colon = head.LastIndexOf(':');
-            var path = (colon >= 0 ? head[(colon + 1)..] : head).Trim();
-
-            counts[Normalise(path)] = counts.GetValueOrDefault(Normalise(path)) + 1;
-        }
-
-        return counts;
-    }
-
-    private static int RepairsFor(IReadOnlyDictionary<string, int> repairs, string relativePath)
-        => repairs.GetValueOrDefault(Normalise(relativePath));
-
     private static string Normalise(string path) => path.Replace('\\', '/').Trim();
+
 
     private string? FaultFromFeed()
         => _feed.Events.LastOrDefault(e => e.Kind is ActivityKind.Error or ActivityKind.NodeFaulted)?.Title;
@@ -495,14 +473,6 @@ public sealed class EvalHarness : IDisposable
             .FirstOrDefault()?.InformationalVersion
            ?? typeof(NodeFactory).Assembly.GetName().Version?.ToString()
            ?? "unknown";
-
-    private static IReadOnlyList<string> SplitLines(string? text)
-        => string.IsNullOrWhiteSpace(text)
-            ? Array.Empty<string>()
-            : text.ReplaceLineEndings("\n").Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
-    private static string Shorten(string text)
-        => text.Length <= 200 ? text : text[..200] + " ...";
 
     public void Dispose()
     {

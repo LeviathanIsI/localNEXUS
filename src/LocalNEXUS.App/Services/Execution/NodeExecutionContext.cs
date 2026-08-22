@@ -58,6 +58,17 @@ public sealed class NodeExecutionContext
     public bool IsConnected(Pin inputPin) => _run.Graph.Connections.Any(c => c.Target == inputPin);
 
     /// <summary>
+    /// Files one of this node's judgements on the run, where something other than a person can
+    /// read it.
+    /// </summary>
+    /// <remarks>
+    /// Beside the feed rather than instead of it. The feed is what somebody reads while a run
+    /// happens and is the right shape for that; this is the same fact in a shape that can be
+    /// counted, compared between runs, and asserted on.
+    /// </remarks>
+    public void Record(RunDecision decision) => _run.Record(decision);
+
+    /// <summary>
     /// The node on the other end of an input pin's wire, or null when the pin is unconnected.
     /// </summary>
     /// <remarks>

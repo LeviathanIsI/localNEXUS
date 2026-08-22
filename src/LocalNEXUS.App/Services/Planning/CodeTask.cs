@@ -13,6 +13,24 @@ public enum FileOperation
 }
 
 /// <summary>
+/// What triage decided about one file, as opposed to what will happen to the path.
+/// </summary>
+/// <remarks>
+/// Not the same question as <see cref="FileOperation"/>. A plan that writes a new file because
+/// nothing in the project covered it, and a plan that writes one having looked straight past a
+/// type that already did, are both a create, and only the second is the failure this application
+/// exists to prevent. Nothing recorded the difference, so nothing could count it.
+/// </remarks>
+public enum PlanChoice
+{
+    /// <summary>Nothing already in the project covered this, so something new is being written.</summary>
+    CreateNew,
+
+    /// <summary>A file the project already has is being changed rather than duplicated.</summary>
+    EditExisting
+}
+
+/// <summary>
 /// One file the plan says to write, and everything the coder needs to write it.
 /// </summary>
 /// <remarks>
@@ -31,7 +49,9 @@ public sealed class CodeTask
         FileOperation operation,
         string intent,
         string projectContext,
-        string? existingContent)
+        string? existingContent,
+        string? existingType = null,
+        string? existingTypePath = null)
     {
         Order = order;
         RelativePath = relativePath;
@@ -40,6 +60,8 @@ public sealed class CodeTask
         Intent = intent;
         ProjectContext = projectContext;
         ExistingContent = existingContent;
+        ExistingType = existingType;
+        ExistingTypePath = existingTypePath;
     }
 
     /// <summary>Position in the plan, counting from one. Dependencies come first.</summary>
@@ -63,6 +85,22 @@ public sealed class CodeTask
     /// <summary>The current contents of the file, when it is being edited. Null for a new file.</summary>
     public string? ExistingContent { get; }
 
+    /// <summary>
+    /// The type already in the project that this row touches, when there is one.
+    /// </summary>
+    /// <remarks>
+    /// Set when the row changes a file the index already knows a type in, and left null for a
+    /// genuinely new one. That is what makes a plan which reused what was there tellable apart
+    /// afterwards from one that wrote a second copy, without anybody reading the prose.
+    /// </remarks>
+    public string? ExistingType { get; }
+
+    /// <summary>Where that type already lives, relative to the project root.</summary>
+    public string? ExistingTypePath { get; }
+
+    /// <summary>What was chosen, as opposed to what will happen to the path.</summary>
+    public PlanChoice Choice => Operation == FileOperation.Edit ? PlanChoice.EditExisting : PlanChoice.CreateNew;
+
     /// <summary>The file name on its own.</summary>
     public string FileName => System.IO.Path.GetFileName(RelativePath);
 
@@ -85,7 +123,7 @@ public sealed class FilePlan
     public FilePlan(
         IReadOnlyList<CodeTask> tasks,
         IReadOnlyList<CandidateVerdict> verdicts,
-        IReadOnlyList<string> blocked,
+        IReadOnlyList<DuplicateTypeGuard.Refusal> blocked,
         string summary)
     {
         Tasks = tasks;
@@ -101,7 +139,7 @@ public sealed class FilePlan
     public IReadOnlyList<CandidateVerdict> Verdicts { get; }
 
     /// <summary>Files the plan asked for that were refused, and why.</summary>
-    public IReadOnlyList<string> Blocked { get; }
+    public IReadOnlyList<DuplicateTypeGuard.Refusal> Blocked { get; }
 
     /// <summary>One line describing the plan, for the node footer.</summary>
     public string Summary { get; }
@@ -110,7 +148,7 @@ public sealed class FilePlan
     public static FilePlan Empty { get; } = new(
         Array.Empty<CodeTask>(),
         Array.Empty<CandidateVerdict>(),
-        Array.Empty<string>(),
+        Array.Empty<DuplicateTypeGuard.Refusal>(),
         "Nothing to write.");
 
     /// <summary>The plan as text, which is what a wire carries when something reads it as text.</summary>
@@ -159,6 +197,17 @@ public sealed record GeneratedFile(CodeTask Task, string Content, IReadOnlyList<
     /// a compiler is.
     /// </remarks>
     public FileCheckState Check { get; init; } = FileCheckState.NotChecked;
+
+    /// <summary>
+    /// How many times the coder was asked to fix this file before it was left as it is.
+    /// </summary>
+    /// <remarks>
+    /// Carried on the file because the check knew it and dropped it. Whether a file compiled first
+    /// time or on the third attempt is the difference between a model that writes working code and
+    /// one that is being repeatedly corrected into it, and reading that back out of the wording of
+    /// a log line is not a measurement.
+    /// </remarks>
+    public int Repairs { get; init; }
 
     /// <summary>What the check said, when it said anything worth carrying.</summary>
     public string CheckDetail { get; init; } = string.Empty;

@@ -55,6 +55,14 @@ public sealed record SeedFile(string RelativePath, string Content);
 /// Types the project already declares. A second declaration of any of them anywhere is the
 /// failure this application exists to prevent.
 /// </param>
+/// <param name="TypeThatShouldBeReused">
+/// The type already in the project that the right answer changes rather than duplicates, when
+/// there is one.
+/// </param>
+/// <param name="ExpectedRefusalRule">
+/// Which project rule ought to refuse the write, named exactly, when a refusal is the right
+/// answer. A refusal by some other rule is not the same event and does not count as one.
+/// </param>
 public sealed record EvalTask(
     string Id,
     TaskShape Shape,
@@ -63,7 +71,9 @@ public sealed record EvalTask(
     IReadOnlyList<string> ExpectedNewFiles,
     IReadOnlyList<string> ExpectedEditedFiles,
     bool ExpectsRefusal,
-    IReadOnlyList<string> TypesThatMustNotBeDuplicated)
+    IReadOnlyList<string> TypesThatMustNotBeDuplicated,
+    string? TypeThatShouldBeReused = null,
+    string? ExpectedRefusalRule = null)
 {
     /// <summary>How many files the task expects to be touched at all.</summary>
     public int ExpectedFileCount => ExpectedNewFiles.Count + ExpectedEditedFiles.Count;
