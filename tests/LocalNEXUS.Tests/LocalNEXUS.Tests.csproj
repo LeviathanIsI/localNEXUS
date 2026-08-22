@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!--
+        Windows and WPF, because the thing under test is a WPF application: several services take
+        a Dispatcher and the node types live in the same assembly as the views. Referencing it any
+        other way would mean splitting the application in two to make it testable, which is a
+        larger change than this task is allowed to make.
+    -->
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>LocalNEXUS.Tests</RootNamespace>
+
+    <!-- A test project that warns is a test project nobody reads the output of. -->
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\LocalNEXUS.App\LocalNEXUS.App.csproj" />
+  </ItemGroup>
+
+</Project>
