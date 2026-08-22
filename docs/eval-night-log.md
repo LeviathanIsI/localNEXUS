@@ -66,3 +66,35 @@ work.
 
 What the section wanted to establish, a documented floor for what the application does when the
 model is not capable enough, is therefore still unknown.
+
+### 2. Ten stability runs
+
+Two hundred task runs, 157 passed. Ran clean end to end. The analysis had to be redone once,
+because `history.csv` had a stale header and every column after the first added one was shifted by
+two while still parsing. That is written up as D9 in the report and is the one thing fixed
+tonight, on the grounds that reporting numbers known to be wrong is worse than a small change to
+measurement code.
+
+### 4. Debate and Judge
+
+First attempt faulted before the debate started: a model node handed to something on its Model pin
+is still executed as a node, and throws when its own Text pin is empty. That is D2 and it means
+neither node has ever been runnable as designed. Worked around in the probe by wiring the subject
+into both models, which costs two completions nobody reads, and the workaround is stated in the
+transcript itself so the file does not mislead anybody reading it alone.
+
+Second attempt ran all six rounds, never settled, and fell to the judge. The convergence numbers
+are the most useful thing the night produced and they are bad: the whole six round score rests on
+one shared token. Written up as D5 with the per round breakdown.
+
+### 5. Report
+
+`docs/eval-night-report.md`, with the full transcript as an appendix so the whole thing is one
+file as asked.
+
+## What was fixed and what was not
+
+Fixed: the history file header drift, because it made the night's data unreadable.
+
+Not fixed, deliberately: everything else. Ten defects, all in the report with enough detail to act
+on, in a suggested order.

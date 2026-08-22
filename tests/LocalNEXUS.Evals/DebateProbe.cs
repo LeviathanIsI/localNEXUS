@@ -128,6 +128,16 @@ public sealed class DebateProbe : IDisposable
         Connect(graph, debate.Brief, judge.First);
         Connect(graph, first.Self, judge.Judge);
 
+        // A workaround for a defect, not a design. A model node handed to something on its Model
+        // pin is still executed as a node in its own right, and a model node with nothing on its
+        // Text pin throws rather than standing by, so a debate wired the way the Model pin was
+        // introduced for cannot run at all. Feeding the subject into both keeps them satisfied.
+        //
+        // It costs two completions nobody reads, before the debate that does the real work. The
+        // defect is in the report and is deliberately not fixed here.
+        Connect(graph, prompt.Request, first.Prompt);
+        Connect(graph, prompt.Request, second.Prompt);
+
         var services = BuildServices();
 
         Console.WriteLine("Running the debate. This takes a few minutes.");
@@ -177,6 +187,15 @@ public sealed class DebateProbe : IDisposable
             text.AppendLine($"**It stopped:** {fault}");
         }
 
+        text.AppendLine();
+        text.AppendLine("## A workaround is in this graph");
+        text.AppendLine();
+        text.AppendLine(
+            "Both model nodes have the subject wired into their own Text input as well as being "
+            + "handed to the debate. Without it the run faults before the debate starts, because a model "
+            + "node used purely as a reference is still executed and throws when its Text pin is empty. "
+            + "That is a defect and it is reported rather than fixed. The two completions it causes are "
+            + "the first two entries in the transcript and nothing reads them.");
         text.AppendLine();
         text.AppendLine("## Settings");
         text.AppendLine();
