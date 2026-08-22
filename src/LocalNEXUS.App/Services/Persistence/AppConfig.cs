@@ -179,6 +179,23 @@ public sealed class AppConfig
     /// The server is a local named pipe and never a socket, so switching it on is not a network
     /// exposure. What it is is a second way in.
     /// </remarks>
+    /// <summary>
+    /// Where the vision model that reads images lives, or null when there is none.
+    /// </summary>
+    /// <remarks>
+    /// One for the application rather than one per node, because reading an image happens before a
+    /// run rather than inside one: the image never enters the graph, and what joins the request is
+    /// the text it produced.
+    ///
+    /// An address rather than a file, because a hosted model needs nothing installed and a local
+    /// one needs llama-server started with a multimodal projector, which is a server somebody
+    /// started rather than a weight file this application can pick.
+    /// </remarks>
+    public string? VisionBaseUrl { get; set; }
+
+    /// <summary>Which model at that address reads images.</summary>
+    public string? VisionModelId { get; set; }
+
     public bool McpServerEnabled { get; set; }
 
     /// <summary>True once somebody has closed the walkthrough, so it stops opening itself.</summary>

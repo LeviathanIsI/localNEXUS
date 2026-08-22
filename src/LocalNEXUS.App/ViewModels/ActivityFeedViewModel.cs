@@ -92,6 +92,53 @@ public sealed partial class ActivityFeedViewModel : ObservableObject
     /// <summary>True when the search checkbox should be on the request box at all.</summary>
     public bool CanSearch => Search?.HasKey == true;
 
+    /// <summary>The vision model that reads a pasted image, when one is configured.</summary>
+    public Services.Vision.VisionReader? Vision { get; }
+
+    /// <summary>
+    /// Reads an image and puts what it says into the request box.
+    /// </summary>
+    /// <remarks>
+    /// The image never goes any further than this. What joins the request is the text the vision
+    /// model produced, so the graph, the pins and the coder are all untouched and none of them has
+    /// to be multimodal.
+    ///
+    /// What was extracted is in the feed before the run uses it, because a wrong reading that
+    /// silently becomes the request is the failure this feature could most easily have.
+    /// </remarks>
+    public async Task AttachImageAsync(byte[] image, string mediaType, CancellationToken ct = default)
+    {
+        if (Vision is not { } vision)
+        {
+            _feed.Info("No vision model", Services.Vision.VisionReader.NotConfiguredMessage);
+            return;
+        }
+
+        if (!vision.IsConfigured)
+        {
+            _feed.Info("No vision model", Services.Vision.VisionReader.NotConfiguredMessage);
+            return;
+        }
+
+        try
+        {
+            var reading = await vision.ReadAsync(image, mediaType, ct).ConfigureAwait(true);
+
+            _feed.Add(
+                Infrastructure.ActivityKind.Info,
+                $"Read an image in {reading.Elapsed.TotalSeconds:0.0} s",
+                reading.Text);
+
+            RequestText = RequestText.Trim().Length == 0
+                ? reading.Text
+                : RequestText.TrimEnd() + Environment.NewLine + Environment.NewLine + reading.Text;
+        }
+        catch (Services.Vision.VisionException ex)
+        {
+            _feed.Error("The image was not read", ex.Message);
+        }
+    }
+
     /// <summary>
     /// Whether this send may search.
     /// </summary>
@@ -123,9 +170,11 @@ public sealed partial class ActivityFeedViewModel : ObservableObject
         Services.History.RunRecorder? recorder = null,
         Services.History.ConversationService? conversation = null,
         Services.History.RunHistoryStore? history = null,
-        Services.Search.WebSearchService? search = null)
+        Services.Search.WebSearchService? search = null,
+        Services.Vision.VisionReader? vision = null)
     {
         Search = search;
+        Vision = vision;
         _conversation = conversation;
         _history = history;
 

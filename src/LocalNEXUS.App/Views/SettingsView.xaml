@@ -473,6 +473,33 @@
                         at the window, so it says what that means rather than only what it is
                         called.
                     -->
+                    <TextBlock Style="{StaticResource FieldLabel}" Text="Vision model" />
+                    <TextBlock Style="{StaticResource HintText}"
+                               Margin="0,4,0,0"
+                               TextWrapping="Wrap"
+                               Text="{Binding VisionStatus}" />
+                    <TextBox Margin="0,6,0,0"
+                             Padding="8,6"
+                             Text="{Binding VisionBaseUrl, UpdateSourceTrigger=LostFocus}"
+                             ToolTip="The base url of an OpenAI compatible server that can see." />
+                    <TextBox Margin="0,6,0,0"
+                             Padding="8,6"
+                             Text="{Binding VisionModelId, UpdateSourceTrigger=LostFocus}"
+                             ToolTip="Which model at that address reads images." />
+                    <DockPanel Margin="0,6,0,0">
+                        <Button DockPanel.Dock="Right"
+                                Style="{StaticResource SmallButton}"
+                                Margin="6,0,0,0"
+                                Content="Save key"
+                                Command="{Binding SetVisionKeyCommand}"
+                                CommandParameter="{Binding Password, ElementName=VisionKeyBox}" />
+                        <PasswordBox x:Name="VisionKeyBox" Padding="8,6" />
+                    </DockPanel>
+                    <TextBlock Style="{StaticResource HintText}"
+                               Margin="0,4,0,14"
+                               TextWrapping="Wrap"
+                               Text="Paste or drop an image on the request box and this reads it into text, which joins your request. The image never enters the graph, so the coding model does not have to be able to see. A hosted model needs an address, a model id and a key. A local one needs llama-server started with a multimodal projector, because a GGUF on its own will load and then refuse every image." />
+
                     <TextBlock Style="{StaticResource FieldLabel}" Text="Web search key" />
                     <TextBlock Style="{StaticResource HintText}"
                                Margin="0,4,0,0"

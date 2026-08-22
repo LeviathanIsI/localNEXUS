@@ -178,6 +178,58 @@ public sealed partial class AppSettingsViewModel : ObservableObject
     public void UseHistory(Services.History.RunHistoryStore history) => History = history;
 
     private Services.Mcp.McpBridgeServer? _mcp;
+    private Services.Vision.VisionReader? _vision;
+
+    /// <summary>Points this panel at the vision model, which App owns.</summary>
+    public void UseVision(Services.Vision.VisionReader vision)
+    {
+        _vision = vision;
+        OnPropertyChanged(nameof(VisionStatus));
+    }
+
+    /// <summary>What is configured, or that nothing is.</summary>
+    public string VisionStatus => _vision?.Status ?? "Nothing configured.";
+
+    /// <summary>The address of a server that can see.</summary>
+    public string VisionBaseUrl
+    {
+        get => _config.VisionBaseUrl ?? string.Empty;
+        set
+        {
+            SetConfig(value, v => _config.VisionBaseUrl = string.IsNullOrWhiteSpace(v) ? null : v.Trim(),
+                nameof(VisionStatus));
+
+            _vision?.Refresh();
+        }
+    }
+
+    /// <summary>Which model there reads images.</summary>
+    public string VisionModelId
+    {
+        get => _config.VisionModelId ?? string.Empty;
+        set
+        {
+            SetConfig(value, v => _config.VisionModelId = string.IsNullOrWhiteSpace(v) ? null : v.Trim(),
+                nameof(VisionStatus));
+
+            _vision?.Refresh();
+        }
+    }
+
+    /// <summary>Stores the key the vision endpoint wants, when it wants one.</summary>
+    [RelayCommand]
+    private void SetVisionKey(string? key)
+    {
+        _credentialsForVision?.Set(Services.Vision.VisionReader.ProviderId, key);
+        OnPropertyChanged(nameof(VisionStatus));
+    }
+
+    private Services.Credentials.ICredentialStore? _credentialsForVision;
+
+    /// <summary>Points this panel at the credential store, for the vision key.</summary>
+    public void UseCredentials(Services.Credentials.ICredentialStore credentials)
+        => _credentialsForVision = credentials;
+
     private Services.Search.WebSearchService? _search;
 
     /// <summary>Points this panel at web search, which App owns.</summary>

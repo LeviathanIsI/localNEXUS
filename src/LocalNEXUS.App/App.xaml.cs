@@ -226,9 +226,14 @@ public partial class App : Application
 
         services.Search = search;
 
+        // Reads an image into text before a run starts. Nothing in the graph knows it exists,
+        // because what reaches the graph is the text it produced.
+        var vision = new Services.Vision.VisionReader(
+            config, credentials, OpenAiCompatibleClient.CreateDefaultHttpClient());
+
         var executor = new GraphExecutor(services);
 
-        var feedViewModel = new ActivityFeedViewModel(executor, graph, feed, Dispatcher, cost, staging, recorder, conversation, history, search);
+        var feedViewModel = new ActivityFeedViewModel(executor, graph, feed, Dispatcher, cost, staging, recorder, conversation, history, search, vision);
         var catalogViewModel = new ModelCatalogViewModel(catalog, dialogs);
         var pythonViewModel = new PythonEnvironmentViewModel(pythonEnvironment, dialogs);
         var networkViewModel = new NetworkViewModel(mesh, catalog, config, feed, dialogs);
@@ -270,6 +275,8 @@ public partial class App : Application
         settingsViewModel.UseHistory(history);
         settingsViewModel.UseProjectSettings(projectSettings);
         settingsViewModel.UseSearch(search);
+        settingsViewModel.UseVision(vision);
+        settingsViewModel.UseCredentials(credentials);
 
         var mainViewModel = new MainViewModel(
             graph,

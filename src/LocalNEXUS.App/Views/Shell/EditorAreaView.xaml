@@ -285,7 +285,13 @@
                     </Grid.ColumnDefinitions>
 
                 <Grid Grid.Column="0">
+                    <!--
+                        Images arrive here, by paste or by drop. The image itself goes no further:
+                        a vision model reads it and what joins the request is the text it produced,
+                        which is why the graph and its pins are untouched by any of it.
+                    -->
                     <TextBox Text="{Binding Feed.RequestText, UpdateSourceTrigger=PropertyChanged}"
+                             behaviors:ImageDropBehavior.IsEnabled="True"
                              AcceptsReturn="True"
                              TextWrapping="Wrap"
                              VerticalScrollBarVisibility="Auto"
