@@ -81,6 +81,9 @@ public sealed record RunConditions(
 /// <param name="TimeToFirstToken">The first call's wait before anything came back.</param>
 /// <param name="TruncatedReplies">Replies that stopped because they hit the token ceiling.</param>
 /// <param name="GeneratedCharacters">How much code came out.</param>
+/// <param name="ChangedFileContents">
+/// What every file the run touched looks like now.
+/// </param>
 public sealed record TaskResult(
     string TaskId,
     TaskShape Shape,
@@ -115,7 +118,8 @@ public sealed record TaskResult(
     TimeSpan ModelTime,
     TimeSpan? TimeToFirstToken,
     int TruncatedReplies,
-    int GeneratedCharacters)
+    int GeneratedCharacters,
+    IReadOnlyDictionary<string, string> ChangedFileContents)
 {
     /// <summary>Files the check reached a verdict on.</summary>
     public int FilesChecked => FilesCompiledFirstPass + FilesCompiledAfterRepair + FilesNeverCompiled + FilesInconclusive;

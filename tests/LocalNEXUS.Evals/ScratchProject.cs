@@ -79,17 +79,30 @@ public sealed class ScratchProject : IDisposable
     public IReadOnlyList<string> NewFiles()
         => ReadAllScripts().Keys.Where(p => !_before.ContainsKey(p)).OrderBy(p => p, StringComparer.Ordinal).ToList();
 
-    /// <summary>Files that were there and whose contents are not what they were.</summary>
+    /// <summary>
+    /// Files that were there and whose contents are not what they were.
+    /// </summary>
+    /// <remarks>
+    /// Line endings are normalised before comparing, and that is not a detail. A model that
+    /// returns a file unchanged apart from writing it with different newlines had produced no edit
+    /// at all, and counting it as one made a task that the model silently declined to do look like
+    /// one it had completed. That was measured rather than reasoned about: the refusal task
+    /// reported an edit landing while the file came back byte for byte the same code.
+    /// </remarks>
     public IReadOnlyList<string> ChangedFiles()
     {
         var now = ReadAllScripts();
 
         return _before
-            .Where(pair => now.TryGetValue(pair.Key, out var content) && !string.Equals(content, pair.Value, StringComparison.Ordinal))
+            .Where(pair => now.TryGetValue(pair.Key, out var content)
+                           && !string.Equals(Canonical(content), Canonical(pair.Value), StringComparison.Ordinal))
             .Select(pair => pair.Key)
             .OrderBy(p => p, StringComparer.Ordinal)
             .ToList();
     }
+
+    /// <summary>The text with its newlines made uniform, so only real changes count.</summary>
+    private static string Canonical(string content) => content.ReplaceLineEndings("\n").TrimEnd();
 
     /// <summary>Files that were there when the task started and are not now.</summary>
     public IReadOnlyList<string> DeletedFiles()

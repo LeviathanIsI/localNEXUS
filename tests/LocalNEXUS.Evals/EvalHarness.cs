@@ -317,7 +317,38 @@ public sealed class EvalHarness : IDisposable
             TimeSpan.FromTicks(calls.Sum(c => c.Elapsed.Ticks)),
             calls.FirstOrDefault()?.ToFirstToken,
             calls.Count(c => string.Equals(c.FinishReason, "length", StringComparison.OrdinalIgnoreCase)),
-            generated.Sum(f => f.Content.Length));
+            generated.Sum(f => f.Content.Length),
+            CaptureTouchedFiles(project, newFiles, changed));
+    }
+
+    /// <summary>
+    /// What every file the run touched looks like now.
+    /// </summary>
+    /// <remarks>
+    /// Kept because several of the numbers cannot be read without it. A guardrail that did not
+    /// fire is either a change that legitimately trips no rule or a rule that missed one, and
+    /// those are opposite findings that look identical in a count. The same goes for an edit that
+    /// landed: whether it added the method or replaced the file is not something a byte count
+    /// says. These files are a few hundred bytes each and there are a handful per task, so keeping
+    /// them costs nothing worth saving.
+    /// </remarks>
+    private static IReadOnlyDictionary<string, string> CaptureTouchedFiles(
+        ScratchProject project,
+        IReadOnlyList<string> newFiles,
+        IReadOnlyList<string> changed)
+    {
+        var all = project.ReadAllScripts();
+        var touched = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var path in newFiles.Concat(changed).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            if (all.TryGetValue(path, out var content))
+            {
+                touched[path] = content;
+            }
+        }
+
+        return touched;
     }
 
     /// <summary>
