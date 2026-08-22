@@ -71,6 +71,63 @@ public sealed class SerializationTests : IDisposable
         Assert.IsNotType<UnavailableNode>(node);
     }
 
+    /// <summary>Every entry the palette offers, as the palette offers it.</summary>
+    public static TheoryData<string> EveryPaletteKey
+    {
+        get
+        {
+            var keys = new TheoryData<string>();
+
+            foreach (var descriptor in NodeFactory.Descriptors)
+            {
+                keys.Add(descriptor.TypeKey);
+            }
+
+            return keys;
+        }
+    }
+
+    /// <summary>
+    /// Everything on the palette can be added, and calls itself what the palette called it.
+    /// </summary>
+    /// <remarks>
+    /// The test that would have caught both occurrences of the same bug. The palette offered
+    /// Compile while the node saved itself as CompileCheck, and later offered Reshape, Debate and
+    /// Judge while the factory had never heard of any of them. Both shipped.
+    ///
+    /// It is driven from <see cref="NodeFactory.Descriptors"/> rather than from a list written out
+    /// here, because a list written out here is a third place to forget. A node type added to the
+    /// application arrives in this test without anybody adding it.
+    ///
+    /// The second assertion is the half that is easy to miss: a type that constructs but reports a
+    /// different key writes a graph it cannot then reopen.
+    /// </remarks>
+    [Theory]
+    [MemberData(nameof(EveryPaletteKey))]
+    public void EveryPaletteEntryConstructsAndKeepsItsKey(string typeKey)
+    {
+        using var services = TestServices.Create();
+
+        var node = services.Factory.Create(typeKey);
+
+        Assert.IsNotType<UnavailableNode>(node);
+        Assert.Equal(typeKey, node.TypeKey);
+    }
+
+    /// <summary>Every palette entry has a label and a description, because both are shown.</summary>
+    [Fact]
+    public void EveryPaletteEntryIsLabelled()
+    {
+        Assert.NotEmpty(NodeFactory.Descriptors);
+
+        Assert.All(NodeFactory.Descriptors, descriptor =>
+        {
+            Assert.False(string.IsNullOrWhiteSpace(descriptor.TypeKey));
+            Assert.False(string.IsNullOrWhiteSpace(descriptor.DisplayName));
+            Assert.False(string.IsNullOrWhiteSpace(descriptor.Description));
+        });
+    }
+
     /// <summary>A graph saved with historical keys loads whole, with every wire.</summary>
     [Fact]
     public void AGraphSavedUnderOldKeysLoadsWhole()
@@ -82,9 +139,7 @@ public sealed class SerializationTests : IDisposable
         var prompt = (PromptNode)services.Factory.Create("Prompt");
         var triage = (TriageNode)services.Factory.Create("Triage");
         var model = (ModelNode)services.Factory.Create("Model");
-        // Built from the key that still resolves, because the current one does not. See the
-        // Reshape tests below.
-        var reshape = (ReshapeNode)services.Factory.Create("Patch");
+        var reshape = (ReshapeNode)services.Factory.Create("Reshape");
         var check = (CompilerCheckNode)services.Factory.Create("CompilerCheck");
         var output = (OutputNode)services.Factory.Create("Output");
 
@@ -217,11 +272,15 @@ public sealed class SerializationTests : IDisposable
     }
 
     /// <summary>
-    /// A node type this build does not know is held rather than dropped.
+    /// A node type this build does not know is held rather than dropped, with a Code wire.
     /// </summary>
     /// <remarks>
     /// An extension that is not installed here must not cost somebody their wiring, and above all
     /// must not have the hole written back out the next time the graph is saved.
+    ///
+    /// The wire here is deliberately Code rather than Text. A placeholder used to rebuild every
+    /// pin as Text, which passes a test that wires Text and drops the wire in the case that
+    /// actually matters, because a node between a coder and a writer is carrying Code.
     /// </remarks>
     [Fact]
     public void AnUnknownTypeIsHeldAsAPlaceholderWithItsWires()
@@ -253,7 +312,80 @@ public sealed class SerializationTests : IDisposable
         Assert.NotEmpty(warnings);
         Assert.Equal(2, loaded.Nodes.Count);
         Assert.Single(loaded.Connections);
-        Assert.Contains(loaded.Nodes, n => n is UnavailableNode);
+
+        var placeholder = Assert.Single(loaded.Nodes.OfType<UnavailableNode>());
+
+        // The pin is Code because the file said so, which is the only way a placeholder can know.
+        Assert.Equal(PinType.Code, Assert.Single(placeholder.Outputs).PinType);
+    }
+
+    /// <summary>The type of every pin is written, so a node this build cannot make can read it.</summary>
+    [Fact]
+    public void PinTypesAreWrittenToTheFile()
+    {
+        using var services = TestServices.Create();
+        var serializer = new GraphSerializer(services.Factory);
+
+        var saved = new GraphModel();
+        var triage = (TriageNode)services.Factory.Create("Triage");
+        saved.AddNode(triage);
+
+        var path = PathFor("pin-types");
+        serializer.Save(saved, path);
+
+        var element = ((JsonArray)((JsonObject)JsonNode.Parse(File.ReadAllText(path))!)["nodes"]!)
+            .OfType<JsonObject>()
+            .Single();
+
+        var written = ((JsonArray)element["inputs"]!)
+            .OfType<JsonObject>()
+            .Select(p => p["type"]?.GetValue<string>())
+            .ToList();
+
+        Assert.Equal(triage.Inputs.Select(p => p.PinType.ToString()), written);
+    }
+
+    /// <summary>
+    /// A graph saved before pin types were written still opens, with its pins defaulting to Text.
+    /// </summary>
+    /// <remarks>
+    /// The old behaviour, kept for old documents. Only a placeholder reads the field at all, and
+    /// only a placeholder in a graph saved by an older build is affected, so the fallback is the
+    /// same answer those graphs already get today.
+    /// </remarks>
+    [Fact]
+    public void AGraphWithNoPinTypesStillLoads()
+    {
+        using var services = TestServices.Create();
+        var serializer = new GraphSerializer(services.Factory);
+
+        var saved = new GraphModel();
+        var check = (CompilerCheckNode)services.Factory.Create("CompilerCheck");
+        var output = (OutputNode)services.Factory.Create("Output");
+        saved.AddNode(check);
+        saved.AddNode(output);
+        saved.TryConnect(check.Checked, output.Content, out _);
+
+        var path = PathFor("no-pin-types");
+        serializer.Save(saved, path);
+
+        var document = (JsonObject)JsonNode.Parse(File.ReadAllText(path))!;
+
+        foreach (var element in ((JsonArray)document["nodes"]!).OfType<JsonObject>())
+        {
+            foreach (var pin in ((JsonArray)element["inputs"]!).Concat((JsonArray)element["outputs"]!).OfType<JsonObject>())
+            {
+                pin.Remove("type");
+            }
+        }
+
+        File.WriteAllText(path, document.ToJsonString());
+
+        var loaded = new GraphModel();
+
+        Assert.Empty(serializer.LoadInto(loaded, path));
+        Assert.Equal(2, loaded.Nodes.Count);
+        Assert.Single(loaded.Connections);
     }
 
     /// <summary>A graph written by a newer build is refused rather than half read.</summary>
@@ -318,9 +450,7 @@ public sealed class SerializationTests : IDisposable
 
         var saved = new GraphModel();
 
-        // Built from a key that resolves today, then checked against the key the node itself
-        // writes, so this measures the round trip rather than the palette.
-        var node = services.Factory.Create(typeKey == "Reshape" ? "Patch" : typeKey);
+        var node = services.Factory.Create(typeKey);
         Assert.Equal(typeKey, node.TypeKey);
 
         saved.AddNode(node);

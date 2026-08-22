@@ -41,10 +41,15 @@ public sealed class UnavailableNode : NodeBase
     /// Rebuilds the pins as the file recorded them, so the wires drawn to this node survive.
     /// </summary>
     /// <remarks>
-    /// The pin type is not in the saved shape, and it does not need to be. Compatibility is
-    /// decided when a wire is drawn, and these wires were drawn on a machine where the extension
-    /// was present and the real types were known. Restoring them as Text keeps the pin, the name
-    /// and the identity, which is all the connection needs to find its way back.
+    /// The type matters and the reasoning that said it did not was wrong. Compatibility is not
+    /// only checked when a wire is drawn: restoring a connection goes through the same check, so a
+    /// placeholder whose pins all claimed to be Text refused every Code wire it was holding and
+    /// dropped it with a warning. The promise that the node and its wires are kept was only true
+    /// for the plainest half of them.
+    /// <para>
+    /// So the type is read from the file, which now records it. A graph saved before it did has no
+    /// type to read and falls back to Text, which is what those graphs already do today.
+    /// </para>
     /// </remarks>
     public void AdoptSavedPins(JsonArray? inputs, JsonArray? outputs)
     {
@@ -80,9 +85,22 @@ public sealed class UnavailableNode : NodeBase
                 continue;
             }
 
+            var pinType = ReadPinType(entry["type"]?.GetValue<string>());
+
             _ = direction == PinDirection.Input
-                ? AddInput(name, PinType.Text)
-                : AddOutput(name, PinType.Text);
+                ? AddInput(name, pinType)
+                : AddOutput(name, pinType);
         }
     }
+
+    /// <summary>
+    /// The type the file recorded, or Text when it recorded none.
+    /// </summary>
+    /// <remarks>
+    /// Text for a graph saved before types were written, and Text for a type this build does not
+    /// have a name for, which is a graph from a newer build. Neither is worth refusing to open
+    /// over, and both leave the node exactly where it was.
+    /// </remarks>
+    private static PinType ReadPinType(string? saved)
+        => Enum.TryParse<PinType>(saved, out var pinType) ? pinType : PinType.Text;
 }

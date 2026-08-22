@@ -91,12 +91,20 @@ public sealed partial class RunHistoryStore
         {
             return await ReadAsync(
                 """
-                SELECT s.run_id, r.started_at, r.request, snippet(search, 3, '[', ']', ' ... ', 24)
-                FROM search s
-                JOIN runs r ON r.run_id = s.run_id
-                WHERE search MATCH $query
-                GROUP BY s.run_id
-                ORDER BY rank
+                WITH hits AS (
+                    SELECT run_id,
+                           snippet(search, 3, '[', ']', ' ... ', 24) AS body,
+                           rank AS score
+                    FROM search
+                    WHERE search MATCH $query
+                    ORDER BY rank
+                    LIMIT $scan
+                )
+                SELECT h.run_id, r.started_at, r.request, h.body, MIN(h.score)
+                FROM hits h
+                JOIN runs r ON r.run_id = h.run_id
+                GROUP BY h.run_id
+                ORDER BY MIN(h.score)
                 LIMIT $limit;
                 """,
                 reader => new HistoryHit(
@@ -106,15 +114,30 @@ public sealed partial class RunHistoryStore
                     reader.GetString(3)),
                 ct,
                 ("$query", Quote(query)),
+                ("$scan", limit * ScanFactor),
                 ("$limit", limit)).ConfigureAwait(false);
         }
-        catch (SqliteException)
+        catch (SqliteException ex)
         {
-            // A query the matcher will not accept is a typo rather than a fault, and an empty
-            // result says so without a dialog.
-            return Array.Empty<HistoryHit>();
+            // Not swallowed. This used to return an empty list on the grounds that a query the
+            // matcher will not accept is a typo, which is true and was also how a broken query
+            // hid: every search this application has ever run failed here and reported nothing
+            // found. Whatever the reason, the caller is told the difference between a search that
+            // ran and matched nothing and a search that did not run.
+            throw new HistoryQueryException(
+                $"That search could not be run against this project's history: {ex.Message}", ex);
         }
     }
+
+    /// <summary>
+    /// How many matching events are considered before they are folded down to one row per run.
+    /// </summary>
+    /// <remarks>
+    /// A run writes many events and a search over a busy one can match several of them, so taking
+    /// exactly the asked for number of events would return fewer runs than asked for. This takes a
+    /// few times as many and lets the grouping decide.
+    /// </remarks>
+    private const int ScanFactor = 8;
 
     /// <summary>
     /// Wraps a search in quotes so that what somebody typed is looked for rather than parsed.

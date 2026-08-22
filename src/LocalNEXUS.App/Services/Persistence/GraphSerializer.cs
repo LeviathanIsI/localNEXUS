@@ -143,7 +143,13 @@ public sealed class GraphSerializer
             array.Add(new JsonObject
             {
                 ["name"] = pin.Name,
-                ["id"] = pin.Id.ToString()
+                ["id"] = pin.Id.ToString(),
+
+                // Written for the sake of a node this build cannot construct. Every other node
+                // rebuilds its own pins and their types from code and ignores this, but a
+                // placeholder has only the file to go on, and a placeholder that guessed Text
+                // could not accept the Code wire it was holding.
+                ["type"] = pin.PinType.ToString()
             });
         }
 

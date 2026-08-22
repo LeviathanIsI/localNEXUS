@@ -18,6 +18,16 @@ namespace LocalNEXUS.Tests;
 [Trait(Layers.Name, Layers.Deterministic)]
 public sealed class HistoryTests
 {
+    /// <summary>
+    /// A character the database layer cannot put in a string, used to force a real query failure.
+    /// </summary>
+    /// <remarks>
+    /// Everything a person could plausibly type is handled by the quoting and comes back as no
+    /// results, which is correct and is what the punctuation cases below check. Something is still
+    /// needed to reach the failure path, and this is the shortest thing that does.
+    /// </remarks>
+    private static readonly string Nul = ((char)0).ToString();
+
     private static async Task<RunHistoryStore> Open(SampleProject project)
     {
         var store = new RunHistoryStore();
@@ -122,9 +132,8 @@ public sealed class HistoryTests
     /// The point of keeping the record on disk rather than in memory. A session that ended last
     /// week is exactly the one worth finding.
     ///
-    /// The index is populated correctly and the rows are there; the query that reads them is what
-    /// fails, and it fails silently. Written as a test of the behaviour somebody expects rather
-    /// than of what currently happens, because what currently happens is the defect.
+    /// The query behind this was malformed from the day the feature shipped and every search
+    /// returned nothing, because the database error was caught and reported as no results.
     /// </remarks>
     [Fact]
     public async Task RunsAreSearchable()
@@ -143,6 +152,152 @@ public sealed class HistoryTests
 
         Assert.Single(hits);
         Assert.Equal("run-1", hits[0].RunId);
+        Assert.Contains("stacking", hits[0].Request, StringComparison.OrdinalIgnoreCase);
+
+        // The snippet is what the result list shows, so an empty one is a blank row.
+        Assert.False(string.IsNullOrWhiteSpace(hits[0].Snippet));
+    }
+
+    /// <summary>
+    /// A run matched by several of its own events appears once.
+    /// </summary>
+    /// <remarks>
+    /// The reason the query groups at all. A busy run writes dozens of events and a common word
+    /// hits many of them, which would otherwise fill the results with one run repeated.
+    /// </remarks>
+    [Fact]
+    public async Task ARunMatchedManyTimesAppearsOnce()
+    {
+        using var project = SampleProject.Create();
+        await using var store = await Open(project);
+
+        store.BeginRun("run-1", "add stacking to the inventory", "graph", 2, 1);
+
+        for (var i = 0; i < 5; i++)
+        {
+            store.RecordEvent(
+                "run-1",
+                Guid.NewGuid(),
+                DateTimeOffset.UtcNow.AddSeconds(i),
+                "Info",
+                null,
+                "working on stacking",
+                "more about stacking");
+        }
+
+        store.EndRun("run-1", "Completed", 0m, 0);
+
+        await Reopen(store, project);
+
+        var hits = await store.SearchAsync("stacking", 10, CancellationToken.None);
+
+        Assert.Single(hits);
+    }
+
+    /// <summary>A search matches what was said during a run, not only what was asked.</summary>
+    [Fact]
+    public async Task TheTranscriptIsSearchableToo()
+    {
+        using var project = SampleProject.Create();
+        await using var store = await Open(project);
+
+        store.BeginRun("run-1", "do something", "graph", 2, 1);
+        store.RecordEvent(
+            "run-1",
+            Guid.NewGuid(),
+            DateTimeOffset.UtcNow,
+            "Info",
+            null,
+            "wrote InventorySlot",
+            "the file compiled");
+        store.EndRun("run-1", "Completed", 0m, 0);
+
+        await Reopen(store, project);
+
+        var hits = await store.SearchAsync("InventorySlot", 10, CancellationToken.None);
+
+        Assert.Single(hits);
+        Assert.Equal("run-1", hits[0].RunId);
+    }
+
+    /// <summary>The limit is a limit on runs returned, not on events considered.</summary>
+    [Fact]
+    public async Task TheLimitCountsRuns()
+    {
+        using var project = SampleProject.Create();
+        await using var store = await Open(project);
+
+        for (var i = 0; i < 6; i++)
+        {
+            var runId = $"run-{i}";
+            store.BeginRun(runId, "add stacking somewhere", "graph", 2, 1);
+            store.RecordEvent(runId, Guid.NewGuid(), DateTimeOffset.UtcNow, "Info", null, "stacking", "stacking again");
+            store.EndRun(runId, "Completed", 0m, 0);
+        }
+
+        await Reopen(store, project);
+
+        Assert.Equal(3, (await store.SearchAsync("stacking", 3, CancellationToken.None)).Count);
+    }
+
+    /// <summary>
+    /// A search that could not run is reported, not returned as no results.
+    /// </summary>
+    /// <remarks>
+    /// The reason the broken query survived from v1.14 to now. Every failure was caught and
+    /// answered with an empty list on the reasonable sounding grounds that somebody had probably
+    /// mistyped something, so a query that could never work looked exactly like a project with
+    /// nothing in it.
+    ///
+    /// Mistyping is genuinely handled, and separately: the search text is quoted into a phrase
+    /// before it reaches the matcher, so brackets, colons, quotes and operator words are looked
+    /// for rather than parsed. Those come back as no results because they really did match
+    /// nothing. What is left over is a fault, and a fault is said out loud.
+    /// </remarks>
+    [Fact]
+    public async Task ASearchThatCouldNotRunIsReported()
+    {
+        using var project = SampleProject.Create();
+        await using var store = await Open(project);
+
+        store.BeginRun("run-1", "add stacking", "graph", 2, 1);
+        store.EndRun("run-1", "Completed", 0m, 0);
+
+        await Reopen(store, project);
+
+        var ex = await Assert.ThrowsAsync<HistoryQueryException>(
+            () => store.SearchAsync("stacking" + Nul, 10, CancellationToken.None));
+
+        Assert.False(string.IsNullOrWhiteSpace(ex.Message));
+        Assert.NotNull(ex.InnerException);
+    }
+
+    /// <summary>
+    /// What somebody types is looked for rather than parsed, so punctuation is not a fault.
+    /// </summary>
+    /// <remarks>
+    /// The matcher has an expression syntax of its own, and a colon or a stray bracket in an
+    /// ordinary sentence is a syntax error in it. Each of these is a search that ran and found
+    /// nothing, which is a different answer from one that could not run.
+    /// </remarks>
+    [Theory]
+    [InlineData("what about (this)")]
+    [InlineData("error: something")]
+    [InlineData("a OR")]
+    [InlineData("NEAR(")]
+    [InlineData("\"")]
+    [InlineData("*")]
+    public async Task PunctuationIsSearchedForRatherThanParsed(string query)
+    {
+        using var project = SampleProject.Create();
+        await using var store = await Open(project);
+
+        store.BeginRun("run-1", "add stacking", "graph", 2, 1);
+        store.EndRun("run-1", "Completed", 0m, 0);
+
+        await Reopen(store, project);
+
+        Assert.Empty(await store.SearchAsync(query, 10, CancellationToken.None));
     }
 
     /// <summary>A search that matches nothing returns nothing rather than everything.</summary>

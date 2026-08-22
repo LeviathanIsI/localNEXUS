@@ -152,6 +152,15 @@ public sealed partial class HistoryViewModel : ObservableObject
         {
             // A newer query is already on its way.
         }
+        catch (Services.History.HistoryQueryException ex)
+        {
+            // Said out loud rather than shown as no results. A search that could not run and a
+            // search that found nothing look identical from the outside, and that is precisely how
+            // a broken query went unnoticed for as long as it did.
+            Runs.Clear();
+            Hits.Clear();
+            ListSummary = ex.Message;
+        }
         finally
         {
             IsBusy = false;

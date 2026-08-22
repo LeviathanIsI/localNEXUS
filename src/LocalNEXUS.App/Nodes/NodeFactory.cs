@@ -13,7 +13,8 @@ namespace LocalNEXUS.App.Nodes;
 /// <remarks>
 /// Node construction lives here rather than in the view model or the serializer because both of
 /// them need it, and because model nodes need their services injected. Registering a new node
-/// type is a single entry in <see cref="Descriptors"/>.
+/// type is a single entry in the built in table, which is what the palette is projected from and
+/// what the factory looks up in, so the two cannot come to disagree.
 /// </remarks>
 public sealed class NodeFactory
 {
@@ -102,50 +103,140 @@ public sealed class NodeFactory
     /// <param name="Description">Tooltip explaining what the node does.</param>
     public readonly record struct NodeDescriptor(string TypeKey, string DisplayName, string Description);
 
-    /// <summary>Every node type that can be added to a graph, in palette order.</summary>
-    public static IReadOnlyList<NodeDescriptor> Descriptors { get; } = new[]
+    /// <summary>
+    /// One built in node type: what it is called, what it used to be called, and how to make one.
+    /// </summary>
+    /// <param name="TypeKey">The key this type writes when a graph is saved.</param>
+    /// <param name="DisplayName">Label shown in the palette.</param>
+    /// <param name="Description">Tooltip explaining what the node does.</param>
+    /// <param name="FormerKeys">Every key this type has been saved under before, so old graphs open.</param>
+    /// <param name="Build">Makes one, started from the application wide defaults.</param>
+    private sealed record BuiltInNode(
+        string TypeKey,
+        string DisplayName,
+        string Description,
+        IReadOnlyList<string> FormerKeys,
+        Func<NodeFactory, NodeBase> Build);
+
+    /// <summary>
+    /// Every built in node type, in palette order. The one place any of this is written down.
+    /// </summary>
+    /// <remarks>
+    /// This table exists in this shape because the palette and the factory drifted apart twice,
+    /// and the second time there was already a comment warning about the first. A comment is not a
+    /// mechanism.
+    ///
+    /// What makes it one is that the two are no longer two things. The palette is projected from
+    /// this list and the factory looks up in it, so a type offered on the palette that nothing can
+    /// build is not a bug that ships, it is a row missing its <c>Build</c> argument and the build
+    /// fails. Adding a node type is one row here and nothing else, and a row cannot be written
+    /// without saying how to construct what it offers.
+    ///
+    /// Former keys live on the row for the same reason. A rename used to be a case label in a
+    /// switch somewhere else, which is exactly the thing that got forgotten; here it sits beside
+    /// the name that replaced it.
+    /// </remarks>
+    private static readonly IReadOnlyList<BuiltInNode> BuiltIn = new[]
     {
-        new NodeDescriptor("Prompt", "Prompt", "Sends on what you typed in the chat box."),
-        new NodeDescriptor("Triage", "Triage", "Reads your project and decides which files to leave alone, edit, or write new."),
-        new NodeDescriptor("Model", "Model", "Asks a model, local or hosted, and sends on its reply."),
-        new NodeDescriptor("Debate", "Debate", "Puts two models in genuine disagreement about how to approach something, over several rounds, and sends on what they settled."),
-        new NodeDescriptor("Judge", "Judge", "Reads what a debate settled, or two models arguing separately, and makes the determination."),
-        new NodeDescriptor("Reshape", "Reshape", "Reshapes the text passing through it. Inject standing instructions, keep the part you want, find and replace, trim, or run an expression."),
-        new NodeDescriptor("CompilerCheck", "Compiler check", "Compiles the code and asks the model to fix whatever does not build."),
-        new NodeDescriptor("Output", "Output", "Writes the finished files into your project.")
+        new BuiltInNode(
+            "Prompt",
+            "Prompt",
+            "Sends on what you typed in the chat box.",
+            new[] { "Input" },
+            _ => new PromptNode()),
+
+        new BuiltInNode(
+            "Triage",
+            "Triage",
+            "Reads your project and decides which files to leave alone, edit, or write new.",
+            new[] { "Plan" },
+            factory => new TriageNode
+            {
+                MapCharacters = factory._config.DefaultMapCharacters,
+                CandidateCharacters = factory._config.DefaultCandidateCharacters,
+                EmittedCharacters = factory._config.DefaultEmittedCharacters,
+                CandidateLimit = factory._config.DefaultCandidateLimit
+            }),
+
+        // No key is seeded, because a node no longer holds one. It names a provider and the key
+        // is looked up from the store when a run needs it.
+        new BuiltInNode(
+            "Model",
+            "Model",
+            "Asks a model, local or hosted, and sends on its reply.",
+            Array.Empty<string>(),
+            factory => new ModelNode(
+                factory._catalog,
+                factory._mesh,
+                factory._dialogs,
+                factory._toolset,
+                factory._credentials)),
+
+        new BuiltInNode(
+            "Debate",
+            "Debate",
+            "Puts two models in genuine disagreement about how to approach something, over several rounds, and sends on what they settled.",
+            Array.Empty<string>(),
+            _ => new DebateNode()),
+
+        new BuiltInNode(
+            "Judge",
+            "Judge",
+            "Reads what a debate settled, or two models arguing separately, and makes the determination.",
+            Array.Empty<string>(),
+            _ => new JudgeNode()),
+
+        new BuiltInNode(
+            "Reshape",
+            "Reshape",
+            "Reshapes the text passing through it. Inject standing instructions, keep the part you want, find and replace, trim, or run an expression.",
+            new[] { "Patch", "Transform" },
+            _ => new ReshapeNode()),
+
+        new BuiltInNode(
+            "CompilerCheck",
+            "Compiler check",
+            "Compiles the code and asks the model to fix whatever does not build.",
+            new[] { "CompileCheck", "Compile" },
+            factory => new CompilerCheckNode { RetryLimit = factory._config.DefaultRetryLimit }),
+
+        new BuiltInNode(
+            "Output",
+            "Output",
+            "Writes the finished files into your project.",
+            Array.Empty<string>(),
+            _ => new OutputNode())
     };
+
+    /// <summary>
+    /// Every key that resolves to a built in type, current and historical, to the type it makes.
+    /// </summary>
+    private static readonly IReadOnlyDictionary<string, BuiltInNode> ByKey = BuiltIn
+        .SelectMany(node => node.FormerKeys.Prepend(node.TypeKey), (node, key) => (key, node))
+        .ToDictionary(pair => pair.key, pair => pair.node, StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Every node type that can be added to a graph, in palette order.</summary>
+    public static IReadOnlyList<NodeDescriptor> Descriptors { get; } = BuiltIn
+        .Select(node => new NodeDescriptor(node.TypeKey, node.DisplayName, node.Description))
+        .ToList();
 
     /// <summary>Creates a node of the given type, started from the application wide defaults.</summary>
     /// <remarks>
     /// Every key a node has ever saved itself under is accepted here, and the current key is the
     /// one written back. That is the whole of the migration, and it is not optional: a key this
-    /// does not recognise is reported as an unknown type and the node is dropped along with every
-    /// wire attached to it, so a rename without this silently eats somebody's graph. It happened
-    /// once already, when the palette offered <c>Compile</c> while the node saved itself as
-    /// <c>CompileCheck</c>.
+    /// does not recognise is reported as an unknown type and the node is held as a placeholder, so
+    /// a rename without this leaves somebody's graph with a hole where a node used to be. It has
+    /// happened twice, once when the palette offered <c>Compile</c> while the node saved itself as
+    /// <c>CompileCheck</c>, and again when Patch became Reshape and Debate and Judge arrived.
     ///
-    /// The old names are: Input for Prompt, Plan for Triage, Patch and Transform for Reshape, and both
-    /// CompileCheck and Compile for Compiler check.
+    /// Nothing is listed here any more. The keys come from the table above, which is also what the
+    /// palette is built from, so there is no second list to forget to update.
     /// </remarks>
     /// <exception cref="NotSupportedException">The type key is not one this build has ever used.</exception>
-    public NodeBase Create(string typeKey) => typeKey switch
-    {
-        "Prompt" or "Input" => new PromptNode(),
-        "Triage" or "Plan" => new TriageNode
-        {
-            MapCharacters = _config.DefaultMapCharacters,
-            CandidateCharacters = _config.DefaultCandidateCharacters,
-            EmittedCharacters = _config.DefaultEmittedCharacters,
-            CandidateLimit = _config.DefaultCandidateLimit
-        },
-        // No key is seeded, because a node no longer holds one. It names a provider and the key
-        // is looked up from the store when a run needs it.
-        "Model" => new ModelNode(_catalog, _mesh, _dialogs, _toolset, _credentials),
-        "Patch" or "Transform" => new ReshapeNode(),
-        "CompilerCheck" or "CompileCheck" or "Compile" => new CompilerCheckNode { RetryLimit = _config.DefaultRetryLimit },
-        "Output" => new OutputNode(),
-        _ => CreateContributed(typeKey)
-    };
+    public NodeBase Create(string typeKey)
+        => ByKey.TryGetValue(typeKey, out var builtIn)
+            ? builtIn.Build(this)
+            : CreateContributed(typeKey);
 
     /// <summary>Creates a node of the given type at a canvas position.</summary>
     public NodeBase Create(string typeKey, double x, double y)
