@@ -42,7 +42,7 @@ public sealed class NestedTypeIndexTests
     }
 
     private static IndexedType Named(IReadOnlyList<IndexedType> types, string name)
-        => Assert.Single(types.Where(t => t.Name == name));
+        => Assert.Single(types, t => t.Name == name);
 
     /// <summary>A top level type is what it always was.</summary>
     [Fact]

@@ -129,7 +129,7 @@ public sealed class DeclaredTwiceTests
         Assert.True(project.Exists("ItemStack.cs"));
         Assert.False(project.Exists("Inventory.cs"));
 
-        var refusal = Assert.Single(run.Decisions.Where(d => d.Kind == RunDecisionKind.WriteRefused));
+        var refusal = Assert.Single(run.Decisions, d => d.Kind == RunDecisionKind.WriteRefused);
 
         Assert.Equal(nameof(ProjectWriteRule.NothingDeclaredTwice), refusal.Rule);
         Assert.Contains("ItemStack", refusal.Detail, StringComparison.Ordinal);
@@ -159,7 +159,7 @@ public sealed class DeclaredTwiceTests
         Assert.Equal(RunState.Completed, run.State);
         Assert.True(project.Exists("ItemStack.cs"));
         Assert.True(project.Exists("Inventory.cs"));
-        Assert.Empty(run.Decisions.Where(d => d.Kind == RunDecisionKind.WriteRefused));
+        Assert.DoesNotContain(run.Decisions, d => d.Kind == RunDecisionKind.WriteRefused);
     }
 
     /// <summary>The refusal names the rule, so it is countable rather than a sentence.</summary>

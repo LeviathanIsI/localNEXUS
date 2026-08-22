@@ -14,8 +14,11 @@ namespace LocalNEXUS.App.Services.Planning;
 ///
 /// Every part of the parse is tolerant. Markdown fences, bullets, numbering, extra whitespace and
 /// missing sections are all normal, and a row that cannot be read is skipped rather than taking
-/// the plan down with it. What is not tolerated is inventing content: a reply with no readable
-/// plan rows produces an empty plan, and the caller says so.
+/// the plan down with it. A missing plan section is read back out of the decisions, which is not
+/// the same generosity: it repeats a decision the planner made rather than inventing one.
+///
+/// What is not tolerated is inventing content. A reply with nothing readable in it at all
+/// produces an empty plan, and the caller says so.
 /// </remarks>
 public static class PlanParser
 {
@@ -93,7 +96,54 @@ public static class PlanParser
             }
         }
 
+        if (rows.Count == 0)
+        {
+            rows.AddRange(PlanImpliedBy(verdicts));
+        }
+
         return new ParsedPlan(verdicts, rows);
+    }
+
+    /// <summary>
+    /// The plan a reply implies when it wrote decisions and no plan.
+    /// </summary>
+    /// <remarks>
+    /// The commonest way a plan comes back empty is not a malformed row. It is a reply that
+    /// answered the first section and stopped, either by writing the decisions alone or by folding
+    /// a plan row into a decision row, and both were unrecoverable for no better reason than that
+    /// the parser decided what a row was from the heading above it rather than from the row. A
+    /// decision saying to edit a file is already a statement that the file has to be written, so
+    /// the plan is derivable: the ordering is the order the decisions were written in, the type is
+    /// the one the file name promises, and the intent is the reason the planner gave.
+    ///
+    /// Only an edit. The other three decisions cannot become a row and it is worth saying why,
+    /// because taking them would look like the same generosity and would not be. Use as is and
+    /// ignore both mean leave this file alone, so writing it is the opposite of what was decided.
+    /// Create new referencing is the subtle one: its path column names the existing file the new
+    /// work has to tie into, not the file to write, so a row derived from it would edit a file the
+    /// planner asked to be left alone. There is nothing in the reply that says where the new file
+    /// should go, and inventing a path is worse than reporting that the plan was empty.
+    ///
+    /// A fallback and never a supplement. If any plan row parsed, that is the plan, because a
+    /// reply that wrote both sections properly would otherwise have every edited file planned
+    /// twice.
+    /// </remarks>
+    private static IEnumerable<PlanRow> PlanImpliedBy(IEnumerable<CandidateVerdict> verdicts)
+    {
+        foreach (var verdict in verdicts)
+        {
+            if (verdict.Decision != CandidateDecision.Edit
+                || !verdict.RelativePath.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            yield return new PlanRow(
+                FileOperation.Edit,
+                verdict.RelativePath,
+                System.IO.Path.GetFileNameWithoutExtension(verdict.RelativePath),
+                verdict.Reason);
+        }
     }
 
     private static Section HeadingOf(string line)
@@ -146,7 +196,13 @@ public static class PlanParser
         }
 
         var symbol = words.Length > 1 ? string.Join(' ', words[1..]).Trim() : null;
-        var reason = parts.Count > 2 ? parts[2] : string.Empty;
+
+        // The last column rather than the third. They are the same column in a row of the three
+        // the format asks for, and they differ exactly when the model folded a plan row into a
+        // decision row, where the prose is at the end and the third column is a path or a type.
+        // Reading the third there gives an intent of "Assets/Scripts/Rotator.cs", which is what
+        // the coder would then be told the file is for.
+        var reason = parts.Count > 2 ? parts[^1] : string.Empty;
 
         verdict = new CandidateVerdict(path, decision, string.IsNullOrWhiteSpace(symbol) ? null : symbol, reason);
         return true;
