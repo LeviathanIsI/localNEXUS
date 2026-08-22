@@ -317,9 +317,17 @@
         </Border>
 
         <!--
-            The canvas. Nodes are added from the Edit menu or from a right click here, which is
-            where an editor puts that rather than on a strip that costs a row of canvas forever.
+            The canvas and the search over it.
+
+            Nodes can be added from the Edit menu, from a right click, by double clicking empty
+            canvas, or by dragging a wire out and letting go over nothing. The last two are what a
+            node editor is expected to have, and the fourth is the fastest of them because the pin
+            it came from says which node types could possibly go on the end.
+
+            The search is a layer over the canvas rather than a window, so the graph stays visible
+            behind it and dismissing it costs an escape rather than a trip to a title bar.
         -->
+        <Grid>
         <nodify:NodifyEditor ItemsSource="{Binding Document.Nodes}"
                              Connections="{Binding Graph.Connections}"
                              PendingConnection="{Binding PendingConnection}"
@@ -331,6 +339,7 @@
                              RemoveConnectionCommand="{Binding RemoveConnectionCommand}"
                              GridCellSize="16"
                              DisplayConnectionsOnTop="False"
+                             behaviors:CanvasSearchBehavior.Search="{Binding NodeSearch}"
                              Background="Transparent">
             <nodify:NodifyEditor.ContextMenu>
                 <ContextMenu>
@@ -353,5 +362,81 @@
                 </ContextMenu>
             </nodify:NodifyEditor.ContextMenu>
         </nodify:NodifyEditor>
+
+        <!--
+            Dimmed behind, so the click that lands anywhere else closes the search rather than
+            reaching the canvas underneath and starting something.
+        -->
+        <Border Background="{DynamicResource Surface.Scrim.Brush}"
+                Visibility="{Binding NodeSearch.IsOpen, Converter={StaticResource BooleanToVisibility}}">
+            <Border.InputBindings>
+                <MouseBinding MouseAction="LeftClick" Command="{Binding NodeSearch.CloseCommand}" />
+            </Border.InputBindings>
+
+            <Border Width="380"
+                    MaxHeight="360"
+                    VerticalAlignment="Center"
+                    HorizontalAlignment="Center"
+                    Padding="0"
+                    CornerRadius="6"
+                    Background="{DynamicResource Surface.Card.Brush}"
+                    BorderThickness="1"
+                    BorderBrush="{DynamicResource Surface.Border.Brush}">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top"
+                               Style="{StaticResource HintText}"
+                               Margin="12,10,12,0"
+                               Text="{Binding NodeSearch.Prompt}" />
+
+                    <!--
+                        Enter places the highlighted row and escape closes, which is what makes
+                        this usable without the mouse leaving where the node is going.
+                    -->
+                    <TextBox DockPanel.Dock="Top"
+                             x:Name="NodeSearchBox"
+                             Margin="12,6,12,10"
+                             Padding="8,6"
+                             behaviors:FocusOnVisibleBehavior.IsEnabled="True"
+                             Text="{Binding NodeSearch.Query, UpdateSourceTrigger=PropertyChanged}">
+                        <TextBox.InputBindings>
+                            <KeyBinding Key="Enter" Command="{Binding NodeSearch.PlaceCommand}" />
+                            <KeyBinding Key="Escape" Command="{Binding NodeSearch.CloseCommand}" />
+                            <KeyBinding Key="Down" Command="{Binding NodeSearch.SelectNextCommand}" />
+                            <KeyBinding Key="Up" Command="{Binding NodeSearch.SelectPreviousCommand}" />
+                        </TextBox.InputBindings>
+                    </TextBox>
+
+                    <TextBlock DockPanel.Dock="Bottom"
+                               Style="{StaticResource HintText}"
+                               Margin="12,8,12,12"
+                               TextWrapping="Wrap"
+                               Visibility="{Binding NodeSearch.HasResults, Converter={StaticResource BooleanToVisibility}, ConverterParameter=Invert}"
+                               Text="Nothing matches. Every node type is offered here, so a name that finds nothing is a name no node has." />
+
+                    <ListBox ItemsSource="{Binding NodeSearch.Results}"
+                             SelectedItem="{Binding NodeSearch.Selected}"
+                             Background="Transparent"
+                             BorderThickness="0"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <ListBox.InputBindings>
+                            <MouseBinding MouseAction="LeftDoubleClick" Command="{Binding NodeSearch.PlaceCommand}" />
+                            <KeyBinding Key="Enter" Command="{Binding NodeSearch.PlaceCommand}" />
+                            <KeyBinding Key="Escape" Command="{Binding NodeSearch.CloseCommand}" />
+                        </ListBox.InputBindings>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Margin="4,3">
+                                    <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" />
+                                    <TextBlock Style="{StaticResource HintText}"
+                                               TextWrapping="Wrap"
+                                               Text="{Binding Detail}" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+            </Border>
+        </Border>
+        </Grid>
     </DockPanel>
 </UserControl>

@@ -162,7 +162,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         ProjectIndex = projectIndex;
         Themes = themes;
         Settings = settings;
-        PendingConnection = new PendingConnectionViewModel(graph, message => _feed.Error("Connection refused", message));
+        NodeSearch = new NodeSearchViewModel(factory, PlaceSearchedNode);
+
+        PendingConnection = new PendingConnectionViewModel(
+            graph,
+            message => _feed.Error("Connection refused", message),
+            OpenSearchFromPin);
 
         Document = new GraphDocumentViewModel(graph, () => Feed.RunState, dispatcher);
         Problems = new ProblemsViewModel(graph);
@@ -203,6 +208,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     /// <summary>A run held on a wire, and what it is holding.</summary>
     public Services.Execution.BreakpointService Breakpoints { get; }
+
+    /// <summary>The search that places a node, opened from the canvas rather than from a menu.</summary>
+    public NodeSearchViewModel NodeSearch { get; }
 
     /// <summary>What the open project contains, shown under the explorer.</summary>
     public ProjectIndexService ProjectIndex { get; }
@@ -446,6 +454,69 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             _dialogs.ShowError("Node not added", ex.Message);
         }
     }
+
+    /// <summary>
+    /// Places a node the search chose, and wires it back when the search came from a pin.
+    /// </summary>
+    /// <remarks>
+    /// The wiring is done through the same validator everything else uses, so a node offered by
+    /// the search cannot land and then refuse to connect. The search only offers types with a
+    /// reachable pin, so a refusal here would mean the two disagreed, which is worth saying rather
+    /// than swallowing.
+    /// </remarks>
+    private void PlaceSearchedNode(string typeKey, double x, double y, Pin? from)
+    {
+        NodeBase node;
+
+        try
+        {
+            node = _factory.Create(typeKey, x, y);
+        }
+        catch (NotSupportedException ex)
+        {
+            _dialogs.ShowError("Node not added", ex.Message);
+            return;
+        }
+
+        Graph.AddNode(node);
+        SelectOnly(node);
+
+        if (from is null)
+        {
+            return;
+        }
+
+        var landing = from.Direction == PinDirection.Output ? node.Inputs : node.Outputs;
+
+        foreach (var pin in landing)
+        {
+            var (output, input) = from.Direction == PinDirection.Output ? (from, pin) : (pin, from);
+
+            if (Graph.TryConnect(output, input, out _))
+            {
+                return;
+            }
+        }
+
+        _feed.Error(
+            "Node added without a wire",
+            $"{node.Title} was offered as somewhere {from.Owner.Title}.{from.Name} could go, and then no "
+            + "pin on it would take the connection.");
+    }
+
+    /// <summary>Opens the search where a wire was let go over empty canvas.</summary>
+    private void OpenSearchFromPin(Pin source)
+        => NodeSearch.OpenFrom(source, LastCanvasPoint.X, LastCanvasPoint.Y);
+
+    /// <summary>
+    /// Where the pointer last was on the canvas, in the coordinates nodes are positioned in.
+    /// </summary>
+    /// <remarks>
+    /// Written by the behaviour that watches the canvas, because a released wire arrives here as a
+    /// pin and nothing else: the command carries no position, and the view model has no way to ask
+    /// where the pointer is.
+    /// </remarks>
+    public Point LastCanvasPoint { get; set; }
 
     /// <summary>Removes every selected node together with its wires.</summary>
     [RelayCommand(CanExecute = nameof(CanDeleteSelection))]

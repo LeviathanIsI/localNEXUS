@@ -16,6 +16,7 @@ public sealed partial class PendingConnectionViewModel : ObservableObject
 {
     private readonly GraphModel _graph;
     private readonly Action<string> _onRejected;
+    private readonly Action<Pin>? _onDroppedInSpace;
 
     /// <summary>The pin the drag started from.</summary>
     [ObservableProperty]
@@ -39,10 +40,17 @@ public sealed partial class PendingConnectionViewModel : ObservableObject
 
     /// <param name="graph">The graph the connection would be added to.</param>
     /// <param name="onRejected">Called with an explanation when a drop is refused.</param>
-    public PendingConnectionViewModel(GraphModel graph, Action<string> onRejected)
+    /// <param name="onDroppedInSpace">
+    /// Called with the pin that was dragged from when the wire is released over nothing.
+    /// </param>
+    public PendingConnectionViewModel(
+        GraphModel graph,
+        Action<string> onRejected,
+        Action<Pin>? onDroppedInSpace = null)
     {
         _graph = graph;
         _onRejected = onRejected;
+        _onDroppedInSpace = onDroppedInSpace;
     }
 
     /// <summary>Begins a drag from the given pin.</summary>
@@ -63,8 +71,17 @@ public sealed partial class PendingConnectionViewModel : ObservableObject
         var source = Source;
         Reset();
 
-        if (source is null || target is null)
+        if (source is null)
         {
+            return;
+        }
+
+        // Released over nothing. That used to be the end of it, which is a wire dragged out and
+        // thrown away; it is more usefully read as asking for the node that would go on the end,
+        // and the pin it came from says which ones could.
+        if (target is null)
+        {
+            _onDroppedInSpace?.Invoke(source);
             return;
         }
 
