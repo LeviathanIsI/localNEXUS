@@ -166,6 +166,21 @@ public sealed class AppConfig
     /// <summary>Port the mesh node's management API answers on.</summary>
     public int MeshConsolePort { get; set; } = 3131;
 
+    /// <summary>True once somebody has closed the walkthrough, so it stops opening itself.</summary>
+    /// <remarks>
+    /// Dismissal and not completion. Somebody who works through every step never has to press
+    /// anything for it to stop being useful, and somebody who wants it back finds it on the Help
+    /// menu, which is why this is the only thing about it that is remembered.
+    /// </remarks>
+    public bool WalkthroughDismissed { get; set; }
+
+    /// <summary>True once a run has finished on this machine, which is the walkthrough's last step.</summary>
+    /// <remarks>
+    /// The one step nothing else can see. A run that completed leaves nothing behind that is still
+    /// true a minute later, so unlike the other four this one has to be written down.
+    /// </remarks>
+    public bool HasCompletedAWalkthroughRun { get; set; }
+
     /// <summary>
     /// Reads the configuration from disk. A missing or unreadable file yields defaults rather
     /// than an error, because losing this state is never worth blocking startup over.

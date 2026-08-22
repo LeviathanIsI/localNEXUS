@@ -330,6 +330,18 @@ public sealed partial class ModelNode : NodeBase, ICodeRepairSource, IModelHandl
         _ => "unknown"
     };
 
+    /// <summary>
+    /// True when this node has been pointed at a model of some kind.
+    /// </summary>
+    /// <remarks>
+    /// Read off the same display name the canvas shows rather than repeating the per provider
+    /// tests, so a node that says it has no model selected and a node that reports itself
+    /// unconfigured cannot come to disagree. It answers whether something was chosen, not whether
+    /// that something will answer, which only running it can establish.
+    /// </remarks>
+    public bool IsConfigured => !ModelDisplayName.StartsWith("no ", StringComparison.Ordinal)
+                               && !string.Equals(ModelDisplayName, "unknown", StringComparison.Ordinal);
+
     /// <inheritdoc />
     public override async Task<NodeResult> ExecuteAsync(NodeExecutionContext ctx, CancellationToken ct)
     {

@@ -21,6 +21,89 @@
 
     <DockPanel>
 
+        <!--
+            Getting started.
+
+            In the side bar rather than over the canvas, because every step is a thing to do
+            elsewhere in the window and a panel that covered the thing it was pointing at would
+            have to be moved before it could be followed. It is above the outline so it is the
+            first thing read on a first launch, and it takes no room at all once dismissed.
+
+            A suggestion and not a gate. Nothing is disabled while it is showing.
+        -->
+        <Border DockPanel.Dock="Top"
+                Padding="12,10"
+                BorderBrush="{DynamicResource Surface.Border.Brush}"
+                BorderThickness="0,0,0,1"
+                Visibility="{Binding Walkthrough.IsOpen, Converter={StaticResource BooleanToVisibility}}">
+            <StackPanel>
+                <DockPanel>
+                    <Button DockPanel.Dock="Right"
+                            Style="{StaticResource IconButton}"
+                            Content="&#xE711;"
+                            ToolTip="Hide this. Help, Getting started brings it back."
+                            AutomationProperties.Name="Hide the walkthrough"
+                            Command="{Binding Walkthrough.DismissCommand}" />
+
+                    <TextBlock Text="Getting started"
+                               VerticalAlignment="Center"
+                               FontWeight="SemiBold" />
+                </DockPanel>
+
+                <TextBlock Style="{StaticResource HintText}"
+                           Margin="0,2,0,0"
+                           Text="{Binding Walkthrough.Progress}" />
+
+                <TextBlock Style="{StaticResource HintText}"
+                           Margin="0,8,0,0"
+                           TextWrapping="Wrap"
+                           Visibility="{Binding Walkthrough.IsFinished, Converter={StaticResource BooleanToVisibility}}"
+                           Text="That is the whole of it. Close this and carry on; it is on the Help menu if you want it back." />
+
+                <ItemsControl ItemsSource="{Binding Walkthrough.Steps}" Margin="0,8,0,0">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Margin="0,0,0,10">
+                                <DockPanel>
+                                    <TextBlock DockPanel.Dock="Left"
+                                               Width="18"
+                                               VerticalAlignment="Top"
+                                               FontFamily="{StaticResource Font.Icons}"
+                                               Foreground="{DynamicResource Status.Success.Brush}"
+                                               Text="&#xE73E;"
+                                               Visibility="{Binding IsDone, Converter={StaticResource BooleanToVisibility}}" />
+
+                                    <TextBlock DockPanel.Dock="Left"
+                                               Width="18"
+                                               VerticalAlignment="Top"
+                                               FontFamily="{StaticResource Font.Icons}"
+                                               Foreground="{DynamicResource Text.Muted.Brush}"
+                                               Text="&#xE739;"
+                                               Visibility="{Binding IsDone, Converter={StaticResource BooleanToVisibility}, ConverterParameter=Invert}" />
+
+                                    <TextBlock Text="{Binding Title}"
+                                               TextWrapping="Wrap"
+                                               VerticalAlignment="Center" />
+                                </DockPanel>
+
+                                <TextBlock Style="{StaticResource HintText}"
+                                           Margin="18,2,0,0"
+                                           TextWrapping="Wrap"
+                                           Text="{Binding Detail}" />
+
+                                <Button Margin="18,6,0,0"
+                                        HorizontalAlignment="Left"
+                                        Style="{StaticResource SmallButton}"
+                                        Content="{Binding ActionLabel}"
+                                        Command="{Binding Action}"
+                                        Visibility="{Binding HasAction, Converter={StaticResource BooleanToVisibility}}" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </Border>
+
         <!-- What the graph writes into, and what is known about it. -->
         <Border DockPanel.Dock="Bottom"
                 BorderBrush="{DynamicResource Surface.Border.Brush}"

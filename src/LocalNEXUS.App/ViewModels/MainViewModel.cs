@@ -185,6 +185,16 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         Network.PropertyChanged += OnNetworkChanged;
         Document.PropertyChanged += OnDocumentChanged;
 
+        Walkthrough = new WalkthroughViewModel(
+            config,
+            project,
+            catalog.Models,
+            graph,
+            OpenProjectCommand,
+            OpenSettingsCommand,
+            ApplyTemplateCommand,
+            Templates);
+
         // The graph handed in is normally empty, but it does not have to be.
         ResyncNodeSubscriptions();
         RefreshCompilerReachability();
@@ -225,6 +235,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     /// <summary>True when the canvas has nothing on it, which is what the empty state is drawn from.</summary>
     public bool IsCanvasEmpty => Graph.Nodes.Count == 0;
+
+    /// <summary>The first run checklist, which suggests and never blocks.</summary>
+    public WalkthroughViewModel Walkthrough { get; }
 
     /// <summary>What the open project contains, shown under the explorer.</summary>
     public ProjectIndexService ProjectIndex { get; }
@@ -866,6 +879,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         OnPropertyChanged(nameof(IsCanvasEmpty));
         SaveAsTemplateCommand.NotifyCanExecuteChanged();
+        Walkthrough.Refresh();
 
         // A reset carries no item lists, which is what clearing the canvas raises. Rebuilding the
         // subscription set from the collection covers that case as well as ordinary add and
@@ -976,9 +990,19 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// </summary>
     private void OnFeedChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(ActivityFeedViewModel.RunState))
+        if (e.PropertyName != nameof(ActivityFeedViewModel.RunState))
         {
-            Document.OnRunStateChanged();
+            return;
+        }
+
+        Document.OnRunStateChanged();
+
+        // The walkthrough's last step, and the only one nothing else can see afterwards. A run
+        // that left files waiting still ran, so it counts: the step is having got the graph to do
+        // something, not having got a perfect result on the first attempt.
+        if (Feed.RunState is Services.Execution.RunState.Completed or Services.Execution.RunState.Unresolved)
+        {
+            Walkthrough.RecordSuccessfulRun();
         }
     }
 

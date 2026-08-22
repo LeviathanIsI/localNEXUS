@@ -192,6 +192,10 @@
                                 <Separator />
                                 <MenuItem Header="_Clear the transcript" Command="{Binding Feed.ClearFeedCommand}" />
                             </MenuItem>
+
+                            <MenuItem Header="_Help">
+                                <MenuItem Header="_Getting started" Command="{Binding Walkthrough.ShowCommand}" />
+                            </MenuItem>
                         </Menu>
 
                         <TextBlock Grid.Column="2"
