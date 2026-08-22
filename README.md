@@ -4,7 +4,7 @@
 
 LocalNEXUS wires language models together on a canvas and points them at your codebase. You type what you want, the graph reads your project, writes the code, compiles it, and writes the files. Models run on your hardware, across several machines, or through a hosted provider if you want them to.
 
-I built it for Unity C#. The engine underneath has no idea Unity exists.
+Built it for Unity C#. Ever expanding...
 
 ![The workspace during a run](docs/images/workspace-mid-run.png)
 
