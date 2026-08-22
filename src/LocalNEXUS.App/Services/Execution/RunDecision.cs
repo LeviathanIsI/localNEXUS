@@ -17,7 +17,17 @@ public enum RunDecisionKind
     DuplicateRefused,
 
     /// <summary>A write a project rule refused, and which rule refused it.</summary>
-    WriteRefused
+    WriteRefused,
+
+    /// <summary>
+    /// Planning stopped to ask something rather than guessing at it.
+    /// </summary>
+    /// <remarks>
+    /// Whether a request was ambiguous enough to be worth a question is a judgement, and it was
+    /// made and then reported only to the person. Nothing could count how often a run guessed
+    /// where it should have asked, which is the failure mode the elicitation exists to prevent.
+    /// </remarks>
+    ClarificationAsked
 }
 
 /// <summary>

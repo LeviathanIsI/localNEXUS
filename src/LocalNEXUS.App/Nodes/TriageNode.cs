@@ -235,6 +235,17 @@ public sealed partial class TriageNode : NodeBase
             asked,
             Id);
 
+        // Filed as well as shown. Asking rather than guessing is the whole point of the
+        // elicitation, and until now the only record that it had happened was a panel somebody
+        // had to be present to see.
+        ctx.Record(new RunDecision(
+            RunDecisionKind.ClarificationAsked,
+            questions.Count.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            string.Empty,
+            null,
+            null,
+            asked));
+
         StatusMessage = questions.Count == 1 ? "Waiting on an answer" : $"Waiting on {questions.Count} answers";
 
         var outcome = conversation is null

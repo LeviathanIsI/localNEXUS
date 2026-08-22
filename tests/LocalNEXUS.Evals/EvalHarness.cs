@@ -342,6 +342,8 @@ public sealed class EvalHarness : IDisposable
             calls.FirstOrDefault()?.ToFirstToken,
             calls.Count(c => string.Equals(c.FinishReason, "length", StringComparison.OrdinalIgnoreCase)),
             generated.Sum(f => f.Content.Length),
+            decisions.Count(d => d.Kind == RunDecisionKind.ClarificationAsked),
+            changed,
             CaptureTouchedFiles(project, newFiles, changed));
     }
 

@@ -88,6 +88,10 @@ public sealed record RunConditions(
 /// <param name="TimeToFirstToken">The first call's wait before anything came back.</param>
 /// <param name="TruncatedReplies">Replies that stopped because they hit the token ceiling.</param>
 /// <param name="GeneratedCharacters">How much code came out.</param>
+/// <param name="ClarificationsAsked">
+/// How many times planning stopped to ask something rather than guessing at it.
+/// </param>
+/// <param name="ChangedFiles">Files the project already had whose contents are not what they were.</param>
 /// <param name="ChangedFileContents">
 /// What every file the run touched looks like now.
 /// </param>
@@ -130,6 +134,8 @@ public sealed record TaskResult(
     TimeSpan? TimeToFirstToken,
     int TruncatedReplies,
     int GeneratedCharacters,
+    int ClarificationsAsked,
+    IReadOnlyList<string> ChangedFiles,
     IReadOnlyDictionary<string, string> ChangedFileContents)
 {
     /// <summary>Files the check reached a verdict on.</summary>
@@ -189,8 +195,17 @@ public sealed record TaskResult(
     /// already existed would be the harness scoring a point for the wrong reason.
     /// </remarks>
     public bool RefusedByTheRightRule(EvalTask task)
-        => task.ExpectedRefusalRule is { Length: > 0 } rule
-           && RefusalsFired.Any(r => r.StartsWith(rule, StringComparison.Ordinal));
+        => task.RefusalRules.Count > 0
+           && task.RefusalRules.Any(rule => RefusalsFired.Any(r => r.StartsWith(rule, StringComparison.Ordinal)));
+
+    /// <summary>
+    /// The run left the project exactly as it found it.
+    /// </summary>
+    /// <remarks>
+    /// Only meaningful for a task whose right answer is to do nothing, and there it is the whole
+    /// of the answer. A model that produced something good is still wrong.
+    /// </remarks>
+    public bool LeftEverythingAlone => UnexpectedNewFiles.Count == 0 && ChangedFiles.Count == 0;
 
     /// <summary>
     /// Whether the task came out the way it was supposed to.
@@ -205,6 +220,19 @@ public sealed record TaskResult(
         if (DuplicateTypes.Count > 0 || DeletedFiles.Count > 0 || ScriptsMissingMeta.Count > 0)
         {
             return false;
+        }
+
+        if (task.ExpectsNoChange)
+        {
+            return !Faulted && LeftEverythingAlone;
+        }
+
+        if (task.ExpectsClarification)
+        {
+            // Asking is the pass. What it went on to do afterwards is not what this measures,
+            // because with nobody present to answer, proceeding on a stated assumption is the
+            // designed behaviour rather than a failure.
+            return ClarificationsAsked > 0;
         }
 
         if (task.ExpectsRefusal)

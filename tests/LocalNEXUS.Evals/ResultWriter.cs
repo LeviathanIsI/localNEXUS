@@ -133,7 +133,13 @@ public static class ResultWriter
         text.AppendLine($"- **Reused the existing type when it should have:** {reused} of {reuseTasks.Count}");
         text.AppendLine($"- **Went for a second copy instead:** {attempted} of {results.Count}");
         text.AppendLine($"- **Duplicate types that reached disk:** {results.Sum(r => r.DuplicateTypes.Count)}");
+        var quietTasks = results.Where(r => TaskFor(r, tasks)?.ExpectsNoChange == true).ToList();
+        var askTasks = results.Where(r => TaskFor(r, tasks)?.ExpectsClarification == true).ToList();
+
         text.AppendLine($"- **Refused by the rule the task was built to trip:** {refusedRight} of {refusalTasks.Count}");
+        text.AppendLine($"- **Left the project alone when that was the answer:** {quietTasks.Count(r => r.LeftEverythingAlone)} of {quietTasks.Count}");
+        text.AppendLine($"- **Asked rather than guessed when the request was ambiguous:** {askTasks.Count(r => r.ClarificationsAsked > 0)} of {askTasks.Count}");
+        text.AppendLine($"- **Clarifications asked in total:** {results.Sum(r => r.ClarificationsAsked)}");
         text.AppendLine($"- **Guardrail refusals in total:** {results.Sum(r => r.RefusalsFired.Count)}");
 
         foreach (var group in results
@@ -269,9 +275,24 @@ public static class ResultWriter
 
         if (task.ExpectsRefusal && !result.RefusedByTheRightRule(task))
         {
+            var wantedRules = string.Join(" or ", task.RefusalRules);
+
             reasons.Add(result.RefusalsFired.Count == 0
-                ? $"nothing refused it and {task.ExpectedRefusalRule} should have"
-                : $"it was refused by {string.Join(", ", result.RefusalsFired.Select(Rule))} rather than by {task.ExpectedRefusalRule}");
+                ? $"nothing refused it and {wantedRules} should have"
+                : $"it was refused by {string.Join(", ", result.RefusalsFired.Select(Rule))} rather than by {wantedRules}");
+        }
+
+        if (task.ExpectsNoChange && !result.LeftEverythingAlone)
+        {
+            reasons.Add(
+                "the project already did what was asked and it wrote anyway ("
+                + string.Join(", ", result.UnexpectedNewFiles.Concat(result.ChangedFiles))
+                + ")");
+        }
+
+        if (task.ExpectsClarification && result.ClarificationsAsked == 0)
+        {
+            reasons.Add("the request was ambiguous and it guessed rather than asking");
         }
 
         if (!task.ExpectsRefusal && result.RefusalsFired.Count > 0)
@@ -314,7 +335,7 @@ public static class ResultWriter
         var header = string.Join(",",
             "started_at", "app_version", "task_set", "model", "quantization", "context_size", "gpu_layers",
             "temperature", "max_tokens", "task", "shape", "attempt", "met_the_bar", "faulted", "run_state",
-            "planned_files", "planned_landed", "planned_creates", "planned_edits", "reused_as_intended", "attempted_duplicate", "refused_by_expected_rule", "expected_files", "landed_files", "first_pass", "repaired", "never_compiled",
+            "planned_files", "planned_landed", "planned_creates", "planned_edits", "reused_as_intended", "attempted_duplicate", "refused_by_expected_rule", "clarifications", "left_alone", "expected_files", "landed_files", "first_pass", "repaired", "never_compiled",
             "inconclusive", "repair_attempts", "duplicates", "refusals", "refusal_expected", "staged",
             "unexpected_files", "fences_left", "model_calls", "prompt_tokens", "completion_tokens",
             "cost_usd", "wall_seconds", "model_seconds", "first_token_seconds", "truncated", "generated_chars");
@@ -356,6 +377,8 @@ public static class ResultWriter
                 r.ReusedAsIntended(task) ? 1 : 0,
                 r.AttemptedDuplicate(task) ? 1 : 0,
                 r.RefusedByTheRightRule(task) ? 1 : 0,
+                r.ClarificationsAsked,
+                r.LeftEverythingAlone ? 1 : 0,
                 task.ExpectedFileCount,
                 r.ExpectedNewFilesLanded + r.ExpectedEditsLanded,
                 r.FilesCompiledFirstPass,

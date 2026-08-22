@@ -21,6 +21,30 @@ public enum TaskShape
     /// <summary>Several files where one depends on another written in the same run.</summary>
     MultiFileOrdered,
 
+    /// <summary>One interface and more than one thing implementing it.</summary>
+    InterfaceWithImplementations,
+
+    /// <summary>Work on an asset type rather than a component.</summary>
+    ScriptableObject,
+
+    /// <summary>The project already does what was asked, so the right answer is to leave it alone.</summary>
+    ChangeNothing,
+
+    /// <summary>Not enough was said to act on, so the right answer is to ask.</summary>
+    Ambiguous,
+
+    /// <summary>More than one file the project already has has to change.</summary>
+    EditTwoFiles,
+
+    /// <summary>More work than the prompt budget can carry context for.</summary>
+    OversizedPlan,
+
+    /// <summary>Something named in the request exists nowhere, so it has to be written too.</summary>
+    MissingDependency,
+
+    /// <summary>Ordinary single file work, for volume.</summary>
+    Routine,
+
     /// <summary>A request whose right answer is an edit, phrased the way somebody would phrase it.</summary>
     ShouldEditNotCreate,
 
@@ -59,9 +83,19 @@ public sealed record SeedFile(string RelativePath, string Content);
 /// The type already in the project that the right answer changes rather than duplicates, when
 /// there is one.
 /// </param>
-/// <param name="ExpectedRefusalRule">
-/// Which project rule ought to refuse the write, named exactly, when a refusal is the right
-/// answer. A refusal by some other rule is not the same event and does not count as one.
+/// <param name="AcceptableRefusalRules">
+/// Which project rules would be a correct refusal of this write, named exactly. More than one is
+/// allowed because some requests can legitimately be refused by either of two rules depending on
+/// how the model went about it, and a refusal by anything outside this list is a different event
+/// that does not count as the one the task was built to trip.
+/// </param>
+/// <param name="ExpectsNoChange">
+/// True when the project already does what was asked and the right answer is to write nothing at
+/// all. A model that writes something anyway has failed, however good the something is.
+/// </param>
+/// <param name="ExpectsClarification">
+/// True when the request is too underspecified to act on and the right answer is to ask rather
+/// than to guess.
 /// </param>
 public sealed record EvalTask(
     string Id,
@@ -73,10 +107,15 @@ public sealed record EvalTask(
     bool ExpectsRefusal,
     IReadOnlyList<string> TypesThatMustNotBeDuplicated,
     string? TypeThatShouldBeReused = null,
-    string? ExpectedRefusalRule = null)
+    IReadOnlyList<string>? AcceptableRefusalRules = null,
+    bool ExpectsNoChange = false,
+    bool ExpectsClarification = false)
 {
     /// <summary>How many files the task expects to be touched at all.</summary>
     public int ExpectedFileCount => ExpectedNewFiles.Count + ExpectedEditedFiles.Count;
+
+    /// <summary>The rules that would be a correct refusal, never null.</summary>
+    public IReadOnlyList<string> RefusalRules => AcceptableRefusalRules ?? Array.Empty<string>();
 
     public override string ToString() => $"{Id} ({Shape})";
 }
