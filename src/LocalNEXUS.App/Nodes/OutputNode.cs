@@ -6,6 +6,7 @@ using LocalNEXUS.App.Models;
 using LocalNEXUS.App.Services.Execution;
 using LocalNEXUS.App.Services.Files;
 using LocalNEXUS.App.Services.Planning;
+using LocalNEXUS.App.Services.ProjectIndex;
 
 namespace LocalNEXUS.App.Nodes;
 
@@ -211,7 +212,7 @@ public sealed partial class OutputNode : NodeBase
             {
                 batch.EnforceExpectedExistence(absolute, file.Operation == FileOperation.Edit);
                 UnityScriptRules.Enforce(file.RelativePath, file.Content, index.FindFile(file.RelativePath), file.Types);
-                EnforceNothingDeclaredTwice(file, declaredHere);
+                EnforceNothingDeclaredTwice(file, declaredHere, index);
             }
             catch (UnityScriptRuleException ex)
             {
@@ -335,35 +336,59 @@ public sealed partial class OutputNode : NodeBase
 
     /// <summary>Turns a file the run could not finish into the record that outlives the run.</summary>
     /// <summary>
-    /// Refuses a file that declares a type another file of the same plan already declared.
+    /// Refuses a file declaring a type that another file already declares.
     /// </summary>
     /// <remarks>
     /// The content level half of the rule the duplicate guard enforces on the plan. The guard is
-    /// the authority on what the project already has and runs before anything is written, which is
-    /// the right place for it and cannot cover this: a file declares what the coder decided to put
-    /// in it, and that is known only after the coder has run.
+    /// the authority on what the project has and runs before anything is written, which is the
+    /// right place for it and cannot cover this: what a file declares is decided by the coder,
+    /// after the plan has been approved, and a plan row promises one type name per path.
     ///
-    /// Nesting is what made it invisible. A type nested inside another is a different type to a
-    /// compiler and the same name to a person, so two ItemStacks compiled cleanly and left a
-    /// project with two of something. Names are compared rather than full names for that reason.
+    /// Two places to look, and the second was missing for a version. A file of the same plan,
+    /// which catches a plan that writes the same name twice; and the project itself, which catches
+    /// a generated file quietly redeclaring something that was already there. The second is the
+    /// one that actually happened: a generated Inventory.cs declared a second InventorySlot beside
+    /// the one already sitting in its own file, nothing in the plan mentioned it, and comparing
+    /// only against the plan could never have seen it.
     ///
-    /// It refuses the second file rather than the first, so the plan's own order decides which
-    /// survives, and the refusal names both so the person can see which pair collided.
+    /// Nesting is why it stays invisible without this. A type nested inside another is a different
+    /// type to a compiler and the same name to a person, so it compiles and every check after the
+    /// coder is about whether something compiles. Names are compared rather than full names for
+    /// that reason.
+    ///
+    /// A partial type is exempt, because being spread across files is what partial means. Editing
+    /// the file a type already lives in is exempt for the more obvious reason: that is an edit.
     /// </remarks>
-    /// <exception cref="UnityScriptRuleException">Another file of this plan declares the same name.</exception>
-    private static void EnforceNothingDeclaredTwice(GeneratedFile file, Dictionary<string, string> declaredHere)
+    /// <exception cref="UnityScriptRuleException">Another file already declares the same name.</exception>
+    private static void EnforceNothingDeclaredTwice(
+        GeneratedFile file,
+        Dictionary<string, string> declaredHere,
+        ProjectIndexService index)
     {
         foreach (var type in file.Types)
         {
             if (declaredHere.TryGetValue(type.Name, out var owner)
                 && !string.Equals(owner, file.RelativePath, StringComparison.OrdinalIgnoreCase))
             {
-                throw new UnityScriptRuleException(
-                    ProjectWriteRule.NothingDeclaredTwice,
-                    $"{file.RelativePath} declares {type.Name}, and {owner} in this same plan already declares "
-                    + $"a type of that name. Two types with one name is what this application exists to prevent, "
-                    + "and it compiles, so nothing further along would have noticed. Fold the work into one of "
-                    + "them, or give one of them a different name.");
+                throw Collision(file, type.Name, owner, "in this same plan");
+            }
+
+            var existing = index.FindType(type.Name);
+
+            if (existing.Count == 0 || existing.All(t => t.IsPartial) || type.IsPartial)
+            {
+                continue;
+            }
+
+            var elsewhere = existing
+                .Select(index.FileOf)
+                .Where(f => f is not null)
+                .Select(f => f!.RelativePath)
+                .FirstOrDefault(path => !string.Equals(path, file.RelativePath, StringComparison.OrdinalIgnoreCase));
+
+            if (elsewhere is not null)
+            {
+                throw Collision(file, type.Name, elsewhere, "in this project");
             }
         }
 
@@ -372,6 +397,15 @@ public sealed partial class OutputNode : NodeBase
             declaredHere[type.Name] = file.RelativePath;
         }
     }
+
+    /// <summary>The refusal, worded the same wherever the other one was found.</summary>
+    private static UnityScriptRuleException Collision(GeneratedFile file, string name, string owner, string where)
+        => new(
+            ProjectWriteRule.NothingDeclaredTwice,
+            $"{file.RelativePath} declares {name}, and {owner} {where} already declares a type of that name. "
+            + "Two types with one name is the thing this application exists to prevent, and it compiles, so "
+            + "nothing further along would have noticed. Fold the work into the one that exists, or give one "
+            + "of them a different name.");
 
     private static StagedFile Stage(GeneratedFile file, StagedReason reason, string detail)
         => new(
