@@ -79,6 +79,20 @@
                          Fill="{Binding Feed.RunState, Converter={StaticResource ResourceLookup}, ConverterParameter=RunState}" />
             </Grid>
 
+            <!--
+                The Spec tab, hidden until the extension that brings it is installed. Hidden rather
+                than disabled: a greyed out tab promises that something happens if you find the
+                right thing to click, and there is nothing behind this one until it is there.
+            -->
+            <Grid ToolTip="Spec: changes, their artifacts and what state each one is in."
+                  Visibility="{Binding IsSpecAvailable, Converter={StaticResource BooleanToVisibility}}">
+                <RadioButton Style="{StaticResource ActivityBarButton}"
+                             GroupName="PrimarySection"
+                             Content="&#xE8A5;"
+                             AutomationProperties.Name="Spec"
+                             IsChecked="{Binding IsSpec, Mode=TwoWay}" />
+            </Grid>
+
             <Grid ToolTip="Network: what the mesh can serve, and what this machine contributes.">
                 <RadioButton Style="{StaticResource ActivityBarButton}"
                              GroupName="PrimarySection"

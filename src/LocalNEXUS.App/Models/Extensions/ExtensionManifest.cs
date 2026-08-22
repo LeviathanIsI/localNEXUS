@@ -42,6 +42,9 @@ public sealed record ExtensionManifest(
     /// <summary>True when this extension adds node types to the graph.</summary>
     public bool ProvidesNodes => Contracts.Contains(ExtensionContract.Node);
 
+    /// <summary>True when this extension brings a tab with it.</summary>
+    public bool ProvidesTab => Contracts.Contains(ExtensionContract.Spec);
+
     /// <summary>What it contributes, as one line for the list.</summary>
     public string ContributionSummary
     {
@@ -57,6 +60,11 @@ public sealed record ExtensionManifest(
             if (ProvidesNodes)
             {
                 parts.Add(Nodes.Count == 1 ? "1 node" : $"{Nodes.Count} nodes");
+            }
+
+            if (ProvidesTab)
+            {
+                parts.Add("a tab");
             }
 
             return parts.Count == 0 ? "nothing yet" : string.Join(", ", parts);

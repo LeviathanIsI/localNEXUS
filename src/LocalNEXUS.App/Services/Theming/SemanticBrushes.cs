@@ -97,6 +97,14 @@ public static class SemanticBrushes
         // Node state as it is drawn, which has one value more than the model does. A node still
         // pending when the run faulted never ran and never will, and the same quiet grey as a node
         // waiting its turn is the honest answer: it did not fail, it was not reached.
+        // An artifact of a change. Blocked takes the neutral colour rather than the danger one,
+        // because blocked is waiting its turn and painting it red would blame it for the artifact
+        // in front of it. Same three state discipline as a node that was never reached.
+        ("SpecArtifactState.Unknown.Brush", "Accent.NeutralColor"),
+        ("SpecArtifactState.Done.Brush", "Status.SuccessColor"),
+        ("SpecArtifactState.Ready.Brush", "Status.InfoColor"),
+        ("SpecArtifactState.Blocked.Brush", "Accent.NeutralColor"),
+
         ("NodeDisplayState.Pending.Brush", "Accent.NeutralColor"),
         ("NodeDisplayState.Running.Brush", "Status.InfoColor"),
         ("NodeDisplayState.Completed.Brush", "Status.SuccessColor"),

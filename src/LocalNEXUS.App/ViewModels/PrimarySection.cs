@@ -14,5 +14,15 @@ public enum PrimarySection
     Workspace,
 
     /// <summary>What the mesh can serve, and this machine's contribution to it.</summary>
-    Network
+    Network,
+
+    /// <summary>
+    /// Changes, their artifacts and their state, from a spec driven planning tool.
+    /// </summary>
+    /// <remarks>
+    /// The only section that is not always there. It appears when an extension declaring the spec
+    /// contract is installed and usable, and there is nothing to show before that, so there is
+    /// nothing to show greyed out either.
+    /// </remarks>
+    Spec
 }

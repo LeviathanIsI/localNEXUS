@@ -22,12 +22,55 @@ public static class ExtensionPresets
     public static IReadOnlyList<ExtensionManifest> All { get; } = new[]
     {
         AnkleBreaker(),
-        UnityOfficial()
+        UnityOfficial(),
+        OpenSpec()
     };
 
     /// <summary>Finds a preset by id.</summary>
     public static ExtensionManifest? Find(string id)
         => All.FirstOrDefault(m => string.Equals(m.Id, id, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// OpenSpec, which is the only preset that brings a tab with it.
+    /// </summary>
+    /// <remarks>
+    /// Not installed by default, like the other two, so the install path and its prerequisite check
+    /// are exercised rather than assumed. Node is the prerequisite and the existing check handles
+    /// it: it says what is missing, offers to install it, and installs nothing if that is declined.
+    ///
+    /// The launch is the package runner rather than a global install, so the version resolves per
+    /// run and nothing is added to the machine this application did not ask for. It fetches the
+    /// bridge on install like every other extension, so OpenSpec's licence stays its own and its
+    /// updates are its own; nothing about it is bundled here.
+    /// </remarks>
+    private static ExtensionManifest OpenSpec() => new(
+        Id: "ai.fission.openspec",
+        Name: "OpenSpec",
+        Version: "latest",
+        Description:
+            "Adds a Spec tab to the window for spec driven planning. Lists your changes, shows " +
+            "each one's proposal, specs, design and tasks with whether each is done, ready or " +
+            "blocked, and sends a change's task list to the Workspace as a request for the graph " +
+            "to implement.",
+        Author: "Fission AI",
+        Homepage: "https://github.com/Fission-AI/OpenSpec",
+        Contracts: new[] { ExtensionContract.Spec },
+        Tools: Array.Empty<ToolContribution>(),
+        Nodes: Array.Empty<NodeContribution>(),
+        Prerequisites: new[]
+        {
+            new ExtensionPrerequisite(
+                PrerequisiteKind.Executable,
+                "node",
+                "OpenSpec is an npm package, so Node runs it.",
+                InstallCommand: "winget",
+                InstallArguments: new[]
+                {
+                    "install", "--id", "OpenJS.NodeJS.LTS", "--exact",
+                    "--silent", "--accept-package-agreements", "--accept-source-agreements"
+                })
+        },
+        Launch: new ExtensionLaunch("npx", new[] { "--yes", "@fission-ai/openspec-bridge@latest" }));
 
     private static ExtensionManifest AnkleBreaker() => new(
         Id: "studio.anklebreaker.unity-mcp",

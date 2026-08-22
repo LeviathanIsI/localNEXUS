@@ -141,7 +141,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         Services.Compilation.ICodeCompiler compiler,
         Services.History.RunHistoryStore history,
         IHistoryWindow historyWindow,
-        Services.Execution.BreakpointService breakpoints)
+        Services.Execution.BreakpointService breakpoints,
+        Services.Extensions.ExtensionRegistry extensions,
+        Services.Extensions.ExtensionHost extensionHost)
     {
         Breakpoints = breakpoints;
         _compiler = compiler;
@@ -164,6 +166,17 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         Themes = themes;
         Settings = settings;
         NodeSearch = new NodeSearchViewModel(factory, PlaceSearchedNode);
+
+        // The tab, and the one thing it can do to the Workspace: put text in the request box. It
+        // arrives the way anything typed arrives, so nothing in the Workspace knows or cares that
+        // a tab sent it.
+        Spec = new SpecViewModel(extensions, extensionHost, feed, text =>
+        {
+            Feed.RequestText = text;
+            ShowSection(PrimarySection.Workspace);
+        });
+
+        extensions.Extensions.CollectionChanged += (_, _) => OnPropertyChanged(nameof(IsSpecAvailable));
         _templates = new GraphTemplates(factory, serializer);
 
         PendingConnection = new PendingConnectionViewModel(
@@ -239,6 +252,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// <summary>The first run checklist, which suggests and never blocks.</summary>
     public WalkthroughViewModel Walkthrough { get; }
 
+    /// <summary>The Spec tab, which is only reachable when its extension is installed.</summary>
+    public SpecViewModel Spec { get; }
+
     /// <summary>What the open project contains, shown under the explorer.</summary>
     public ProjectIndexService ProjectIndex { get; }
 
@@ -302,6 +318,29 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             }
         }
     }
+
+    /// <summary>True while the activity bar has the Spec tab selected.</summary>
+    public bool IsSpec
+    {
+        get => ActiveSection == PrimarySection.Spec;
+        set
+        {
+            if (value)
+            {
+                ShowSection(PrimarySection.Spec);
+            }
+        }
+    }
+
+    /// <summary>
+    /// True when an extension that brings a tab is installed and usable.
+    /// </summary>
+    /// <remarks>
+    /// The tab is hidden rather than disabled when this is false. A greyed out tab is a promise
+    /// that something will happen if you find the right thing to click, and there is nothing behind
+    /// this one until the extension is there.
+    /// </remarks>
+    public bool IsSpecAvailable => Spec.Installed() is not null;
 
     /// <summary>
     /// Whatever the right hand inspector should be showing: the selected node in the Workspace,

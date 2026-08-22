@@ -236,11 +236,24 @@ public sealed class ExtensionHost : IDisposable
         return contract switch
         {
             ExtensionContract.Mcp => await StartMcpAsync(extension, process, logPath, ct).ConfigureAwait(false),
-            _ => StartNode(extension, process, logPath)
+            _ => StartRpc(extension, contract, process, logPath)
         };
     }
 
-    private ExtensionSession StartNode(InstalledExtension extension, Process process, string logPath)
+    /// <summary>
+    /// A session speaking newline delimited JSON-RPC over the worker's stdio.
+    /// </summary>
+    /// <remarks>
+    /// Shared by the node contract and the spec contract, because the framing is the same one and
+    /// a second reader of the same stdout would be a second way to lose messages. The contract is
+    /// carried through rather than assumed, so a session says which of the two it is rather than
+    /// every one of them claiming to be a node session.
+    /// </remarks>
+    private ExtensionSession StartRpc(
+        InstalledExtension extension,
+        ExtensionContract contract,
+        Process process,
+        string logPath)
     {
         var connection = new JsonRpcConnection(process);
 
@@ -260,14 +273,16 @@ public sealed class ExtensionHost : IDisposable
                 return;
             }
 
-            if (method == "node/log" && payload?["message"]?.GetValue<string>() is { } message)
+            // Both contracts log the same way and reach the same feed. A worker that says
+            // something has one place to say it whichever contract it is speaking.
+            if (method is "node/log" or "spec/log" && payload?["message"]?.GetValue<string>() is { } message)
             {
                 _feed.Info(extension.Manifest.Name, Truncate(message));
             }
         };
 
         return new ExtensionSession(
-            extension.Manifest.Id, ExtensionContract.Node, process, logPath, connection, null);
+            extension.Manifest.Id, contract, process, logPath, connection, null);
     }
 
     private async Task<ExtensionSession> StartMcpAsync(

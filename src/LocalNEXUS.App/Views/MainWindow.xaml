@@ -336,6 +336,13 @@
                             <shell:EditorAreaView Visibility="{Binding IsWorkspace, Converter={StaticResource BooleanToVisibility}}" />
                             <views:NetworkView DataContext="{Binding Network}"
                                                Visibility="{Binding DataContext.IsNetwork, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BooleanToVisibility}}" />
+
+                            <!--
+                                The Spec tab, which is only reachable when the extension that
+                                brings it is installed. Not collapsed by its own availability here,
+                                because the section cannot be selected without it.
+                            -->
+                            <shell:SpecView Visibility="{Binding IsSpec, Converter={StaticResource BooleanToVisibility}}" />
                         </Grid>
 
                         <GridSplitter Grid.Column="4"

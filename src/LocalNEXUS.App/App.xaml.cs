@@ -277,7 +277,9 @@ public partial class App : Application
             compiler,
             history,
             historyWindow,
-            services.Breakpoints);
+            services.Breakpoints,
+            extensions,
+            extensionHost);
 
         // The MCP server, if this installation answers to other tools. Built whatever the setting
         // says so the toggle has something to start, and started only when it is on.
