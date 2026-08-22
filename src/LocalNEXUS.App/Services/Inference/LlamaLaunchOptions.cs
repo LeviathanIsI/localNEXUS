@@ -28,8 +28,54 @@ public sealed record LlamaLaunchOptions
     public int GpuLayers { get; init; } = DefaultGpuLayers;
 
     /// <summary>
+    /// The multimodal projector to load beside the weights, passed with <c>--mmproj</c>.
+    /// </summary>
+    /// <remarks>
+    /// Null for every ordinary model, which is all of them but a vision one. It is part of the key
+    /// because the same weights loaded with and without a projector are two different servers: one
+    /// can see and one answers 400 to every image.
+    /// </remarks>
+    public string? ProjectorPath { get; init; }
+
+    /// <summary>
     /// The key a server started with these options is tracked under, so one entry exists per
     /// model and configuration pair.
     /// </summary>
-    public string BuildServerKey(string fullModelPath) => $"{fullModelPath}|c{ContextSize}|ngl{GpuLayers}";
+    /// <summary>
+    /// The command line a server launched with these options is given.
+    /// </summary>
+    /// <remarks>
+    /// Here rather than inside the manager because these are the options' own business, and
+    /// because an argument list that can only be seen by starting a process is one nothing can
+    /// check. The manager adds nothing to it.
+    /// </remarks>
+    public IReadOnlyList<string> BuildArguments(string fullModelPath, int port)
+    {
+        var arguments = new List<string>
+        {
+            "-m", fullModelPath,
+            "--host", "127.0.0.1",
+            "--port", port.ToString(),
+            "-c", ContextSize.ToString(),
+            "-ngl", GpuLayers.ToString()
+        };
+
+        // The one argument that makes a server able to see. Without it a vision GGUF loads
+        // perfectly well and then refuses every image, which is why it is found for the user
+        // rather than asked of them.
+        if (ProjectorPath is { Length: > 0 } projector)
+        {
+            arguments.Add("--mmproj");
+            arguments.Add(projector);
+        }
+
+        return arguments;
+    }
+
+    public string BuildServerKey(string fullModelPath)
+    {
+        var key = $"{fullModelPath}|c{ContextSize}|ngl{GpuLayers}";
+
+        return ProjectorPath is { Length: > 0 } projector ? $"{key}|mmproj{projector}" : key;
+    }
 }

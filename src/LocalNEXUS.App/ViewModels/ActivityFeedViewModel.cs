@@ -120,9 +120,17 @@ public sealed partial class ActivityFeedViewModel : ObservableObject
             return;
         }
 
+        // A local vision model is loaded onto the card the first time an image arrives, which takes
+        // long enough that saying nothing would look like nothing happening. The same entry is
+        // rewritten as it goes rather than one being added per step.
+        var progress = _feed.Add(Infrastructure.ActivityKind.Info, "Reading an image", "Starting");
+        var status = new Infrastructure.DelegateProgress<string>(message => progress.Detail = message);
+
         try
         {
-            var reading = await vision.ReadAsync(image, mediaType, ct).ConfigureAwait(true);
+            var reading = await vision.ReadAsync(image, mediaType, status, ct).ConfigureAwait(true);
+
+            progress.Detail = $"read in {reading.Elapsed.TotalSeconds:0.0} s";
 
             _feed.Add(
                 Infrastructure.ActivityKind.Info,
@@ -135,6 +143,8 @@ public sealed partial class ActivityFeedViewModel : ObservableObject
         }
         catch (Services.Vision.VisionException ex)
         {
+            progress.Detail = "failed";
+
             _feed.Error("The image was not read", ex.Message);
         }
     }

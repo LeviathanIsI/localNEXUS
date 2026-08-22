@@ -228,8 +228,10 @@ public partial class App : Application
 
         // Reads an image into text before a run starts. Nothing in the graph knows it exists,
         // because what reaches the graph is the text it produced.
+        // The resolver rather than llama.cpp by name, so a local vision model is served the same
+        // way every other local model is. It starts on the first image, not at launch.
         var vision = new Services.Vision.VisionReader(
-            config, credentials, OpenAiCompatibleClient.CreateDefaultHttpClient());
+            config, credentials, OpenAiCompatibleClient.CreateDefaultHttpClient(), runtimes);
 
         var executor = new GraphExecutor(services);
 

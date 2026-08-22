@@ -16,7 +16,18 @@ public sealed record ModelRuntimeOptions
     /// <summary>Layers to offload to the GPU. Meaningful to llama.cpp; the Python runtime places the whole model.</summary>
     public int GpuLayers { get; init; } = LlamaLaunchOptions.DefaultGpuLayers;
 
+    /// <summary>
+    /// The multimodal projector to load beside the weights, for a vision model.
+    /// </summary>
+    /// <remarks>
+    /// Null for every model but a vision one, and ignored by a runtime that has no use for it,
+    /// which is the rule the other two already follow. It is here rather than reached for directly
+    /// so that the vision path asks the resolver for a model the same way a node does, instead of
+    /// naming llama.cpp and undoing what the resolver is for.
+    /// </remarks>
+    public string? ProjectorPath { get; init; }
+
     /// <summary>The llama.cpp shaped view of these options.</summary>
     public LlamaLaunchOptions ToLlamaLaunchOptions()
-        => new() { ContextSize = ContextSize, GpuLayers = GpuLayers };
+        => new() { ContextSize = ContextSize, GpuLayers = GpuLayers, ProjectorPath = ProjectorPath };
 }

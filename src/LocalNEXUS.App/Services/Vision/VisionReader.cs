@@ -5,9 +5,23 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using CommunityToolkit.Mvvm.ComponentModel;
 using LocalNEXUS.App.Services.Credentials;
+using LocalNEXUS.App.Services.Inference;
 using LocalNEXUS.App.Services.Persistence;
 
 namespace LocalNEXUS.App.Services.Vision;
+
+/// <summary>Where the model that reads images is.</summary>
+public enum VisionSource
+{
+    /// <summary>Nothing is configured, so pasting an image says so and does nothing else.</summary>
+    None,
+
+    /// <summary>A GGUF on this machine, served by this application when an image arrives.</summary>
+    Local,
+
+    /// <summary>An address somebody else is serving, hosted or their own.</summary>
+    Endpoint
+}
 
 /// <summary>What a vision model made of an image.</summary>
 /// <param name="Text">The structured extraction, as the model wrote it.</param>
@@ -28,11 +42,16 @@ public sealed record VisionReading(string Text, TimeSpan Elapsed);
 /// graph ever needs; widening it for a step that happens before the graph starts would be changing
 /// the run path to serve something outside it.
 ///
-/// A local vision model needs two files rather than one. llama.cpp serves vision through a
-/// multimodal projector alongside the weights, so llama-server has to be started with --mmproj
-/// pointing at it, and a GGUF on its own will load and then refuse every image. That is why this is
-/// configured as an address rather than as a file: a hosted model needs nothing, and a local one
-/// needs a server somebody has already started correctly.
+/// A local model is picked from the model folders like any other and served by whichever runtime
+/// serves it, which for a GGUF is llama-server. The one thing that makes vision different is a
+/// launch argument: llama.cpp reads images through a multimodal projector published beside the
+/// weights, and a vision GGUF started without one loads perfectly and then answers 400 to every
+/// image. That argument is worked out by <see cref="VisionProjectorLocator"/> rather than asked of
+/// the user, and a model with no projector beside it is refused when it is chosen rather than when
+/// the first image arrives.
+///
+/// The server starts the first time an image is pasted, not at launch, because somebody who never
+/// pastes one should not be holding a model on the GPU all session.
 /// </remarks>
 public sealed partial class VisionReader : ObservableObject
 {
@@ -77,38 +96,88 @@ public sealed partial class VisionReader : ObservableObject
     private readonly AppConfig _config;
     private readonly ICredentialStore _credentials;
     private readonly HttpClient _http;
+    private readonly RuntimeResolver _runtimes;
 
-    public VisionReader(AppConfig config, ICredentialStore credentials, HttpClient http)
+    public VisionReader(AppConfig config, ICredentialStore credentials, HttpClient http, RuntimeResolver runtimes)
     {
         _config = config;
         _credentials = credentials;
         _http = http;
+        _runtimes = runtimes;
     }
 
-    /// <summary>True when an address and a model id have both been set.</summary>
-    public bool IsConfigured
-        => !string.IsNullOrWhiteSpace(_config.VisionBaseUrl) && !string.IsNullOrWhiteSpace(_config.VisionModelId);
+    /// <summary>
+    /// Which of the two ways in is configured, if either.
+    /// </summary>
+    /// <remarks>
+    /// A chosen file wins over an address, because picking one is the more deliberate act of the
+    /// two and an address left behind from an earlier arrangement should not quietly outrank it.
+    /// </remarks>
+    public VisionSource Source
+    {
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(_config.VisionModelPath))
+            {
+                return VisionSource.Local;
+            }
+
+            return !string.IsNullOrWhiteSpace(_config.VisionBaseUrl)
+                   && !string.IsNullOrWhiteSpace(_config.VisionModelId)
+                ? VisionSource.Endpoint
+                : VisionSource.None;
+        }
+    }
+
+    /// <summary>True when there is somewhere to send an image.</summary>
+    public bool IsConfigured => Source != VisionSource.None;
 
     /// <summary>What to say when there is no vision model, which is a state rather than a failure.</summary>
     public const string NotConfiguredMessage =
         "No vision model is configured, so the image was not read and nothing was added to your request. "
-        + "Set one in Settings under Models. A hosted model needs an address, a model id and a key; a local "
-        + "one needs llama-server started with a multimodal projector, because a GGUF on its own cannot see.";
+        + "Set one in Settings under Models. Either pick a local vision model from your model folders, which "
+        + "this application will start for you, or give the address and model id of one somebody else is "
+        + "serving. A local vision model is published as two files, the weights and an mmproj projector; both "
+        + "need to be in the same folder, and the projector is found on its own.";
 
     /// <summary>One line describing what is configured, for the settings panel.</summary>
-    public string Status => IsConfigured
-        ? $"{_config.VisionModelId} at {_config.VisionBaseUrl}. Paste or drop an image on the request box."
-        : "Nothing configured, so pasting an image says so and does nothing else.";
+    public string Status => Source switch
+    {
+        VisionSource.Local => LocalStatus(),
+
+        VisionSource.Endpoint =>
+            $"{_config.VisionModelId} at {_config.VisionBaseUrl}. Paste or drop an image on the request box.",
+
+        _ => "Nothing configured, so pasting an image says so and does nothing else."
+    };
+
+    private string LocalStatus()
+    {
+        var name = System.IO.Path.GetFileNameWithoutExtension(_config.VisionModelPath!);
+        var lookup = VisionProjectorLocator.Locate(_config.VisionModelPath);
+
+        return lookup.IsUsable
+            ? $"{name}, started here when you paste an image. Projector: {lookup.Message}"
+            : $"{name} cannot be used. {lookup.Message}";
+    }
 
     /// <summary>
     /// Reads one image and returns what the model extracted.
     /// </summary>
+    /// <param name="image">The image bytes, however they arrived.</param>
+    /// <param name="mediaType">What kind of image it is, for the data uri.</param>
+    /// <param name="status">Receives progress while a local server starts, so the wait is visible.</param>
+    /// <param name="ct">Cancels the read.</param>
     /// <exception cref="VisionException">Nothing is configured, or the model could not be reached.</exception>
-    public async Task<VisionReading> ReadAsync(byte[] image, string mediaType, CancellationToken ct)
+    public async Task<VisionReading> ReadAsync(
+        byte[] image,
+        string mediaType,
+        IProgress<string>? status,
+        CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(image);
 
-        if (!IsConfigured)
+        if (Source == VisionSource.None)
         {
             throw new VisionException(NotConfiguredMessage);
         }
@@ -124,9 +193,12 @@ public sealed partial class VisionReader : ObservableObject
                 $"That image is {image.Length / (1024 * 1024)} MB, and the limit is {MaximumBytes / (1024 * 1024)} MB.");
         }
 
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var target = await ResolveAsync(status, ct).ConfigureAwait(false);
+
         var payload = new JsonObject
         {
-            ["model"] = _config.VisionModelId,
+            ["model"] = target.ModelId,
             ["stream"] = false,
             ["messages"] = new JsonArray
             {
@@ -153,7 +225,7 @@ public sealed partial class VisionReader : ObservableObject
             }
         };
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, Endpoint())
+        using var request = new HttpRequestMessage(HttpMethod.Post, Endpoint(target.BaseUrl))
         {
             Content = new StringContent(payload.ToJsonString(), Encoding.UTF8, "application/json")
         };
@@ -162,8 +234,6 @@ public sealed partial class VisionReader : ObservableObject
         {
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", key);
         }
-
-        var watch = System.Diagnostics.Stopwatch.StartNew();
 
         HttpResponseMessage response;
 
@@ -198,13 +268,50 @@ public sealed partial class VisionReader : ObservableObject
         }
     }
 
-    private string Endpoint()
+    /// <summary>
+    /// Works out where to send the image, starting a local server if that is what is configured.
+    /// </summary>
+    /// <remarks>
+    /// The projector is looked for every time rather than remembered, because it lives beside the
+    /// weights and a remembered path is one that goes stale when the folder moves. Reading a header
+    /// costs nothing next to loading a model onto a card.
+    /// </remarks>
+    private async Task<RuntimeEndpoint> ResolveAsync(IProgress<string>? status, CancellationToken ct)
     {
-        var baseUrl = _config.VisionBaseUrl!.TrimEnd('/');
+        if (Source == VisionSource.Endpoint)
+        {
+            return new RuntimeEndpoint(_config.VisionBaseUrl!.TrimEnd('/'), _config.VisionModelId!);
+        }
 
-        return baseUrl.EndsWith("/chat/completions", StringComparison.OrdinalIgnoreCase)
-            ? baseUrl
-            : $"{baseUrl}/chat/completions";
+        var path = _config.VisionModelPath!;
+        var lookup = VisionProjectorLocator.Locate(path);
+
+        if (!lookup.IsUsable)
+        {
+            throw new VisionException(lookup.Message);
+        }
+
+        status?.Report($"Starting the vision model {System.IO.Path.GetFileNameWithoutExtension(path)}");
+
+        try
+        {
+            return await _runtimes
+                .ServeAsync(path, new ModelRuntimeOptions { ProjectorPath = lookup.Path }, status, ct)
+                .ConfigureAwait(false);
+        }
+        catch (ModelClientException ex)
+        {
+            throw new VisionException($"The vision model could not be started: {ex.Message}", ex);
+        }
+    }
+
+    private static string Endpoint(string baseUrl)
+    {
+        var trimmed = baseUrl.TrimEnd('/');
+
+        return trimmed.EndsWith("/chat/completions", StringComparison.OrdinalIgnoreCase)
+            ? trimmed
+            : $"{trimmed}/chat/completions";
     }
 
     private static string Explain(System.Net.HttpStatusCode status, string body) => status switch
@@ -216,8 +323,8 @@ public sealed partial class VisionReader : ObservableObject
             "The vision model's address answered but has no chat endpoint there. Check the base url.",
 
         System.Net.HttpStatusCode.BadRequest =>
-            "The vision model refused the image. A local llama-server started without a multimodal "
-            + $"projector answers this way, because it cannot see. It said: {Summarise(body)}",
+            "The vision model refused the image. A server started without a multimodal projector answers "
+            + $"this way, because it cannot see. It said: {Summarise(body)}",
 
         _ => $"The vision model failed with {(int)status}: {Summarise(body)}"
     };
@@ -253,6 +360,7 @@ public sealed partial class VisionReader : ObservableObject
     /// <summary>Notifies that the configuration changed, so the panel and the box follow it.</summary>
     public void Refresh()
     {
+        OnPropertyChanged(nameof(Source));
         OnPropertyChanged(nameof(IsConfigured));
         OnPropertyChanged(nameof(Status));
     }

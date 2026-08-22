@@ -89,6 +89,11 @@ public sealed class LlamaServerManager : IModelRuntime, IDisposable
             throw new ModelClientException($"The model file no longer exists: {ggufPath}");
         }
 
+        if (options.ProjectorPath is { Length: > 0 } declared && !File.Exists(declared))
+        {
+            throw new ModelClientException($"The multimodal projector no longer exists: {declared}");
+        }
+
         var fullPath = Path.GetFullPath(ggufPath);
         var key = options.BuildServerKey(fullPath);
 
@@ -219,16 +224,10 @@ public sealed class LlamaServerManager : IModelRuntime, IDisposable
             RedirectStandardError = true
         };
 
-        startInfo.ArgumentList.Add("-m");
-        startInfo.ArgumentList.Add(ggufPath);
-        startInfo.ArgumentList.Add("--host");
-        startInfo.ArgumentList.Add("127.0.0.1");
-        startInfo.ArgumentList.Add("--port");
-        startInfo.ArgumentList.Add(port.ToString());
-        startInfo.ArgumentList.Add("-c");
-        startInfo.ArgumentList.Add(options.ContextSize.ToString());
-        startInfo.ArgumentList.Add("-ngl");
-        startInfo.ArgumentList.Add(options.GpuLayers.ToString());
+        foreach (var argument in options.BuildArguments(ggufPath, port))
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
 
         Process process;
         try

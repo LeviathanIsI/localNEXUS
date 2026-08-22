@@ -1,6 +1,9 @@
+using System.IO;
 using System.Net;
 using System.Net.Http;
+using System.Text;
 using System.Text.Json.Nodes;
+using LocalNEXUS.App.Services.Inference;
 using LocalNEXUS.App.Services.Persistence;
 using LocalNEXUS.App.Services.Vision;
 using LocalNEXUS.Tests.Support;
@@ -76,7 +79,10 @@ public sealed class VisionTests
 
         var handler = new Canned(status, body);
 
-        return (new VisionReader(config, new InMemoryCredentialStore(), new HttpClient(handler)), handler, config);
+        return (
+            new VisionReader(config, new InMemoryCredentialStore(), new HttpClient(handler), new RuntimeResolver()),
+            handler,
+            config);
     }
 
     private static byte[] AnImage() => new byte[] { 0x89, 0x50, 0x4E, 0x47, 1, 2, 3, 4 };
@@ -96,7 +102,7 @@ public sealed class VisionTests
         Assert.False(vision.IsConfigured);
 
         var ex = await Assert.ThrowsAsync<VisionException>(
-            () => vision.ReadAsync(AnImage(), "image/png", CancellationToken.None));
+            () => vision.ReadAsync(AnImage(), "image/png", null, CancellationToken.None));
 
         Assert.Equal(VisionReader.NotConfiguredMessage, ex.Message);
         Assert.Contains("projector", ex.Message, StringComparison.OrdinalIgnoreCase);
@@ -131,7 +137,7 @@ public sealed class VisionTests
     {
         var (vision, handler, _) = Build();
 
-        await vision.ReadAsync(AnImage(), "image/png", CancellationToken.None);
+        await vision.ReadAsync(AnImage(), "image/png", null, CancellationToken.None);
 
         Assert.NotNull(handler.LastBody);
 
@@ -154,7 +160,7 @@ public sealed class VisionTests
     {
         var (vision, handler, _) = Build();
 
-        await vision.ReadAsync(AnImage(), "image/png", CancellationToken.None);
+        await vision.ReadAsync(AnImage(), "image/png", null, CancellationToken.None);
 
         Assert.EndsWith("/v1/chat/completions", handler.Last!.RequestUri!.ToString(), StringComparison.Ordinal);
     }
@@ -188,7 +194,7 @@ public sealed class VisionTests
     {
         var (vision, _, _) = Build();
 
-        var reading = await vision.ReadAsync(AnImage(), "image/png", CancellationToken.None);
+        var reading = await vision.ReadAsync(AnImage(), "image/png", null, CancellationToken.None);
 
         Assert.StartsWith("KIND: compiler-error", reading.Text, StringComparison.Ordinal);
         Assert.Contains("LINE: 42", reading.Text, StringComparison.Ordinal);
@@ -208,7 +214,7 @@ public sealed class VisionTests
         var (vision, _, _) = Build(HttpStatusCode.BadRequest, """{"error":"image input not supported"}""");
 
         var ex = await Assert.ThrowsAsync<VisionException>(
-            () => vision.ReadAsync(AnImage(), "image/png", CancellationToken.None));
+            () => vision.ReadAsync(AnImage(), "image/png", null, CancellationToken.None));
 
         Assert.Contains("projector", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
@@ -220,7 +226,7 @@ public sealed class VisionTests
         var (vision, _, _) = Build(HttpStatusCode.Unauthorized, "{}");
 
         var ex = await Assert.ThrowsAsync<VisionException>(
-            () => vision.ReadAsync(AnImage(), "image/png", CancellationToken.None));
+            () => vision.ReadAsync(AnImage(), "image/png", null, CancellationToken.None));
 
         Assert.Contains("refused the key", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
@@ -232,7 +238,7 @@ public sealed class VisionTests
         var (vision, handler, _) = Build();
 
         var ex = await Assert.ThrowsAsync<VisionException>(
-            () => vision.ReadAsync(new byte[VisionReader.MaximumBytes + 1], "image/png", CancellationToken.None));
+            () => vision.ReadAsync(new byte[VisionReader.MaximumBytes + 1], "image/png", null, CancellationToken.None));
 
         Assert.Contains("limit", ex.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Null(handler.Last);
@@ -245,8 +251,60 @@ public sealed class VisionTests
         var (vision, handler, _) = Build();
 
         await Assert.ThrowsAsync<VisionException>(
-            () => vision.ReadAsync(Array.Empty<byte>(), "image/png", CancellationToken.None));
+            () => vision.ReadAsync(Array.Empty<byte>(), "image/png", null, CancellationToken.None));
 
+        Assert.Null(handler.Last);
+    }
+
+    /// <summary>
+    /// A chosen file outranks an address, because picking one is the more deliberate act.
+    /// </summary>
+    /// <remarks>
+    /// Both ways in are kept, so which one is meant has to be decided rather than guessed. An
+    /// address left behind from an earlier arrangement should not quietly outrank a file somebody
+    /// just picked.
+    /// </remarks>
+    [Fact]
+    public void AChosenFileOutranksAnAddress()
+    {
+        var (vision, _, config) = Build();
+
+        Assert.Equal(VisionSource.Endpoint, vision.Source);
+
+        config.VisionModelPath = @"C:\models\vision.gguf";
+        Assert.Equal(VisionSource.Local, vision.Source);
+
+        config.VisionModelPath = null;
+        config.VisionBaseUrl = null;
+        Assert.Equal(VisionSource.None, vision.Source);
+        Assert.False(vision.IsConfigured);
+    }
+
+    /// <summary>
+    /// A local model with no projector is refused before anything is started or sent.
+    /// </summary>
+    /// <remarks>
+    /// Selection refuses it first, so this is the second gate rather than the only one. It matters
+    /// because the folder can change after the choice was made, and starting a server that is
+    /// certain to refuse the image would waste a minute of loading to end up in the same place.
+    /// </remarks>
+    [Fact]
+    public async Task ALocalModelWithNoProjectorIsRefusedBeforeAnythingStarts()
+    {
+        var (vision, handler, config) = Build();
+
+        var folder = Path.Combine(Path.GetTempPath(), "localnexus-vision", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+
+        var model = Path.Combine(folder, "vision.gguf");
+        File.WriteAllBytes(model, Encoding.ASCII.GetBytes("GGUF").Concat(new byte[24]).ToArray());
+
+        config.VisionModelPath = model;
+
+        var ex = await Assert.ThrowsAsync<VisionException>(
+            () => vision.ReadAsync(AnImage(), "image/png", null, CancellationToken.None));
+
+        Assert.Contains("projector", ex.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Null(handler.Last);
     }
 
@@ -257,7 +315,7 @@ public sealed class VisionTests
         var (vision, _, _) = Build(HttpStatusCode.OK, """{"choices":[{"message":{"content":"   "}}]}""");
 
         var ex = await Assert.ThrowsAsync<VisionException>(
-            () => vision.ReadAsync(AnImage(), "image/png", CancellationToken.None));
+            () => vision.ReadAsync(AnImage(), "image/png", null, CancellationToken.None));
 
         Assert.Contains("answered with nothing", ex.Message, StringComparison.OrdinalIgnoreCase);
     }

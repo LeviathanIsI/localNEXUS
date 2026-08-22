@@ -185,10 +185,63 @@ public sealed partial class AppSettingsViewModel : ObservableObject
     {
         _vision = vision;
         OnPropertyChanged(nameof(VisionStatus));
+        OnPropertyChanged(nameof(SelectedVisionModel));
     }
 
     /// <summary>What is configured, or that nothing is.</summary>
     public string VisionStatus => _vision?.Status ?? "Nothing configured.";
+
+    /// <summary>
+    /// The local models a vision model could be chosen from.
+    /// </summary>
+    /// <remarks>
+    /// GGUF only, because the projector that lets a model see is a llama.cpp thing and the Python
+    /// runtime has no equivalent. That is a filter on what can be offered rather than a question
+    /// anybody is asked, which is the same rule the model dropdown follows.
+    /// </remarks>
+    public IEnumerable<Services.Persistence.LocalModelInfo> VisionModels
+        => _catalog.Models.Where(m => m.Format == Services.Inference.ModelFormat.Gguf);
+
+    /// <summary>
+    /// The chosen local vision model, or null when the address is being used instead.
+    /// </summary>
+    /// <remarks>
+    /// Setting it is where a model without a projector is refused. The alternative is accepting it
+    /// here and failing on the first image, hours later, with a 400 that means nothing to anybody.
+    /// </remarks>
+    public Services.Persistence.LocalModelInfo? SelectedVisionModel
+    {
+        get => _catalog.FindByPath(_config.VisionModelPath);
+        set
+        {
+            var lookup = Services.Inference.VisionProjectorLocator.Locate(value?.Path);
+
+            if (value is not null && !lookup.IsUsable)
+            {
+                // Refused, and the choice is not stored. What was already configured stays.
+                VisionProblem = lookup.Message;
+                OnPropertyChanged();
+                return;
+            }
+
+            VisionProblem = null;
+            _config.VisionModelPath = value?.Path;
+            _config.Save();
+
+            _vision?.Refresh();
+
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(VisionStatus));
+        }
+    }
+
+    /// <summary>Why the last chosen vision model was refused, or null when none was.</summary>
+    [ObservableProperty]
+    private string? _visionProblem;
+
+    /// <summary>Stops using a local vision model, leaving whatever address is set.</summary>
+    [RelayCommand]
+    private void ClearVisionModel() => SelectedVisionModel = null;
 
     /// <summary>The address of a server that can see.</summary>
     public string VisionBaseUrl

@@ -187,14 +187,25 @@ public sealed class AppConfig
     /// run rather than inside one: the image never enters the graph, and what joins the request is
     /// the text it produced.
     ///
-    /// An address rather than a file, because a hosted model needs nothing installed and a local
-    /// one needs llama-server started with a multimodal projector, which is a server somebody
-    /// started rather than a weight file this application can pick.
+    /// Two ways in, and both are kept. A local model is a GGUF picked from the model folders like
+    /// any other, and this application starts the server for it. An address and a model id point
+    /// at a hosted model or at a server somebody is already running, which the local path cannot
+    /// replace.
     /// </remarks>
     public string? VisionBaseUrl { get; set; }
 
     /// <summary>Which model at that address reads images.</summary>
     public string? VisionModelId { get; set; }
+
+    /// <summary>
+    /// A local vision model on disk, served by this application, or null when there is none.
+    /// </summary>
+    /// <remarks>
+    /// Takes precedence over the address, because someone who has picked a file has said which of
+    /// the two they mean. The projector beside it is found rather than stored: it lives with the
+    /// weights, and a saved path would go stale the moment the folder moved.
+    /// </remarks>
+    public string? VisionModelPath { get; set; }
 
     public bool McpServerEnabled { get; set; }
 

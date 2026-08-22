@@ -74,7 +74,7 @@ public sealed class SpecTabTests
     /// </remarks>
     [Fact]
     public void OnlyOnePresetBringsATab()
-        => Assert.Single(ExtensionPresets.All.Where(p => p.ProvidesTab));
+        => Assert.Single(ExtensionPresets.All, p => p.ProvidesTab);
 
     /// <summary>With nothing installed there is no tab.</summary>
     [Fact]
