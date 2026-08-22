@@ -22,6 +22,16 @@ public sealed class EvalOptions
     public IReadOnlyList<string> Tasks { get; init; } = Array.Empty<string>();
 
     /// <summary>
+    /// Which task sets to run.
+    /// </summary>
+    /// <remarks>
+    /// Nothing named means the Unity set, so every command line written before the plain set
+    /// existed produces exactly what it did. That is not politeness; it is what keeps the Unity
+    /// numbers comparable with the runs already recorded.
+    /// </remarks>
+    public TaskSetChoice Sets { get; init; } = TaskSetChoice.None;
+
+    /// <summary>
     /// How many times to run the whole set.
     /// </summary>
     /// <remarks>
@@ -171,6 +181,7 @@ public sealed class EvalOptions
         var retries = 2;
         var debate = false;
         var diagnose = false;
+        var sets = TaskSetChoice.None;
 
         for (var i = 0; i < args.Length; i++)
         {
@@ -223,6 +234,14 @@ public sealed class EvalOptions
                     int.TryParse(Value(), out retries);
                     break;
 
+                case "--unity":
+                    sets |= TaskSetChoice.Unity;
+                    break;
+
+                case "--plain":
+                    sets |= TaskSetChoice.Plain;
+                    break;
+
                 case "--debate":
                     debate = true;
                     break;
@@ -250,7 +269,8 @@ public sealed class EvalOptions
             Temperature = temperature,
             RetryLimit = retries,
             DebateOnly = debate,
-            DiagnoseOnly = diagnose
+            DiagnoseOnly = diagnose,
+            Sets = sets
         };
 
         error = null;
@@ -269,6 +289,12 @@ public sealed class EvalOptions
           --models <a,b>      Models to run. A fragment of the file name is enough, or give a
                               full path. Defaults to every GGUF under the models folder.
           --tasks <a,b>       Task identifiers to run. Defaults to all of them.
+          --unity             Run the Unity task set. The default when neither is named, so a
+                              command line written before the plain set existed is unchanged.
+          --plain             Run the plain C# task set, against a generated csproj project with
+                              no Assets folder and nothing Unity would recognise. Give both flags
+                              to run both, though the totals of a mixed run are a mixture and the
+                              two sets are not comparable with each other.
           --repeats <n>       How many times to run the set. Defaults to 1. More than one is how
                               a rate becomes meaningful, because a model is not deterministic.
           --out <folder>      Where results are written. Defaults to an evals folder in the

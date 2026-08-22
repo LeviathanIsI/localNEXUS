@@ -94,7 +94,7 @@ public sealed class EvalHarness : IDisposable
         var whole = System.Diagnostics.Stopwatch.StartNew();
         var results = new List<TaskResult>();
 
-        var conditions = DescribeConditions(modelPath);
+        var conditions = DescribeConditions(modelPath, tasks);
 
         for (var attempt = 1; attempt <= _options.Repeats; attempt++)
         {
@@ -444,7 +444,7 @@ public sealed class EvalHarness : IDisposable
             : string.IsNullOrWhiteSpace(entry.Text) ? entry.Title : $"{entry.Title}: {entry.Text}";
     }
 
-    private RunConditions DescribeConditions(string modelPath)
+    private RunConditions DescribeConditions(string modelPath, IReadOnlyList<EvalTask> tasks)
     {
         var name = Path.GetFileName(modelPath);
 
@@ -457,7 +457,7 @@ public sealed class EvalHarness : IDisposable
             _options.Temperature,
             _options.MaxTokens,
             new TriageNode().Budget.Summary,
-            TaskSet.Version,
+            TaskSets.VersionFor(tasks),
             AppVersion(),
             Environment.MachineName,
             DateTimeOffset.Now);

@@ -122,7 +122,11 @@ public static class ResultWriter
         text.AppendLine($"- **Compiled eventually:** {everCompiled} of {checkedFiles} files ({Percent(everCompiled, checkedFiles)})");
         text.AppendLine($"- **Repair attempts used:** {results.Sum(r => r.RepairAttempts)}");
         text.AppendLine($"- **Files left uncompiled:** {results.Sum(r => r.FilesNeverCompiled)}");
-        text.AppendLine($"- **Files nothing could be established about:** {results.Sum(r => r.FilesInconclusive)}");
+        var inconclusive = results.Sum(r => r.FilesInconclusive);
+
+        text.AppendLine(
+            $"- **Files nothing could be established about:** {inconclusive} of {checkedFiles} "
+            + $"({Percent(inconclusive, checkedFiles)})");
         var reuseTasks = results.Where(r => TaskFor(r, tasks)?.TypeThatShouldBeReused is { Length: > 0 }).ToList();
         var reused = reuseTasks.Count(r => r.ReusedAsIntended(TaskFor(r, tasks)!));
         var attempted = results.Count(r => TaskFor(r, tasks) is { } t && r.AttemptedDuplicate(t));
@@ -157,6 +161,8 @@ public static class ResultWriter
         text.AppendLine($"- **Fences left in generated code:** {results.Sum(r => r.FencesLeftInOutput)}");
         text.AppendLine($"- **Meta files lost:** {results.Sum(r => r.ScriptsMissingMeta.Count)}");
         text.AppendLine($"- **Files deleted:** {results.Sum(r => r.DeletedFiles.Count)}");
+
+        AppendPlainSection(text, results, tasks, inconclusive, checkedFiles);
 
         var cost = results.Where(r => r.CostUsd is not null).Sum(r => r.CostUsd!.Value);
 
@@ -330,6 +336,95 @@ public static class ResultWriter
     /// sit next to each other and a row that does not carry its own conditions cannot be sorted,
     /// filtered or compared without going back to the file it came from.
     /// </remarks>
+    /// <summary>
+    /// The two numbers only a plain project can produce, written when the run held one.
+    /// </summary>
+    /// <remarks>
+    /// Kept out of the totals above rather than folded in, because both are meaningless for a
+    /// Unity run and a line that reads "0 of 0" in every report is a line nobody reads.
+    ///
+    /// The first is the one this set was built for. The Unity write rules were scoped in v1.37 and
+    /// held there by deterministic tests; this is the only thing that watches them with a real
+    /// model writing real files, and the number that should always be nought is the useful kind of
+    /// number, because the day it is not is the day something regressed.
+    ///
+    /// The second is the honest accounting of what could not be measured. Outside Unity the
+    /// compile check sees the framework and whatever this run has already settled, and nothing the
+    /// project declares, so a file that calls into existing code comes back neither compiled nor
+    /// broken. That is a limit of the harness rather than a fact about the model, and the share of
+    /// the set it covers is the argument for reading a csproj and loading what it names.
+    /// </remarks>
+    private static void AppendPlainSection(
+        StringBuilder text,
+        IReadOnlyList<TaskResult> results,
+        IReadOnlyList<EvalTask> tasks,
+        int inconclusive,
+        int checkedFiles)
+    {
+        var plain = results.Where(r => TaskFor(r, tasks)?.Project == ProjectShape.Plain).ToList();
+
+        if (plain.Count == 0)
+        {
+            return;
+        }
+
+        var fired = plain.SelectMany(r => r.UnityRefusalsFired).ToList();
+        var plainChecked = plain.Sum(r => r.FilesChecked);
+        var plainInconclusive = plain.Sum(r => r.FilesInconclusive);
+        var plainProven = plain.Sum(r => r.FilesCompiled);
+        var allowedRenames = plain.Where(r => TaskFor(r, tasks)?.Shape == TaskShape.AllowedRename).ToList();
+        var declaredTwice = plain.Count(r => r.RefusedForDeclaringTwice);
+
+        text.AppendLine();
+        text.AppendLine("## On the plain C# project");
+        text.AppendLine();
+
+        text.AppendLine(
+            $"- **Unity rules that fired, which should be none:** {fired.Count}");
+
+        foreach (var group in fired
+            .Select(Rule)
+            .GroupBy(rule => rule, StringComparer.Ordinal)
+            .OrderByDescending(g => g.Count()))
+        {
+            text.AppendLine($"  - {group.Key}: {group.Count()}, which is a defect rather than a score");
+        }
+
+        text.AppendLine(
+            $"- **Edits a Unity project would have refused and this one allowed:** "
+            + $"{allowedRenames.Count(r => r.UnityRefusalsFired.Count == 0)} of {allowedRenames.Count}");
+
+        text.AppendLine($"- **Refused for declaring a name twice:** {declaredTwice} of {plain.Count}");
+
+        text.AppendLine(
+            $"- **Files the compile check could prove:** {plainProven} of {plainChecked} "
+            + $"({Percent(plainProven, plainChecked)})");
+
+        text.AppendLine(
+            $"- **Files it could establish nothing about:** {plainInconclusive} of {plainChecked} "
+            + $"({Percent(plainInconclusive, plainChecked)})");
+
+        text.AppendLine();
+        text.AppendLine(
+            "The compile check has no way to resolve a plain project's references, so it falls back to");
+        text.AppendLine(
+            "the framework this application runs on plus the files already settled in the same run.");
+        text.AppendLine(
+            "Any file calling into code the project already declares therefore reads as inconclusive:");
+        text.AppendLine(
+            "not compiled and not broken, because nothing was established either way. That share is the");
+        text.AppendLine(
+            "measure of what this set cannot prove, and the argument for reading a csproj and loading");
+        text.AppendLine("what it names.");
+
+        if (checkedFiles != plainChecked || inconclusive != plainInconclusive)
+        {
+            text.AppendLine();
+            text.AppendLine(
+                "The totals above cover both sets. These figures cover the plain tasks only.");
+        }
+    }
+
     private static void AppendHistory(EvalRun run, IReadOnlyList<EvalTask> tasks, string path)
     {
         var header = string.Join(",",

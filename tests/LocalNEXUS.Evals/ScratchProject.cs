@@ -3,7 +3,7 @@ using System.IO;
 namespace LocalNEXUS.Evals;
 
 /// <summary>
-/// A throwaway Unity shaped project, built for one task and deleted after it.
+/// A throwaway project, built for one task and deleted after it.
 /// </summary>
 /// <remarks>
 /// Generated rather than pointed at anything real, and generated fresh for every task and every
@@ -12,30 +12,65 @@ namespace LocalNEXUS.Evals;
 /// folder, never in the repository, never a real project, never anywhere the application keeps its
 /// own data.
 ///
-/// It carries the .cs.meta sibling for the component, because the Unity binding rules read it and
-/// a project without one would not exercise them.
+/// Either shape. A Unity one carries ProjectSettings and a .cs.meta sibling beside every script,
+/// because the binding rules read the meta and a project without one would not exercise them. A
+/// plain one carries a project file and, more to the point, nothing that would make detection call
+/// it Unity: no Assets folder, no ProjectSettings, no package manifest.
 /// </remarks>
 public sealed class ScratchProject : IDisposable
 {
+    /// <summary>Folder names that hold something other than the project's own source.</summary>
+    private static readonly string[] NotSource = { "bin", "obj", "node_modules", ".git" };
+
     private readonly Dictionary<string, string> _before = new(StringComparer.OrdinalIgnoreCase);
 
-    private ScratchProject(string root) => Root = root;
+    private ScratchProject(string root, ProjectShape shape)
+    {
+        Root = root;
+        Shape = shape;
+    }
 
-    /// <summary>The project folder, which stands in for a Unity project root.</summary>
+    /// <summary>The project folder.</summary>
     public string Root { get; }
+
+    /// <summary>What sort of project this is.</summary>
+    public ProjectShape Shape { get; }
 
     /// <summary>Builds one from a task's seed.</summary>
     public static ScratchProject Create(EvalTask task)
     {
         var root = Path.Combine(Path.GetTempPath(), "localnexus-evals", Guid.NewGuid().ToString("N"));
-        var project = new ScratchProject(root);
+        var project = new ScratchProject(root, task.Project);
 
-        Directory.CreateDirectory(Path.Combine(root, "ProjectSettings"));
+        Directory.CreateDirectory(root);
 
-        // Enough for the locator to believe this is a Unity project without one being installed.
-        File.WriteAllText(
-            Path.Combine(root, "ProjectSettings", "ProjectVersion.txt"),
-            "m_EditorVersion: 2022.3.20f1" + Environment.NewLine);
+        if (task.Project == ProjectShape.Unity)
+        {
+            Directory.CreateDirectory(Path.Combine(root, "ProjectSettings"));
+
+            // Enough for the locator to believe this is a Unity project without one being
+            // installed.
+            File.WriteAllText(
+                Path.Combine(root, "ProjectSettings", "ProjectVersion.txt"),
+                "m_EditorVersion: 2022.3.20f1" + Environment.NewLine);
+        }
+        else
+        {
+            // A project file, because that is what makes a folder of C# a project to a person.
+            // Nothing in the application reads it: the compile check has no way to resolve a plain
+            // project's references and falls back to the framework, which is the limitation this
+            // set exists to measure rather than to hide.
+            File.WriteAllText(
+                Path.Combine(root, "Shop.csproj"),
+                """
+                <Project Sdk="Microsoft.NET.Sdk">
+                  <PropertyGroup>
+                    <TargetFramework>net8.0</TargetFramework>
+                    <Nullable>enable</Nullable>
+                  </PropertyGroup>
+                </Project>
+                """.ReplaceLineEndings());
+        }
 
         foreach (var seed in task.Seed)
         {
@@ -43,12 +78,15 @@ public sealed class ScratchProject : IDisposable
             Directory.CreateDirectory(Path.GetDirectoryName(absolute)!);
             File.WriteAllText(absolute, seed.Content.ReplaceLineEndings());
 
-            // Every script Unity has imported has one of these, and the GUID in it is what scenes
-            // reference. A rename rule that never saw one would never fire.
-            File.WriteAllText(
-                absolute + ".meta",
-                "fileFormatVersion: 2" + Environment.NewLine
-                + $"guid: {Guid.NewGuid():N}" + Environment.NewLine);
+            if (task.Project == ProjectShape.Unity)
+            {
+                // Every script Unity has imported has one of these, and the GUID in it is what
+                // scenes reference. A rename rule that never saw one would never fire.
+                File.WriteAllText(
+                    absolute + ".meta",
+                    "fileFormatVersion: 2" + Environment.NewLine
+                    + $"guid: {Guid.NewGuid():N}" + Environment.NewLine);
+            }
 
             project._before[Normalise(seed.RelativePath)] = seed.Content.ReplaceLineEndings();
         }
@@ -56,20 +94,35 @@ public sealed class ScratchProject : IDisposable
         return project;
     }
 
-    /// <summary>Every C# file in the project now, by path relative to the root.</summary>
+    /// <summary>
+    /// Every C# file in the project now, by path relative to the root.
+    /// </summary>
+    /// <remarks>
+    /// Scanned from where the index scans from, which is Assets for a Unity project and the root
+    /// for anything else. Reading from a different root than the application uses would mean
+    /// measuring files it never saw, or missing files it wrote.
+    /// </remarks>
     public IReadOnlyDictionary<string, string> ReadAllScripts()
     {
         var found = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var assets = Path.Combine(Root, "Assets");
 
-        if (!Directory.Exists(assets))
+        var scanRoot = Shape == ProjectShape.Unity ? Path.Combine(Root, "Assets") : Root;
+
+        if (!Directory.Exists(scanRoot))
         {
             return found;
         }
 
-        foreach (var file in Directory.EnumerateFiles(assets, "*.cs", SearchOption.AllDirectories))
+        foreach (var file in Directory.EnumerateFiles(scanRoot, "*.cs", SearchOption.AllDirectories))
         {
-            found[Normalise(Path.GetRelativePath(Root, file))] = File.ReadAllText(file);
+            var relative = Normalise(Path.GetRelativePath(Root, file));
+
+            if (relative.Split('/').Any(s => NotSource.Contains(s, StringComparer.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            found[relative] = File.ReadAllText(file);
         }
 
         return found;
@@ -118,7 +171,9 @@ public sealed class ScratchProject : IDisposable
     /// from every scene. Cheap to check and catastrophic to miss, so it is checked.
     /// </remarks>
     public IReadOnlyList<string> ScriptsMissingTheirMeta()
-        => _before.Keys
+        => Shape != ProjectShape.Unity
+            ? Array.Empty<string>()
+            : _before.Keys
             .Where(p => File.Exists(Absolute(p)) && !File.Exists(Absolute(p) + ".meta"))
             .OrderBy(p => p, StringComparer.Ordinal)
             .ToList();

@@ -57,7 +57,7 @@ if (options.DebateOnly)
     return 0;
 }
 
-var tasks = TaskSet.Select(options.Tasks);
+var tasks = TaskSets.Select(options.Sets, options.Tasks);
 
 if (options.DiagnoseOnly)
 {
@@ -74,7 +74,7 @@ if (options.DiagnoseOnly)
 
 if (tasks.Count == 0)
 {
-    Console.Error.WriteLine("No task matched. Known tasks: " + string.Join(", ", TaskSet.Tasks.Select(t => t.Id)));
+    Console.Error.WriteLine("No task matched. Known tasks: " + string.Join(", ", TaskSets.EveryId));
     return 2;
 }
 
@@ -88,7 +88,7 @@ Console.CancelKeyPress += (_, e) =>
     stopping.Cancel();
 };
 
-Console.WriteLine($"Task set v{TaskSet.Version}, {tasks.Count} task(s), {options.Repeats} repeat(s) each.");
+Console.WriteLine($"Task set {TaskSets.VersionFor(tasks)}, {tasks.Count} task(s), {options.Repeats} repeat(s) each.");
 Console.WriteLine($"Results go to {options.OutputDirectory}");
 Console.WriteLine();
 

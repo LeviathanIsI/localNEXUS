@@ -205,6 +205,50 @@ public sealed record TaskResult(
            && task.RefusalRules.Any(rule => RefusalsFired.Any(r => r.StartsWith(rule, StringComparison.Ordinal)));
 
     /// <summary>
+    /// The Unity write rules, which apply to a Unity project and to nothing else.
+    /// </summary>
+    /// <remarks>
+    /// Named here rather than asked of the application, because the point of the list is to be a
+    /// second opinion. If a rule stopped being Unity only, a list that read itself off the same
+    /// code would follow it and the eval would go on passing.
+    ///
+    /// The two rules that are not here, and are therefore expected everywhere, are the ones about
+    /// a file existing or not existing when the plan said it would, and the one about nothing being
+    /// declared twice. v1.37 judged that last one universal, and it is: two types with one name is
+    /// a problem in any codebase.
+    /// </remarks>
+    private static readonly string[] UnityOnlyRules =
+    {
+        "FileNameMustMatchBehaviour",
+        "TypeMayNotDisappear",
+        "NamespaceMayNotChange",
+        "SerializedFieldMayNotBeRenamed",
+        "BehaviourMustStayBehaviour"
+    };
+
+    /// <summary>
+    /// Any Unity rule that refused a write during this task.
+    /// </summary>
+    /// <remarks>
+    /// A score on the Unity set and a defect on the plain one. This is the measurement the plain
+    /// set exists for: the rules were scoped in v1.37 by sixteen deterministic tests, and this is
+    /// the only thing that watches them with a real model writing real files.
+    /// </remarks>
+    public IReadOnlyList<string> UnityRefusalsFired
+        => RefusalsFired.Where(r => UnityOnlyRules.Any(u => r.StartsWith(u, StringComparison.Ordinal))).ToList();
+
+    /// <summary>
+    /// A refusal by the rule that says nothing may be declared twice.
+    /// </summary>
+    /// <remarks>
+    /// Scored on both sets, unchanged, because it is universal. It is the content level half of the
+    /// duplicate guard: the guard refuses a planned type the project already has, and this refuses
+    /// a file that turned out to declare one.
+    /// </remarks>
+    public bool RefusedForDeclaringTwice
+        => RefusalsFired.Any(r => r.StartsWith("NothingDeclaredTwice", StringComparison.Ordinal));
+
+    /// <summary>
     /// The run left the project exactly as it found it.
     /// </summary>
     /// <remarks>
@@ -224,6 +268,15 @@ public sealed record TaskResult(
     public bool MetTheBar(EvalTask task)
     {
         if (DuplicateTypes.Count > 0 || DeletedFiles.Count > 0 || ScriptsMissingMeta.Count > 0)
+        {
+            return false;
+        }
+
+        // On a plain project a Unity rule firing is a defect wherever it happens, including on a
+        // task whose right answer is to change nothing or to ask a question. It is checked before
+        // any of those, because a task that passes its own criterion while a rule that should not
+        // exist here refused one of its writes has not passed.
+        if (task.Project == ProjectShape.Plain && UnityRefusalsFired.Count > 0)
         {
             return false;
         }
@@ -253,6 +306,12 @@ public sealed record TaskResult(
             return false;
         }
 
+        // Deliberately not counting an inconclusive file against the task. Outside Unity the
+        // compile check sees the framework and the files this run has already settled, and nothing
+        // the project itself declares, so a file referencing existing code cannot be proven either
+        // way. Counting it as a failure would report the harness's blind spot as the model's
+        // mistake; counting it as a pass would claim something that was never established. It is
+        // reported as its own number instead.
         return !Faulted
                && RefusalsFired.Count == 0
                && FilesNeverCompiled == 0

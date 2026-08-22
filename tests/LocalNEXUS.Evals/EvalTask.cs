@@ -1,6 +1,27 @@
 namespace LocalNEXUS.Evals;
 
 /// <summary>
+/// The sort of project a task is run against.
+/// </summary>
+/// <remarks>
+/// Two task sets share this harness because two things are being measured, not one thing twice.
+/// A Unity project has rules that refuse edits which compile cleanly and destroy data, and the
+/// scoring there asks whether the right rule refused the right thing. A plain project has none of
+/// them, so the scoring asks the opposite question: that none of them fired at all.
+///
+/// Mixing them into one set was considered and rejected in v1.37, because half the criteria would
+/// be meaningless for half the rows.
+/// </remarks>
+public enum ProjectShape
+{
+    /// <summary>A Unity project: ProjectSettings, an Assets tree, and a meta beside every script.</summary>
+    Unity,
+
+    /// <summary>An ordinary C# project: a csproj and source wherever it naturally lives.</summary>
+    Plain
+}
+
+/// <summary>
 /// The shape of work a task represents, so results can be read by category.
 /// </summary>
 /// <remarks>
@@ -49,7 +70,19 @@ public enum TaskShape
     ShouldEditNotCreate,
 
     /// <summary>A change that compiles cleanly and would silently break a scene.</summary>
-    UnityRefusal
+    UnityRefusal,
+
+    /// <summary>
+    /// An edit a Unity project would refuse and an ordinary one should simply make.
+    /// </summary>
+    /// <remarks>
+    /// The clearest evidence the Unity rules are scoped rather than merely absent. A refusal here
+    /// is a defect, not a score, so this shape is read as the inverse of UnityRefusal.
+    /// </remarks>
+    AllowedRename,
+
+    /// <summary>The project already declares the type being asked for, so it must not be written twice.</summary>
+    DuplicateAttempt
 }
 
 /// <summary>
@@ -97,6 +130,11 @@ public sealed record SeedFile(string RelativePath, string Content);
 /// True when the request is too underspecified to act on and the right answer is to ask rather
 /// than to guess.
 /// </param>
+/// <param name="Project">
+/// The sort of project this runs against, which decides both what the scratch project is built
+/// out of and how the result is scored. Unity by default, so the set that predates this reads
+/// exactly as it did.
+/// </param>
 public sealed record EvalTask(
     string Id,
     TaskShape Shape,
@@ -109,7 +147,8 @@ public sealed record EvalTask(
     string? TypeThatShouldBeReused = null,
     IReadOnlyList<string>? AcceptableRefusalRules = null,
     bool ExpectsNoChange = false,
-    bool ExpectsClarification = false)
+    bool ExpectsClarification = false,
+    ProjectShape Project = ProjectShape.Unity)
 {
     /// <summary>How many files the task expects to be touched at all.</summary>
     public int ExpectedFileCount => ExpectedNewFiles.Count + ExpectedEditedFiles.Count;
