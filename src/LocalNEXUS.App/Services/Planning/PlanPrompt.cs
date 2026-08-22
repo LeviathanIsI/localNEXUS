@@ -49,22 +49,28 @@ public static class PlanPrompt
         builder.AppendLine();
         // Both formats carry a filled in example, because without one they are three columns and
         // five columns of similar looking words and a model merges them. Asked to rename a class,
-        // it replied with a single DECISIONS row whose reason column was the literal text
-        // "path | main type name | what this file is for", and no PLAN section at all. Triage then
-        // reported an empty plan and said nothing about why, ten times out of ten.
+        // it replied with a single DECISIONS row whose reason column was the literal column names
+        // of the plan format, and no PLAN section at all, ten times out of ten.
+        //
+        // The example names a thermostat, and that is the whole of why. It first named Health.cs,
+        // which is a file the evaluation project actually contains, describing a change close
+        // enough to one of its tasks that the model returned the example verbatim as its answer
+        // and stopped. That task went from ten out of ten to three. An example has to be concrete,
+        // or it becomes the column names problem over again, and it has to be about something no
+        // project would contain, or it becomes the answer.
         builder.AppendLine("DECISIONS");
         builder.AppendLine("One row per file listed above that is relevant, with exactly three columns:");
         builder.AppendLine("path | USE_AS_IS or EDIT or CREATE_NEW_REFERENCING <TypeName> or IGNORE | why");
         builder.AppendLine();
         builder.AppendLine("For example:");
-        builder.AppendLine("Assets/Scripts/Health.cs | EDIT | the healing cap belongs on this type");
+        builder.AppendLine("Assets/Scripts/Thermostat.cs | EDIT | the target temperature lives on this type");
         builder.AppendLine();
         builder.AppendLine("PLAN");
         builder.AppendLine("One row per file to write, in the order they must be written, with exactly five columns:");
         builder.AppendLine("order | CREATE or EDIT | path | main type name | what this file is for");
         builder.AppendLine();
         builder.AppendLine("For example:");
-        builder.AppendLine("1 | EDIT | Assets/Scripts/Health.cs | Health | add a maximum and stop healing past it");
+        builder.AppendLine("1 | EDIT | Assets/Scripts/Thermostat.cs | Thermostat | clamp the target temperature to the safe range");
         builder.AppendLine();
         builder.AppendLine("Fill every column in with the real value. Do not repeat the column names back.");
         builder.AppendLine();
