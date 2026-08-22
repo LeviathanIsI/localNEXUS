@@ -48,6 +48,7 @@
             <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
                 <CheckBox Content="Tools a model can call" IsChecked="{Binding SpeaksMcp}" />
                 <CheckBox Content="Node types for the graph" Margin="16,0,0,0" IsChecked="{Binding SpeaksNode}" />
+                <CheckBox Content="A spec tab" Margin="16,0,0,0" IsChecked="{Binding SpeaksSpec}" />
             </StackPanel>
             <TextBlock Style="{StaticResource HintText}"
                        Margin="0,4,0,0"

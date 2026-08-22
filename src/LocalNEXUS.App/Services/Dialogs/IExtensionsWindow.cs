@@ -51,7 +51,8 @@ public sealed record AddExtensionRequest(
     string WorkingDirectory,
     string Environment,
     bool SpeaksMcp,
-    bool SpeaksNode);
+    bool SpeaksNode,
+    bool SpeaksSpec = false);
 
 /// <summary>Collects what is needed to add an extension, one small dialog per method.</summary>
 public interface IAddExtensionDialog

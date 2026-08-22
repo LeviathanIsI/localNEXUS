@@ -44,6 +44,18 @@ public sealed partial class AddExtensionViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(CanAccept))]
     private bool _speaksNode;
 
+    /// <summary>
+    /// Whether the command bridges a spec driven planning tool, and so brings a tab.
+    /// </summary>
+    /// <remarks>
+    /// Offered here because the bridge that speaks this contract is not published, and a command
+    /// or a folder is how somebody runs one before it is. The same escape hatch the other two
+    /// contracts already had.
+    /// </remarks>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanAccept))]
+    private bool _speaksSpec;
+
     public AddExtensionViewModel(AddExtensionMethod method) => Method = method;
 
     /// <summary>Which method this dialog is for.</summary>
@@ -104,7 +116,7 @@ public sealed partial class AddExtensionViewModel : ObservableObject
                 return false;
             }
 
-            return !IsCommand || SpeaksMcp || SpeaksNode;
+            return !IsCommand || SpeaksMcp || SpeaksNode || SpeaksSpec;
         }
     }
 
@@ -117,5 +129,6 @@ public sealed partial class AddExtensionViewModel : ObservableObject
         WorkingDirectory.Trim(),
         Environment.Trim(),
         SpeaksMcp,
-        SpeaksNode);
+        SpeaksNode,
+        SpeaksSpec);
 }

@@ -70,7 +70,11 @@ public static class ExtensionPresets
                     "--silent", "--accept-package-agreements", "--accept-source-agreements"
                 })
         },
-        Launch: new ExtensionLaunch("npx", new[] { "--yes", "@fission-ai/openspec-bridge@latest" }));
+        // The bridge, not OpenSpec itself. OpenSpec is a CLI rather than a server, so what speaks
+        // the contract is a small package that runs it and reads what it prints; it depends on
+        // OpenSpec and pulls it in. Named as it will be published: until it is, it is installed
+        // from a folder or a command, which is what the Add extension dialog is for.
+        Launch: new ExtensionLaunch("npx", new[] { "--yes", "@localnexus/openspec-bridge@latest" }));
 
     private static ExtensionManifest AnkleBreaker() => new(
         Id: "studio.anklebreaker.unity-mcp",

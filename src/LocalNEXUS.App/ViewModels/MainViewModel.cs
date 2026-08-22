@@ -47,6 +47,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private readonly Services.History.RunHistoryStore _history;
     private readonly IHistoryWindow _historyWindow;
     private readonly GraphTemplates _templates;
+    private readonly Services.Extensions.ExtensionHost _extensionHost;
     private readonly IExtensionsWindow _extensionsWindow;
 
     /// <summary>Nodes whose selection state this view model is currently following.</summary>
@@ -146,6 +147,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         Services.Extensions.ExtensionHost extensionHost,
         ProjectSettingsService projectSettings)
     {
+        _extensionHost = extensionHost;
         Breakpoints = breakpoints;
         _compiler = compiler;
         _history = history;
@@ -680,6 +682,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     public void OnProjectOpened()
     {
         ProjectSettings.Open(Project.ProjectPath, Project.Kind);
+
+        // Workers run in the project they exist for. Set here rather than at start up, because a
+        // project can be opened and changed at any point in a session.
+        _extensionHost.ProjectPath = Project.ProjectPath;
 
         if (ProjectSettings.NeedsSetUp)
         {

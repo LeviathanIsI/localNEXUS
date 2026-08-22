@@ -251,6 +251,11 @@ public sealed partial class ExtensionsViewModel : ObservableObject
             contracts.Add(ExtensionContract.Mcp);
         }
 
+        if (request.SpeaksSpec)
+        {
+            contracts.Add(ExtensionContract.Spec);
+        }
+
         if (request.SpeaksNode)
         {
             contracts.Add(ExtensionContract.Node);

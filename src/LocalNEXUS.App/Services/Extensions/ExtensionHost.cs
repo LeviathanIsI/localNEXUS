@@ -45,6 +45,17 @@ public sealed class ExtensionHost : IDisposable
     /// <summary>Raised when a node worker reports progress, carrying the extension id and its text.</summary>
     public event Action<string, string>? NodeProgressReported;
 
+    /// <summary>
+    /// The open project, which every worker is started in and told about.
+    /// </summary>
+    /// <remarks>
+    /// Set when a project is opened and read when a worker starts. An extension exists because of
+    /// a project, so starting one anywhere else means it looks for that project's files in the
+    /// application's own folder. The spec bridge found this first, because it cannot resolve an
+    /// openspec directory without it, but it was equally true of the others.
+    /// </remarks>
+    public string? ProjectPath { get; set; }
+
     public ExtensionHost(ChildProcessGroup children, IActivityFeed feed)
     {
         _children = children;
@@ -167,9 +178,14 @@ public sealed class ExtensionHost : IDisposable
         var startInfo = new ProcessStartInfo
         {
             FileName = launch.Command,
+            // The manifest wins, then the open project, then the application's own folder. A
+            // manifest that names a directory means it, and a worker with no opinion belongs in
+            // the project it is there for.
             WorkingDirectory = launch.WorkingDirectory is { Length: > 0 } dir && Directory.Exists(dir)
                 ? dir
-                : AppContext.BaseDirectory,
+                : ProjectPath is { Length: > 0 } project && Directory.Exists(project)
+                    ? project
+                    : AppContext.BaseDirectory,
             UseShellExecute = false,
             CreateNoWindow = true,
             RedirectStandardInput = true,
@@ -188,6 +204,13 @@ public sealed class ExtensionHost : IDisposable
             {
                 startInfo.Environment[pair.Key] = pair.Value;
             }
+        }
+
+        // Said as well as implied by the working directory, because a worker that changes
+        // directory for its own reasons still needs to know which project it is there for.
+        if (ProjectPath is { Length: > 0 } openProject)
+        {
+            startInfo.Environment["LOCALNEXUS_PROJECT"] = openProject;
         }
 
         Process process;
