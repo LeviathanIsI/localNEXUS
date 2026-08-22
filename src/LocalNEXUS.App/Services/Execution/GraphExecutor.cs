@@ -15,6 +15,12 @@ namespace LocalNEXUS.App.Services.Execution;
 /// The executor knows nothing about what any particular node does. It orders nodes, hands each
 /// one the values arriving on its inputs, stores what comes back, and reports the transitions to
 /// the feed. Adding a node type therefore requires no change here.
+///
+/// It does know two things about the shape of a graph, and both are read from the graph rather
+/// than from what a node is: that a cycle cannot be ordered, and that a wire carrying
+/// configuration is not a dependency. Breakpoints are the third of the same kind. A wire can be
+/// marked, and a marked wire holds the run when a value reaches it. That is a property of a
+/// connection, which this already handles, and it stays true whatever is at either end.
 /// </remarks>
 public sealed class GraphExecutor
 {
@@ -71,6 +77,7 @@ public sealed class GraphExecutor
         {
             run.CurrentNode = null;
             run.ReleasePauseGate();
+            _services.Breakpoints.ReleaseAll();
             Volatile.Write(ref _isRunning, 0);
         }
     }
@@ -170,6 +177,37 @@ public sealed class GraphExecutor
 
         node.State = NodeState.Completed;
         _feed.Add(ActivityKind.NodeCompleted, node.Title, node.StatusMessage, node.Id);
+
+        await HoldAtBreakpointsAsync(node, run, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Holds on each marked wire leaving this node, in turn, and records what was released.
+    /// </summary>
+    /// <remarks>
+    /// After the node rather than before the next one, and that is the difference between showing
+    /// a value and showing a value in the place it came from. Held here, the wire has exactly one
+    /// producer and the thing on it has been produced and not yet read, so it can be changed with
+    /// nothing to undo.
+    ///
+    /// Each marked wire is held separately even when several leave the same pin, because the point
+    /// of a breakpoint on a wire rather than on a node is that the branches can differ.
+    /// </remarks>
+    private async Task HoldAtBreakpointsAsync(NodeBase node, RunContext run, CancellationToken ct)
+    {
+        var marked = run.Graph.Connections
+            .Where(c => c.HasBreakpoint && c.Source.Owner == node)
+            .ToList();
+
+        foreach (var connection in marked)
+        {
+            var value = run.TryGetValue(connection.Source, out var produced) ? produced : null;
+            var released = await _services.Breakpoints.HoldAsync(connection, value, ct).ConfigureAwait(false);
+
+            // Written even when nothing changed, so that what the wire carries is decided in one
+            // place rather than depending on whether somebody happened to type into the box.
+            run.SetWireValue(connection, released);
+        }
     }
 
     private RunContext Fault(RunContext run, string title, string detail)

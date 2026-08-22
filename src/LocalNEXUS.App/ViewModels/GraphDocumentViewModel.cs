@@ -226,5 +226,10 @@ public sealed partial class GraphDocumentViewModel : ObservableObject, IDisposab
         MarkChanged();
     }
 
-    private void MarkChanged() => IsDirty = true;
+    /// <summary>Records that the graph differs from what is on disk.</summary>
+    /// <remarks>
+    /// Public because a breakpoint is part of the saved graph and is toggled from outside the
+    /// bindings this class watches, so nothing else would notice it changed.
+    /// </remarks>
+    public void MarkChanged() => IsDirty = true;
 }

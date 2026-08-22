@@ -12,6 +12,20 @@ namespace LocalNEXUS.App.Models;
 /// </remarks>
 public sealed partial class Connection : ObservableObject
 {
+    /// <summary>
+    /// True when the run should stop here and show what is passing.
+    /// </summary>
+    /// <remarks>
+    /// On the wire rather than on either node, because the thing worth looking at is the value in
+    /// transit and a node that fans out to three places sends something different down each one.
+    ///
+    /// Toggling it has nothing to do with whether a run is in progress. A breakpoint set while a
+    /// graph is idle is the ordinary case, and one set halfway through a run applies to whatever
+    /// has not passed yet, which is what anybody debugging would expect.
+    /// </remarks>
+    [ObservableProperty]
+    private bool _hasBreakpoint;
+
     public Connection(Pin source, Pin target)
     {
         if (source.Direction != PinDirection.Output)

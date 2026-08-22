@@ -48,7 +48,12 @@ public sealed class NodeExecutionContext
             return null;
         }
 
-        return _run.TryGetValue(connection.Source, out var value) ? value : null;
+        // What the wire was told to carry wins over what the pin produced. That is only ever
+        // different when somebody stopped the run on this wire and changed it, and it is per wire
+        // so that editing one branch of a fan out leaves the others alone.
+        return _run.TryGetWireValue(connection, out var edited)
+            ? edited
+            : _run.TryGetValue(connection.Source, out var value) ? value : null;
     }
 
     /// <summary>Reads an input pin as text, yielding an empty string when nothing arrived.</summary>

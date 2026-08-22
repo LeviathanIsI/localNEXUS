@@ -45,6 +45,7 @@ public sealed class ExecutionServices
         Project = project;
         FileWriter = fileWriter;
         Staging = staging ?? new StagingStore();
+        Breakpoints = new BreakpointService(feed);
         History = history ?? new History.RunHistoryStore();
         Conversation = conversation;
         Feed = feed;
@@ -82,6 +83,9 @@ public sealed class ExecutionServices
     /// anything outstanding without learning that a node called Output exists.
     /// </remarks>
     public StagingStore Staging { get; }
+
+    /// <summary>Holds a run on the wires somebody marked, and says what is passing along them.</summary>
+    public BreakpointService Breakpoints { get; }
 
     /// <summary>
     /// The record of every run this project has had.

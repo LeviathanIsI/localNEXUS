@@ -153,15 +153,56 @@
         <Setter Property="HighlightBrush" Value="{DynamicResource Accent.Primary.Brush}" />
     </Style>
 
+    <!--
+        A wire, and whether it is marked.
+
+        The marker is the wire's own label. A connection already draws content at its midpoint and
+        keeps it there as the curve moves, so anything positioned separately would have to be kept
+        in step with two nodes that can both be dragged.
+
+        A style rather than a converter, because the whole of the difference is two properties and
+        a trigger says that in the place the properties are set.
+
+        Right clicking the wire is what sets it, which is where somebody debugging would look, and
+        it works whether or not a run is in progress. The command lives on the main view model, and
+        a context menu is not in the visual tree, so it is reached through the tag the wire carries
+        rather than through an ancestor lookup that would find the menu itself.
+    -->
     <DataTemplate x:Key="ConnectionTemplate">
         <nodify:Connection Source="{Binding Source.Anchor}"
                            Target="{Binding Target.Anchor}"
                            Stroke="{Binding PinType, Converter={StaticResource ResourceLookup}, ConverterParameter=Pin}"
                            StrokeThickness="2"
-                           Foreground="{DynamicResource Text.Secondary.Brush}"
-                           FontSize="{StaticResource Font.Size.Small}"
+                           Foreground="{DynamicResource Text.Inverse.Brush}"
+                           FontSize="{StaticResource Font.Size.Micro}"
                            ArrowEnds="End"
-                           ArrowSize="7,7" />
+                           ArrowSize="7,7"
+                           Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=nodify:NodifyEditor}}">
+            <nodify:Connection.Style>
+                <Style TargetType="nodify:Connection">
+                    <Setter Property="TextPadding" Value="6,1" />
+                    <Setter Property="TextCornerRadius" Value="7" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding HasBreakpoint}" Value="True">
+                            <Setter Property="Text" Value="STOP" />
+                            <Setter Property="TextBackground" Value="{DynamicResource Breakpoint.Marker.Brush}" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </nodify:Connection.Style>
+
+            <nodify:Connection.ContextMenu>
+                <ContextMenu>
+                    <MenuItem Header="Breakpoint"
+                              IsCheckable="True"
+                              IsChecked="{Binding HasBreakpoint, Mode=OneWay}"
+                              Command="{Binding PlacementTarget.Tag.ToggleBreakpointCommand,
+                                                RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                              CommandParameter="{Binding}"
+                              ToolTip="Stop the run here and show what is passing along this wire." />
+                </ContextMenu>
+            </nodify:Connection.ContextMenu>
+        </nodify:Connection>
     </DataTemplate>
 
     <!--

@@ -139,8 +139,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         Dispatcher dispatcher,
         Services.Compilation.ICodeCompiler compiler,
         Services.History.RunHistoryStore history,
-        IHistoryWindow historyWindow)
+        IHistoryWindow historyWindow,
+        Services.Execution.BreakpointService breakpoints)
     {
+        Breakpoints = breakpoints;
         _compiler = compiler;
         _history = history;
         _historyWindow = historyWindow;
@@ -196,8 +198,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// <summary>The Network tab: available models, coverage, sources and contribution.</summary>
     public NetworkViewModel Network { get; }
 
-    /// <summary>The Unity project that output nodes write into.</summary>
+    /// <summary>The project that output nodes write into.</summary>
     public ProjectService Project { get; }
+
+    /// <summary>A run held on a wire, and what it is holding.</summary>
+    public Services.Execution.BreakpointService Breakpoints { get; }
 
     /// <summary>What the open project contains, shown under the explorer.</summary>
     public ProjectIndexService ProjectIndex { get; }
@@ -462,6 +467,33 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             Graph.DisconnectPin(pin);
         }
+    }
+
+    /// <summary>
+    /// Turns a breakpoint on a wire on or off.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately unconditional. There is no run in progress requirement, because the ordinary
+    /// way to set one is on an idle graph before pressing run, and a graph that had to be running
+    /// before it could be marked would be a graph nobody could debug from the start.
+    /// </remarks>
+    [RelayCommand]
+    private void ToggleBreakpoint(Connection? connection)
+    {
+        if (connection is null)
+        {
+            return;
+        }
+
+        connection.HasBreakpoint = !connection.HasBreakpoint;
+
+        _feed.Info(
+            connection.HasBreakpoint ? "Breakpoint set" : "Breakpoint cleared",
+            $"{connection.Source.Owner.Title}.{connection.Source.Name} to "
+            + $"{connection.Target.Owner.Title}.{connection.Target.Name}"
+            + (connection.HasBreakpoint ? ". The run will stop here and show what is passing." : "."));
+
+        Document.MarkChanged();
     }
 
     /// <summary>Removes a single wire. Invoked by the canvas when a connection is cut.</summary>

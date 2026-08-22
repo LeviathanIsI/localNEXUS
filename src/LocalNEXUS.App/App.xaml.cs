@@ -275,7 +275,8 @@ public partial class App : Application
             Dispatcher,
             compiler,
             history,
-            historyWindow);
+            historyWindow,
+            services.Breakpoints);
 
         ReportEnvironment(feed, catalog);
 

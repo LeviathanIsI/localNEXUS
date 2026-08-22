@@ -10,6 +10,7 @@ namespace LocalNEXUS.App.Services.Execution;
 public sealed partial class RunContext : ObservableObject
 {
     private readonly Dictionary<Guid, object?> _pinValues = new();
+    private readonly Dictionary<Guid, object?> _wireValues = new();
     private readonly List<RunDecision> _decisions = new();
     private readonly object _sync = new();
 
@@ -102,6 +103,39 @@ public sealed partial class RunContext : ObservableObject
         lock (_sync)
         {
             return _pinValues.TryGetValue(pin.Id, out value);
+        }
+    }
+
+    /// <summary>
+    /// Records what one wire is to carry, which is not always what its source pin produced.
+    /// </summary>
+    /// <remarks>
+    /// Keyed by the wire's target pin rather than by its source, and that is the whole reason this
+    /// exists separately from the pin values. One output pin can feed several inputs, and somebody
+    /// who edits a value at a breakpoint has edited what that wire carries, not what the node
+    /// produced. Writing it back over the pin would change what every other wire out of that pin
+    /// delivers, silently.
+    ///
+    /// An input pin has at most one incoming wire, so the target identifies the wire.
+    /// </remarks>
+    public void SetWireValue(Connection connection, object? value)
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+
+        lock (_sync)
+        {
+            _wireValues[connection.TargetPinId] = value;
+        }
+    }
+
+    /// <summary>Reads what a wire was told to carry, if anything overrode it.</summary>
+    public bool TryGetWireValue(Connection connection, out object? value)
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+
+        lock (_sync)
+        {
+            return _wireValues.TryGetValue(connection.TargetPinId, out value);
         }
     }
 

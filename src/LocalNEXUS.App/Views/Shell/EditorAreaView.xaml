@@ -162,6 +162,65 @@
                 </Border>
 
                 <!--
+                    A run held on a wire, and the thing it is holding.
+
+                    Above the request box for the same reason the staged files are: the value is
+                    being read and edited, so it wants the width and the wrap that a dialog does
+                    not have, and the run is not going anywhere until it is released.
+
+                    A value that is not text is shown and not offered for editing, with the reason
+                    said rather than a box that would accept typing and discard it.
+                -->
+                <Border Margin="0,0,0,10"
+                        Padding="12,9"
+                        CornerRadius="4"
+                        Background="{DynamicResource Surface.Card.Brush}"
+                        BorderThickness="1"
+                        BorderBrush="{DynamicResource Breakpoint.Marker.Brush}"
+                        Visibility="{Binding Breakpoints.IsHolding, Converter={StaticResource BooleanToVisibility}}"
+                        DataContext="{Binding Breakpoints.Current}">
+                    <StackPanel>
+                        <DockPanel>
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                <Button Style="{StaticResource SmallButton}"
+                                        Margin="0,0,6,0"
+                                        Content="Release unchanged"
+                                        ToolTip="Carry on with the value exactly as it arrived."
+                                        Command="{Binding DiscardCommand}" />
+                                <Button Style="{StaticResource PrimaryButton}"
+                                        MinWidth="88"
+                                        Content="Continue"
+                                        ToolTip="Carry on, with whatever the box now holds."
+                                        Command="{Binding ContinueCommand}" />
+                            </StackPanel>
+
+                            <TextBlock FontWeight="SemiBold"
+                                       VerticalAlignment="Center"
+                                       Foreground="{DynamicResource Breakpoint.Marker.Brush}"
+                                       TextTrimming="CharacterEllipsis"
+                                       Text="{Binding Where}" />
+                        </DockPanel>
+
+                        <TextBlock Style="{StaticResource HintText}"
+                                   Margin="0,4,0,0"
+                                   TextWrapping="Wrap"
+                                   Text="{Binding ReadOnlyReason}"
+                                   Visibility="{Binding IsEditable, Converter={StaticResource BooleanToVisibility}, ConverterParameter=Invert}" />
+
+                        <TextBox Margin="0,8,0,0"
+                                 Style="{StaticResource MonoTextBox}"
+                                 Text="{Binding Text, UpdateSourceTrigger=PropertyChanged}"
+                                 IsReadOnly="{Binding IsEditable, Converter={StaticResource BooleanToInverse}}"
+                                 AcceptsReturn="True"
+                                 TextWrapping="Wrap"
+                                 VerticalScrollBarVisibility="Auto"
+                                 MinHeight="60"
+                                 MaxHeight="220"
+                                 Padding="8,6" />
+                    </StackPanel>
+                </Border>
+
+                <!--
                     What the last run could not finish, above the box that resolves it.
                     Here rather than in a dialog because the answer is typed, and the
                     thing being answered should be readable while it is being typed.

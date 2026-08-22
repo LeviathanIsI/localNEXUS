@@ -167,7 +167,11 @@ public sealed class GraphSerializer
                 ["sourceNodeId"] = connection.SourceNodeId.ToString(),
                 ["sourcePinId"] = connection.SourcePinId.ToString(),
                 ["targetNodeId"] = connection.TargetNodeId.ToString(),
-                ["targetPinId"] = connection.TargetPinId.ToString()
+                ["targetPinId"] = connection.TargetPinId.ToString(),
+
+                // Written always rather than only when set, because a wire that quietly loses its
+                // breakpoint between sessions is a wire somebody will set again and again.
+                ["breakpoint"] = connection.HasBreakpoint
             });
         }
 
@@ -343,6 +347,14 @@ public sealed class GraphSerializer
             if (!target.TryConnect(source, pinTarget, out var reason))
             {
                 warnings.Add($"Skipped the connection {source.Owner.Title} to {pinTarget.Owner.Title}: {reason}.");
+                continue;
+            }
+
+            // Absent in anything saved before breakpoints existed, which reads as no breakpoint,
+            // which is what those graphs meant.
+            if (element["breakpoint"]?.GetValue<bool>() == true)
+            {
+                target.Connections[^1].HasBreakpoint = true;
             }
         }
     }

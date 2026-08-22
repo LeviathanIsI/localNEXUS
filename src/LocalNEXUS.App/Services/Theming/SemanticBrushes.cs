@@ -61,6 +61,11 @@ public static class SemanticBrushes
         ("Status.Danger.Brush", "Status.DangerColor"),
         ("Status.Warning.Brush", "Status.WarningColor"),
 
+        // A wire the run stops on. Red because that is what a breakpoint is everywhere else and
+        // somebody arriving here already knows what it means, and it is the one red in the
+        // application that does not mean something broke.
+        ("Breakpoint.Marker.Brush", "Status.DangerColor"),
+
         // How much a file changed, in the feed.
         ("Diff.Added.Brush", "Diff.AddedColor"),
         ("Diff.Removed.Brush", "Diff.RemovedColor"),
