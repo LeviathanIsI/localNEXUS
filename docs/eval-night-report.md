@@ -10,7 +10,7 @@ single run cannot tell apart from solid. Last night's 18 of 18 was six tasks, on
 
 
 **Where these results live:** an `evals/` folder in the repository, gitignored. It moved there in
-`94c3b06`; it used to sit inside the application's data folder, which meant clearing app data took
+`255d110`; it used to sit inside the application's data folder, which meant clearing app data took
 the record with it, and that happened three times during this session.
 
 ---

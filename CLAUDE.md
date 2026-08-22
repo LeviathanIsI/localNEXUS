@@ -52,6 +52,26 @@ The counterbalance, equally important: build seams and interfaces for the vision
 - No em dashes or en dashes anywhere: code, comments, docs, or UI strings.
 - Follow existing patterns in the repo for naming, async conventions, and how services get their dependencies. Consistency over personal preference.
 
+## Commit messages
+
+Conventional commits. `type(scope): subject`, subject in the imperative and under 70
+characters, body when the subject cannot hold the reason.
+
+Types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `build`. Scope is the part of the
+application it touches, and is left off rather than invented: `feat(debate)`,
+`fix(compiler-check)`, `docs(readme)`, `refactor(nodes)`.
+
+```
+fix(project-index): record a nested type under its containing types
+
+A class ItemStack inside a class Inventory was indexed as Game.ItemStack, which
+is the name of a different type that may or may not exist.
+```
+
+Every message before 22 August 2026 was rewritten into this format in one pass, so a hash
+quoted in an older report no longer resolves. `docs/history-rewrite.md` maps each one to what
+it became.
+
 ## Build and distribution
 
 **Every task ends with a fresh, runnable exe in `dist/`, ready to hand to someone else.**

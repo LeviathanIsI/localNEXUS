@@ -1,0 +1,59 @@
+name: Commit messages
+
+on:
+  pull_request:
+    branches: [main]
+
+# Cheap enough to be worth it: no toolchain, no restore, no build. It reads the messages of the
+# commits the pull request adds and nothing else, so it finishes in seconds and cannot be the
+# reason a pull request is slow to get an answer.
+#
+# Only the commits the branch adds. Rewriting somebody's whole history because one of their
+# commits is malformed is not a thing to ask, and the messages already on main were brought into
+# this format in one pass rather than by this check.
+jobs:
+  conventional:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The merge base has to be present for the range below to resolve, and a shallow
+          # checkout does not have it.
+          fetch-depth: 0
+
+      - name: Check the subjects
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          base="${{ github.event.pull_request.base.sha }}"
+          head="${{ github.event.pull_request.head.sha }}"
+
+          pattern='^(feat|fix|docs|refactor|test|chore|build)(\([a-z0-9-]+\))?!?: .+'
+          failed=0
+
+          while IFS= read -r subject; do
+            [ -z "$subject" ] && continue
+
+            if ! printf '%s' "$subject" | grep -Eq "$pattern"; then
+              echo "::error::Not a conventional commit: $subject"
+              failed=1
+              continue
+            fi
+
+            if [ "${#subject}" -gt 70 ]; then
+              echo "::error::Subject is ${#subject} characters, the limit is 70: $subject"
+              failed=1
+            fi
+          done < <(git log --format=%s "$base..$head")
+
+          if [ "$failed" -ne 0 ]; then
+            echo ""
+            echo "Messages are type(scope): subject, imperative, under 70 characters."
+            echo "Types: feat, fix, docs, refactor, test, chore, build."
+            echo "See CONTRIBUTING.md."
+            exit 1
+          fi
+
+          echo "Every commit message on this branch is a conventional commit."

@@ -1,6 +1,6 @@
 # Overnight eval expansion, working log
 
-Started from `0cefe0a`, working tree clean. That commit is the rollback point.
+Started from `263790a`, working tree clean. That commit is the rollback point.
 
 This is the log kept while the work happened. The thing to read in the morning is
 `docs/eval-night-report.md`; this file is here so the order of events is recoverable.
@@ -16,7 +16,7 @@ This is the log kept while the work happened. The thing to read in the morning i
 
 ### 0. Rollback point
 
-Nothing to commit; the tree was already clean at `0cefe0a`. This log is the first change.
+Nothing to commit; the tree was already clean at `263790a`. This log is the first change.
 
 ### 1. Twenty tasks
 
@@ -109,5 +109,5 @@ after one round at 80 percent, which is sampling rather than anything the fix ch
 Everything else in the report stands unfixed.
 
 **Where these results live:** an `evals/` folder in the repository, gitignored. It moved there in
-`94c3b06`; it used to sit inside the application's data folder, which meant clearing app data took
+`255d110`; it used to sit inside the application's data folder, which meant clearing app data took
 the record with it, and that happened three times during this session.

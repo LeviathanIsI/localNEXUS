@@ -154,7 +154,23 @@ startup, paths, process handling or resource loading, confirm `.\publish.ps1` pr
 that runs. For anything touching the installer, confirm `.\release.ps1` produced one that
 installs, because the installer is published single file too and has the same traps.
 
-Commits should build individually. Subject under 70 characters, body when it needs explaining.
+Commits should build individually, and their messages are conventional commits:
+`type(scope): subject`, subject in the imperative and under 70 characters, body when the
+subject cannot hold the reason.
+
+Types are `feat`, `fix`, `docs`, `refactor`, `test`, `chore` and `build`. Scope is the part of
+the application it touches, and is left off rather than invented.
+
+```
+fix(project-index): record a nested type under its containing types
+
+A class ItemStack inside a class Inventory was indexed as Game.ItemStack, which
+is the name of a different type that may or may not exist.
+```
+
+Every message before 22 August 2026 was rewritten into this format in one pass, so an old hash
+from a report or an issue no longer resolves. `docs/history-rewrite.md` maps each one to what
+it became.
 
 ## Reporting
 
