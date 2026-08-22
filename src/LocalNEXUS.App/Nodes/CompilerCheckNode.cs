@@ -246,13 +246,25 @@ public sealed partial class CompilerCheckNode : NodeBase
         LastProblems = Array.Empty<CompileDiagnostic>();
 
         var settled = new List<GeneratedFile>();
+
+        // What later files are compiled against, which is not the same list. A file that did not
+        // compile is not something anything can legitimately be built on: putting it in the set
+        // hands its errors to every file after it, so one broken row failed the whole rest of the
+        // plan for reasons that had nothing to do with any of them. Worse, only the file being
+        // checked is ever offered for repair, so nothing downstream could fix what was actually
+        // wrong and the run reported a pile of unrepairable files.
+        //
+        // A file whose only complaints were missing references is kept, because what it declares
+        // is real and later files legitimately depend on it. Those complaints are untrusted
+        // wherever they surface again.
+        var compiling = new List<GeneratedFile>();
         var repairs = 0;
 
         foreach (var file in files)
         {
             ct.ThrowIfCancellationRequested();
 
-            var checkedFile = await CheckOneAsync(ctx, settled, file, files.Count, ct).ConfigureAwait(false);
+            var checkedFile = await CheckOneAsync(ctx, compiling, file, files.Count, ct).ConfigureAwait(false);
 
             if (checkedFile.Repairs > 0)
             {
@@ -260,6 +272,18 @@ public sealed partial class CompilerCheckNode : NodeBase
             }
 
             settled.Add(checkedFile.File);
+
+            if (checkedFile.File.Check is FileCheckState.Compiled or FileCheckState.Inconclusive)
+            {
+                compiling.Add(checkedFile.File);
+            }
+            else
+            {
+                ctx.Feed.Info(
+                    $"{Title}: {checkedFile.File.RelativePath} is not being compiled into the rest",
+                    "It does not compile, so anything after it is checked without it. A later file that "
+                    + "genuinely needed it will say so, rather than inheriting errors from this one.");
+            }
         }
 
         var failed = settled.Count(f => f.Check == FileCheckState.DidNotCompile);
@@ -457,17 +481,28 @@ public sealed partial class CompilerCheckNode : NodeBase
     /// The compilation unit for one file of a plan: everything settled before it, plus itself.
     /// </summary>
     private static IReadOnlyList<CompileSource> BuildSet(
-        IReadOnlyList<GeneratedFile> settled,
+        IReadOnlyList<GeneratedFile> earlier,
         GeneratedFile file,
         string content)
     {
-        var sources = settled
-            .Select(f => new CompileSource(f.Task.FileName, f.Content))
-            .ToList();
+        // One source per path, and the file being checked wins. A plan is perfectly capable of
+        // naming the same file twice, and this application has seen one that planned to create
+        // Health.cs and then to edit it. Compiled together those are the same type declared in two
+        // places, which is a wall of CS0101 describing a problem the code does not have.
+        var byPath = new Dictionary<string, CompileSource>(StringComparer.OrdinalIgnoreCase);
 
-        sources.Add(new CompileSource(file.Task.FileName, content));
-        return sources;
+        foreach (var written in earlier)
+        {
+            byPath[Key(written.RelativePath)] = new CompileSource(written.Task.FileName, written.Content);
+        }
+
+        byPath[Key(file.RelativePath)] = new CompileSource(file.Task.FileName, content);
+
+        return byPath.Values.ToList();
     }
+
+    /// <summary>Two spellings of the same path are the same file.</summary>
+    private static string Key(string relativePath) => relativePath.Replace('\\', '/').Trim();
 
     /// <inheritdoc />
     public override JsonObject SaveSettings() => new()
