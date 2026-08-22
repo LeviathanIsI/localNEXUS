@@ -8,6 +8,11 @@ is fixed.
 ten of ten. Three passed zero of ten. Three sat between seven and nine, which is the coin flip a
 single run cannot tell apart from solid. Last night's 18 of 18 was six tasks, one run, and luck.
 
+
+**Where these results live:** an `evals/` folder in the repository, gitignored. It moved there in
+`94c3b06`; it used to sit inside the application's data folder, which meant clearing app data took
+the record with it, and that happened three times during this session.
+
 ---
 
 ## 1. Where it stands, per task

@@ -107,3 +107,7 @@ appendix of the report is the one taken with the workaround in place; the run wi
 after one round at 80 percent, which is sampling rather than anything the fix changed.
 
 Everything else in the report stands unfixed.
+
+**Where these results live:** an `evals/` folder in the repository, gitignored. It moved there in
+`94c3b06`; it used to sit inside the application's data folder, which meant clearing app data took
+the record with it, and that happened three times during this session.
