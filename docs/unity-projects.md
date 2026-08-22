@@ -1,5 +1,8 @@
 # Working with a Unity project
 
+This page is about what a Unity project adds. For what applies to any codebase, and for how a
+Unity project is told apart from an ordinary one, see [project-kinds.md](project-kinds.md).
+
 ## Working against an existing project
 
 Wire the Triage node between the prompt and the model:
@@ -15,8 +18,10 @@ together or not at all.
 
 ### What it reads, and how much
 
-The project is indexed by parsing every `Assets/**/*.cs`, in parallel, recording what each file
-declares and which type names it mentions. The result is cached per file by write time and
+The project is indexed by parsing every C# file in parallel, recording what each file declares and
+which type names it mentions. In a Unity project the scan starts at `Assets`, because that is where
+the editor compiles from; in any other project it starts at the root and skips build output, fetched
+dependencies, and folders the project's own `.gitignore` names. The result is cached per file by write time and
 length, so editing one script re-reads one script. Indexing runs when a project is opened and its
 timing appears in the activity feed.
 
@@ -112,7 +117,7 @@ resolved from the box under the canvas. The node can also be set to fault the ru
 the last attempt on with a warning, but leaving it for later is the default: stopping at the
 third file of eight throws away the four that would have worked.
 
-## Opening a Unity project
+## Opening a project
 
 **File > Open Unity Project or Folder**, and choose the project root, the folder that
 contains `Assets`. The choice is remembered between sessions. Output nodes resolve their

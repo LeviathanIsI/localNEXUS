@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using LocalNEXUS.App.Infrastructure;
 using LocalNEXUS.App.Models;
 using LocalNEXUS.App.Services.Execution;
+using LocalNEXUS.App.Services.Files;
 using LocalNEXUS.App.Services.History;
 using LocalNEXUS.App.Services.Planning;
 using LocalNEXUS.App.Services.ProjectIndex;
@@ -123,7 +124,7 @@ public sealed partial class TriageNode : NodeBase
         if (!project.HasProject)
         {
             throw new InvalidOperationException(
-                $"{Title} needs an open Unity project to know what already exists. Open one from the File menu.");
+                $"{Title} needs an open project to know what already exists. Open one from the File menu.");
         }
 
         var budget = Budget;
@@ -174,7 +175,7 @@ public sealed partial class TriageNode : NodeBase
             $"{Title}: planning with {plannerNode.Title}",
             "The model that writes the files is the one that plans them.");
 
-        var message = PlanPrompt.BuildPlannerMessage(request, map, summary, budget);
+        var message = PlanPrompt.BuildPlannerMessage(request, map, summary, budget, project.Kind);
 
         string reply;
 
@@ -201,12 +202,12 @@ public sealed partial class TriageNode : NodeBase
             // Straight to the same asking path a model's own question takes, so nothing about
             // pausing, the cap, the timeout or proceeding on a stated assumption changes. The
             // model is not asked to plan first, because there is nothing yet to plan from.
-            reply = await ResolveAsync(ctx, planner, plannerNode, message, unplannable, ct).ConfigureAwait(false);
+            reply = await ResolveAsync(ctx, planner, plannerNode, message, unplannable, project.Kind, ct).ConfigureAwait(false);
         }
         else
         {
             reply = await planner
-                .AnswerAsync(PlanPrompt.PlannerSystemPrompt, message, ctx.ForNode(plannerNode), ct)
+                .AnswerAsync(PlanPrompt.PlannerSystemPromptFor(project.Kind), message, ctx.ForNode(plannerNode), ct)
                 .ConfigureAwait(false);
 
             // One round, and only one. A node that keeps asking is worse than one that guesses,
@@ -215,7 +216,7 @@ public sealed partial class TriageNode : NodeBase
 
             if (questions.Count > 0)
             {
-                reply = await ResolveAsync(ctx, planner, plannerNode, message, questions, ct).ConfigureAwait(false);
+                reply = await ResolveAsync(ctx, planner, plannerNode, message, questions, project.Kind, ct).ConfigureAwait(false);
             }
         }
 
@@ -266,6 +267,7 @@ public sealed partial class TriageNode : NodeBase
         NodeBase plannerNode,
         string originalMessage,
         IReadOnlyList<ClarificationQuestion> questions,
+        ProjectKind kind,
         CancellationToken ct)
     {
         var conversation = ctx.Services.Conversation;
@@ -315,7 +317,7 @@ public sealed partial class TriageNode : NodeBase
 
         return await planner
             .AnswerAsync(
-                PlanPrompt.PlannerSystemPrompt,
+                PlanPrompt.PlannerSystemPromptFor(kind),
                 $"{originalMessage}{Environment.NewLine}{Environment.NewLine}{followUp}",
                 ctx.ForNode(plannerNode),
                 ct)

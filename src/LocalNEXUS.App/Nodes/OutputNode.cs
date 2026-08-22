@@ -11,7 +11,7 @@ using LocalNEXUS.App.Services.ProjectIndex;
 namespace LocalNEXUS.App.Nodes;
 
 /// <summary>
-/// Writes the value arriving on its input pin to a file inside the opened Unity project.
+/// Writes the value arriving on its input pin to a file inside the opened project.
 /// </summary>
 /// <remarks>
 /// The path is always resolved through <see cref="Services.Files.ProjectService"/>, which
@@ -22,10 +22,13 @@ namespace LocalNEXUS.App.Nodes;
 /// reason instead of being written, and the rest of the plan carries on. Holding four finished
 /// files hostage to a fifth protects nobody and throws away work that was correct.
 ///
-/// Before anything is written, each file is put through the Unity rules. Those are refusals
-/// rather than warnings, because every one of them describes a change that compiles cleanly and
-/// silently breaks a scene, and a warning in a feed nobody rereads is not a defence against a
-/// prefab that lost its script.
+/// Before anything is written, each file is put through the Unity rules, and only when the open
+/// project is a Unity project. Those are refusals rather than warnings, because every one of them
+/// describes a change that compiles cleanly and silently breaks a scene, and a warning in a feed
+/// nobody rereads is not a defence against a prefab that lost its script. In any other project the
+/// same edits are an ordinary rename or refactor, so none of them run.
+///
+/// One rule is not Unity's and runs everywhere: nothing may be declared twice.
 /// </remarks>
 public sealed partial class OutputNode : NodeBase
 {
@@ -211,7 +214,21 @@ public sealed partial class OutputNode : NodeBase
             try
             {
                 batch.EnforceExpectedExistence(absolute, file.Operation == FileOperation.Edit);
-                UnityScriptRules.Enforce(file.RelativePath, file.Content, index.FindFile(file.RelativePath), file.Types);
+
+                // The Unity rules only where Unity is. Every one of them exists because an edit
+                // that compiles cleanly unbinds a scene, and none of that is true of an ordinary
+                // C# project, where the same edits are a rename and a refactor. A refusal that
+                // makes no sense in the project somebody opened is worse than no refusal, and one
+                // of these would have demanded a Unity attribute from a project with no Unity in
+                // it: any public field counts as serialised, so renaming one would have been
+                // refused until it carried [FormerlySerializedAs].
+                if (project.IsUnity)
+                {
+                    UnityScriptRules.Enforce(file.RelativePath, file.Content, index.FindFile(file.RelativePath), file.Types);
+                }
+
+                // This one runs everywhere. Two types with one name is a problem in any codebase,
+                // and it is the thing this application was built to prevent.
                 EnforceNothingDeclaredTwice(file, declaredHere, index);
             }
             catch (UnityScriptRuleException ex)
@@ -285,7 +302,7 @@ public sealed partial class OutputNode : NodeBase
                 entry.Detail = result[0].Change.Text;
             }
 
-            if (UnityScriptRules.DescribeAttachmentNeeded(file.Types) is { } note)
+            if (project.IsUnity && UnityScriptRules.DescribeAttachmentNeeded(file.Types) is { } note)
             {
                 ctx.Feed.Info($"{file.RelativePath} needs attaching", note);
             }

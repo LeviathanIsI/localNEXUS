@@ -29,7 +29,7 @@
 
                     <TextBlock Style="{StaticResource BodyText}" Margin="0,14,0,0">
                         This installs localNEXUS on this computer, a canvas that wires language models together and
-                        points them at your Unity project. Models run on this machine, across several of your own, or
+                        points them at your codebase. Models run on this machine, across several of your own, or
                         through a hosted provider, entirely your choice.
                     </TextBlock>
 

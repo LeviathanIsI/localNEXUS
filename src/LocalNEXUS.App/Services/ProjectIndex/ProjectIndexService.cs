@@ -92,11 +92,18 @@ public sealed partial class ProjectIndexService : ObservableObject
         await _gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            var assets = Path.Combine(projectPath, "Assets");
+            // Where to start reading. A Unity project keeps every script the editor compiles
+            // under Assets and everything else under it is packages and imported art, so scanning
+            // from there is both correct and a great deal less work. Any other project keeps its
+            // code wherever it likes, so the root is the only honest answer.
+            var root = LocalNEXUS.App.Services.Files.ProjectService.Detect(projectPath)
+                       == LocalNEXUS.App.Services.Files.ProjectKind.Unity
+                ? Path.Combine(projectPath, "Assets")
+                : projectPath;
 
-            if (!Directory.Exists(assets))
+            if (!Directory.Exists(root))
             {
-                Set(ProjectIndexState.Unavailable, "No Assets folder");
+                Set(ProjectIndexState.Unavailable, "The project folder is not there");
                 return;
             }
 
@@ -105,7 +112,7 @@ public sealed partial class ProjectIndexService : ObservableObject
             status?.Report("Reading the project");
 
             var stopwatch = Stopwatch.StartNew();
-            var sources = EnumerateScripts(assets, projectPath);
+            var sources = EnumerateScripts(root, projectPath, IgnoredFolders(projectPath));
 
             var cached = string.Equals(_indexedProject, projectPath, StringComparison.OrdinalIgnoreCase) && _files.Count > 0
                 ? new Dictionary<string, IndexedFile>(_files, StringComparer.OrdinalIgnoreCase)
@@ -247,10 +254,13 @@ public sealed partial class ProjectIndexService : ObservableObject
     }
 
     /// <summary>
-    /// The scripts worth indexing. Anything Unity treats as a package cache or a build artefact
-    /// is skipped, because none of it is code the user is asking about.
+    /// The scripts worth indexing. Anything that is a package cache or a build artefact is
+    /// skipped, because none of it is code the user is asking about.
     /// </summary>
-    private static List<SourceRef> EnumerateScripts(string assets, string projectPath)
+    private static List<SourceRef> EnumerateScripts(
+        string root,
+        string projectPath,
+        IReadOnlySet<string> ignoredFolders)
     {
         var found = new List<SourceRef>();
 
@@ -261,11 +271,11 @@ public sealed partial class ProjectIndexService : ObservableObject
             AttributesToSkip = FileAttributes.Hidden | FileAttributes.System
         };
 
-        foreach (var path in Directory.EnumerateFiles(assets, "*.cs", options))
+        foreach (var path in Directory.EnumerateFiles(root, "*.cs", options))
         {
             var relative = Normalise(Path.GetRelativePath(projectPath, path));
 
-            if (IsIgnored(relative))
+            if (IsIgnored(relative, ignoredFolders))
             {
                 continue;
             }
@@ -287,11 +297,79 @@ public sealed partial class ProjectIndexService : ObservableObject
     }
 
     /// <summary>
-    /// Folders Unity itself ignores. A folder whose name ends in a tilde or starts with a dot is
-    /// not compiled into the project, so indexing it would offer the user code that cannot run.
+    /// Folders that hold something other than the project's own source.
     /// </summary>
-    private static bool IsIgnored(string relativePath)
-        => relativePath.Split('/').Any(segment => segment.EndsWith('~') || segment.StartsWith('.'));
+    /// <remarks>
+    /// The tilde and the leading dot are Unity's own rules: a folder named either way is not
+    /// compiled into the project, so indexing it would offer somebody code that cannot run. They
+    /// hold outside Unity too, since a leading dot is how every tool on this platform marks a
+    /// folder as its own business.
+    ///
+    /// The rest is build output and fetched dependencies, which matters only away from Unity,
+    /// where the scan starts at the root. Offering a model a type out of <c>obj</c> would be
+    /// offering it a generated copy of something the project already declares.
+    /// </remarks>
+    private static bool IsIgnored(string relativePath, IReadOnlySet<string> ignoredFolders)
+        => relativePath.Split('/').Any(segment =>
+            segment.EndsWith('~')
+            || segment.StartsWith('.')
+            || ignoredFolders.Contains(segment));
+
+    /// <summary>The folder names to skip anywhere in the tree.</summary>
+    private static readonly string[] AlwaysIgnored =
+    {
+        "bin", "obj", "node_modules", "packages", "dist", "out", "target", "vendor"
+    };
+
+    /// <summary>
+    /// The folder names to skip, including whatever the project's own gitignore names.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately the cheap reading of a gitignore rather than the correct one. A line is taken
+    /// only when it names a plain folder, with no wildcard, no negation, no path separator and no
+    /// anchoring, because that covers what a gitignore is mostly made of and needs no glob engine
+    /// and no walk of nested ignore files. Anything more expressive is skipped rather than
+    /// half interpreted, so a pattern this cannot read costs an indexed folder that did not need
+    /// indexing rather than a wrong answer. Only the root file is read, and a project without one
+    /// is the ordinary case, not a problem.
+    /// </remarks>
+    private static IReadOnlySet<string> IgnoredFolders(string projectPath)
+    {
+        var names = new HashSet<string>(AlwaysIgnored, StringComparer.OrdinalIgnoreCase);
+        var gitignore = Path.Combine(projectPath, ".gitignore");
+
+        if (!File.Exists(gitignore))
+        {
+            return names;
+        }
+
+        try
+        {
+            foreach (var raw in File.ReadLines(gitignore))
+            {
+                var line = raw.Trim().TrimEnd('/');
+
+                if (line.Length == 0
+                    || line.StartsWith('#')
+                    || line.StartsWith('!')
+                    || line.Contains('/')
+                    || line.Contains('*')
+                    || line.Contains('?')
+                    || line.Contains('['))
+                {
+                    continue;
+                }
+
+                names.Add(line);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // A gitignore that will not read is not a reason to index nothing.
+        }
+
+        return names;
+    }
 
     private readonly record struct SourceRef(string Absolute, string Relative, DateTime LastWriteUtc, long Length);
 }

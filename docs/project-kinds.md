@@ -98,10 +98,33 @@ against the open Unity project.
 - `OutputNode.DefaultSubfolder` is `Assets/Scripts`. It is the value a newly added node starts from,
   saved with the graph, and changing it per project kind would reach into graphs already saved.
   Reported, not changed.
-- The planner's worked examples name `Assets/Scripts/Thermostat.cs`. The path in an example is not
-  an instruction, and the examples exist because without them the two row formats get merged.
-  Changing them is the change that cost `edit-existing` seven runs out of ten in v1.31. Left alone
-  deliberately.
+
+### The planner's worked examples
+
+The examples in the planner prompt are load bearing: without a filled-in example the two row formats
+are three columns and five columns of similar-looking words, and the model merges them. The last
+change to one of them cost `edit-existing` seven runs out of ten, because the example named a file
+the evaluation project contained and the model returned it verbatim as its answer.
+
+So only the folder in them follows the project kind, and only outside Unity. `Assets/Scripts` is
+where a Unity project keeps its code and is nowhere at all in any other, so showing it to a model
+planning against a plain project invites it to invent the folder. The Unity wording is unchanged to
+the byte, and a test asserts that rather than trusting it.
+
+## What the compiler needs to be useful outside Unity
+
+The framework fallback works and needs nothing to run. What it needs to be genuinely useful is the
+project's own types, and it does not have them.
+
+Outside Unity a check sees the .NET assemblies this application runs on, plus the files already
+settled in the current plan. Every reference to a type the project already declares reads as a
+missing type. The state reports this as `FrameworkOnly`, and `CompilerCheckNode` already refuses to
+trust a missing-type diagnostic under it, so nothing is falsely reported as broken; what is lost is
+the ability to confirm that a call into existing code is correct.
+
+Closing that gap means resolving a plain project's references, which is reading its `.csproj` or its
+`project.assets.json` and loading what they name. That is real work with a real failure surface and
+it is not in this task. It is written down here rather than left to be discovered.
 
 ## Detection
 

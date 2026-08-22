@@ -95,7 +95,7 @@ through `CSharpSyntaxTree.ParseText` in parallel, cached by write time and lengt
 generated `csproj` files, which Unity rewrites on every recompile anyway.
 
 **Generated code is compiled before it is written.** Roslyn, against reference assemblies from
-the open Unity project, failures handed back upstream. Unity batch mode was measured and
+the open project, failures handed back upstream. Unity batch mode was measured and
 rejected: seconds rather than milliseconds per attempt, and a second instance refuses to open
 a project the editor already has open, which is exactly the situation of anyone using this.
 

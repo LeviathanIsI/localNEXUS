@@ -3,6 +3,7 @@ using LocalNEXUS.App.Infrastructure;
 using LocalNEXUS.App.Services.Editing;
 using LocalNEXUS.App.Services.Inference;
 using LocalNEXUS.App.Nodes;
+using LocalNEXUS.App.Services.Files;
 using LocalNEXUS.App.Services.Planning;
 using LocalNEXUS.App.Services.Processes;
 using LocalNEXUS.App.Services.ProjectIndex;
@@ -96,7 +97,7 @@ public sealed class PlannerProbe : IDisposable
         var candidates = RelevanceRanker.Rank(index, task.Request, budget.CandidateLimit);
         var map = ProjectDigest.BuildMap(index, candidates, budget);
         var summary = ProjectDigest.BuildCandidateSummary(candidates, budget);
-        var message = PlanPrompt.BuildPlannerMessage(task.Request, map, summary, budget);
+        var message = PlanPrompt.BuildPlannerMessage(task.Request, map, summary, budget, ProjectKind.Unity);
 
         // What the application decides before the model is asked anything. A request that names
         // nothing never reaches the planner in a real run, so showing the model's answer without
@@ -109,7 +110,7 @@ public sealed class PlannerProbe : IDisposable
         var result = await client
             .StreamChatAsync(
                 new ModelEndpoint(endpoint.BaseUrl, endpoint.ModelId, null),
-                PlanPrompt.PlannerSystemPrompt,
+                PlanPrompt.PlannerSystemPromptFor(ProjectKind.Unity),
                 message,
                 _options.Temperature,
                 _options.MaxTokens,

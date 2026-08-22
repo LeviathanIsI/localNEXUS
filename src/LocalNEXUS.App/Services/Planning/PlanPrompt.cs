@@ -1,4 +1,5 @@
 using System.Text;
+using LocalNEXUS.App.Services.Files;
 using LocalNEXUS.App.Services.ProjectIndex;
 
 namespace LocalNEXUS.App.Services.Planning;
@@ -12,11 +13,21 @@ namespace LocalNEXUS.App.Services.Planning;
 /// </remarks>
 public static class PlanPrompt
 {
-    /// <summary>The system prompt a planning model runs under.</summary>
-    public const string PlannerSystemPrompt =
-        "You plan changes to an existing Unity project. You never write code. "
-        + "You answer only in the two sections you are asked for, using the exact row format given, "
-        + "with no commentary, no explanation and no markdown fences.";
+    /// <summary>
+    /// The system prompt a planning model runs under, for the kind of project that is open.
+    /// </summary>
+    /// <remarks>
+    /// A model told about a Unity project that has no Unity in it is being given noise, and worse,
+    /// an instruction it may set about satisfying. The rest of the sentence is the same either way,
+    /// because none of it was ever about Unity.
+    /// </remarks>
+    public static string PlannerSystemPromptFor(ProjectKind kind)
+        => (kind == ProjectKind.Unity
+                ? "You plan changes to an existing Unity project. "
+                : "You plan changes to an existing C# codebase. ")
+           + "You never write code. "
+           + "You answer only in the two sections you are asked for, using the exact row format given, "
+           + "with no commentary, no explanation and no markdown fences.";
 
     /// <summary>
     /// The planner's message: what exists, what was asked for, and the format of the answer.
@@ -25,11 +36,14 @@ public static class PlanPrompt
         string request,
         string projectMap,
         string candidateSummary,
-        ContextBudget budget)
+        ContextBudget budget,
+        ProjectKind kind)
     {
         var builder = new StringBuilder();
 
-        builder.AppendLine("This Unity project already contains the following. Each line is a file and what it declares.");
+        builder.AppendLine(kind == ProjectKind.Unity
+            ? "This Unity project already contains the following. Each line is a file and what it declares."
+            : "This C# project already contains the following. Each line is a file and what it declares.");
         builder.AppendLine();
         builder.AppendLine(projectMap.Length == 0 ? "(the project has no C# files yet)" : projectMap);
         builder.AppendLine();
@@ -58,26 +72,41 @@ public static class PlanPrompt
         // and stopped. That task went from ten out of ten to three. An example has to be concrete,
         // or it becomes the column names problem over again, and it has to be about something no
         // project would contain, or it becomes the answer.
+        //
+        // The folder in it follows the project, and only the folder. Assets/Scripts is where a
+        // Unity project keeps its code and is nowhere at all in any other, so showing it to a
+        // model planning against a plain project invites it to invent the folder. The Unity
+        // wording is unchanged to the byte, because this example is load bearing and the last
+        // change to it cost a task seven runs in ten.
+        var exampleFolder = kind == ProjectKind.Unity ? "Assets/Scripts" : "src";
+
         builder.AppendLine("DECISIONS");
         builder.AppendLine("One row per file listed above that is relevant, with exactly three columns:");
         builder.AppendLine("path | USE_AS_IS or EDIT or CREATE_NEW_REFERENCING <TypeName> or IGNORE | why");
         builder.AppendLine();
         builder.AppendLine("For example:");
-        builder.AppendLine("Assets/Scripts/Thermostat.cs | EDIT | the target temperature lives on this type");
+        builder.AppendLine($"{exampleFolder}/Thermostat.cs | EDIT | the target temperature lives on this type");
         builder.AppendLine();
         builder.AppendLine("PLAN");
         builder.AppendLine("One row per file to write, in the order they must be written, with exactly five columns:");
         builder.AppendLine("order | CREATE or EDIT | path | main type name | what this file is for");
         builder.AppendLine();
         builder.AppendLine("For example:");
-        builder.AppendLine("1 | EDIT | Assets/Scripts/Thermostat.cs | Thermostat | clamp the target temperature to the safe range");
+        builder.AppendLine($"1 | EDIT | {exampleFolder}/Thermostat.cs | Thermostat | clamp the target temperature to the safe range");
         builder.AppendLine();
         builder.AppendLine("Fill every column in with the real value. Do not repeat the column names back.");
         builder.AppendLine();
         builder.AppendLine("Rules.");
         builder.AppendLine("Order the plan by dependency: interfaces and data types first, then what implements them, then what uses them.");
         builder.AppendLine("Do not create a type that already exists above. Edit its file, or write something that references it.");
-        builder.AppendLine("A MonoBehaviour file name must match its class name exactly.");
+
+        // Only where it is true. The rule is real in Unity, where a component whose file name does
+        // not match its class simply refuses to be added, and is a convention everywhere else.
+        if (kind == ProjectKind.Unity)
+        {
+            builder.AppendLine("A MonoBehaviour file name must match its class name exactly.");
+        }
+
         builder.AppendLine("Write as many files as the request genuinely needs, and no more.");
         builder.AppendLine();
 

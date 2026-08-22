@@ -4,7 +4,9 @@
 
 LocalNEXUS wires language models together on a canvas and points them at your codebase. You type what you want, the graph reads your project, writes the code, compiles it, and writes the files. Models run on your hardware, across several machines, or through a hosted provider if you want them to.
 
-Built it for Unity C#. Ever expanding...
+Works on any C# codebase. Unity is detected rather than assumed, and a Unity project adds the
+write rules that keep a scene from silently losing its scripts. Built it for Unity C# first. Ever
+expanding...
 
 ![The workspace during a run](docs/images/workspace-mid-run.png)
 
@@ -18,7 +20,9 @@ Or take the zip. Unzip, run `LocalNEXUS.exe`, place the engine binaries yourself
 
 Five minutes to a generated file, assuming a `.gguf` on disk:
 
-1. `File > Open Unity project`. The status bar reports how many C# files it indexed.
+1. `File > Open project`. The status bar names the project and says whether it is a Unity
+   project or an ordinary C# one, and reports how many C# files it indexed. Unity is detected,
+   never asked for, and a Unity project is the only kind the Unity write rules apply to.
 2. `File > Settings`, Models section. Drop a `.gguf` into the `models\gguf` folder it names, or point it at a folder of your own. Format is detected by reading the file, not the name.
 3. `Edit > Add node`. Add a Prompt, a Model and an Output. Wire Prompt `Text` to Model `Text`, Model `Code` to Output `Code`. Pins refuse connections that do not typecheck.
 4. Click the Model node, choose Local, pick your model.
