@@ -418,7 +418,7 @@
 
                     <TextBlock Style="{StaticResource FieldLabel}" Text="Open project" />
                     <TextBlock Text="{Binding Index.IndexedProject, TargetNullValue=No project is open.}" />
-                    <TextBlock Style="{StaticResource HintText}" Text="Change it from File, Open Unity project." />
+                    <TextBlock Style="{StaticResource HintText}" Text="Change it from File, Open project." />
 
                     <TextBlock Style="{StaticResource FieldLabel}" Text="What is known about it" />
                     <StackPanel Orientation="Horizontal">

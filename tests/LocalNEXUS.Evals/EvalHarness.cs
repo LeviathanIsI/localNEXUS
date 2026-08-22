@@ -133,8 +133,8 @@ public sealed class EvalHarness : IDisposable
         _models.Reset();
         _feed.Clear();
 
-        var unityProject = new UnityProjectService();
-        unityProject.Open(project.Root);
+        var projectService = new ProjectService();
+        projectService.Open(project.Root);
 
         var index = new ProjectIndexService();
         var staging = new StagingStore(_loop.Dispatcher);
@@ -148,7 +148,7 @@ public sealed class EvalHarness : IDisposable
             _mesh,
             _compiler,
             index,
-            unityProject,
+            projectService,
             new FileWriter(),
             _feed,
             staging,

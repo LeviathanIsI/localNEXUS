@@ -182,7 +182,7 @@ public sealed partial class CompilerCheckNode : NodeBase
         LastProblems = Array.Empty<CompileDiagnostic>();
 
         var compiler = ctx.Services.Compiler;
-        var projectPath = ctx.Services.UnityProject.ProjectPath;
+        var projectPath = ctx.Services.Project.ProjectPath;
         var fileName = RoslynUnityCompiler.DeriveFileName(source, FallbackFileName);
 
         CompileResult result;
@@ -319,7 +319,7 @@ public sealed partial class CompilerCheckNode : NodeBase
         CancellationToken ct)
     {
         var label = $"{file.Task.Order} of {total}: {file.RelativePath}";
-        var projectPath = ctx.Services.UnityProject.ProjectPath;
+        var projectPath = ctx.Services.Project.ProjectPath;
 
         CompileResult result;
         try
@@ -611,7 +611,7 @@ public sealed partial class CompilerCheckNode : NodeBase
             try
             {
                 result = await ctx.Services.Compiler
-                    .CompileAsync(current, fileName, ctx.Services.UnityProject.ProjectPath, ct)
+                    .CompileAsync(current, fileName, ctx.Services.Project.ProjectPath, ct)
                     .ConfigureAwait(false);
             }
             catch (CompilerUnavailableException)

@@ -4,14 +4,19 @@ using CommunityToolkit.Mvvm.ComponentModel;
 namespace LocalNEXUS.App.Services.Files;
 
 /// <summary>
-/// Tracks the Unity project that output nodes write into, and resolves paths inside it.
+/// Tracks the project that output nodes write into, resolves paths inside it, and says what sort
+/// of project it is.
 /// </summary>
 /// <remarks>
 /// Resolution is the security boundary of the slice. Every path an output node produces is
 /// checked to be inside the opened project, so a subfolder or file name containing traversal
-/// segments cannot reach the rest of the disk.
+/// segments cannot reach the rest of the disk. None of that is about Unity, and neither was any of
+/// the rest of this; only the name was.
+///
+/// What is about Unity is <see cref="Kind"/>, which is read once when a folder is opened and is
+/// what puts the Unity write rules in force or leaves them out. It is detected rather than asked.
 /// </remarks>
-public sealed partial class UnityProjectService : ObservableObject
+public sealed partial class ProjectService : ObservableObject
 {
     /// <summary>Absolute path of the opened project folder, or null when nothing is open.</summary>
     [ObservableProperty]
@@ -20,16 +25,29 @@ public sealed partial class UnityProjectService : ObservableObject
     [NotifyPropertyChangedFor(nameof(StatusText))]
     private string? _projectPath;
 
-    /// <summary>True when the opened folder actually looks like a Unity project.</summary>
+    /// <summary>What sort of project is open.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsUnity))]
+    [NotifyPropertyChangedFor(nameof(KindText))]
     [NotifyPropertyChangedFor(nameof(StatusText))]
-    private bool _looksLikeUnityProject;
+    private ProjectKind _kind = ProjectKind.None;
+
+    /// <summary>True when the Unity write rules are in force.</summary>
+    public bool IsUnity => Kind == ProjectKind.Unity;
 
     /// <summary>True when a folder is open.</summary>
     public bool HasProject => !string.IsNullOrWhiteSpace(ProjectPath);
 
     /// <summary>Leaf folder name of the opened project.</summary>
     public string? ProjectName => HasProject ? new DirectoryInfo(ProjectPath!).Name : null;
+
+    /// <summary>What was detected, in two words, for anywhere the project is named.</summary>
+    public string KindText => Kind switch
+    {
+        ProjectKind.Unity => "Unity project",
+        ProjectKind.Plain => "C# project",
+        _ => "No project"
+    };
 
     /// <summary>One line description of the current project, shown in the title bar area.</summary>
     public string StatusText
@@ -41,15 +59,49 @@ public sealed partial class UnityProjectService : ObservableObject
                 return "No project open";
             }
 
-            return LooksLikeUnityProject
-                ? $"{ProjectName}  ({ProjectPath})"
-                : $"{ProjectName}  ({ProjectPath})  no Assets folder found";
+            return Kind == ProjectKind.Unity
+                ? $"{ProjectName}  ({ProjectPath})  Unity project, so the Unity write rules are in force"
+                : $"{ProjectName}  ({ProjectPath})  C# project, so the Unity write rules do not apply";
         }
     }
 
     /// <summary>
-    /// Opens a folder as the active project. Folders without an <c>Assets</c> directory are
-    /// still accepted so that a new project can be set up, but they are flagged.
+    /// Whether a folder is a Unity project.
+    /// </summary>
+    /// <remarks>
+    /// Two signals rather than one, and neither of them is an <c>Assets</c> folder on its own.
+    /// <c>ProjectVersion.txt</c> is written by the editor and by nothing else, which makes it the
+    /// one worth leading with. An <c>Assets</c> folder is a common name outside Unity, so it counts
+    /// only alongside a second folder that is not: <c>ProjectSettings</c>, or the package manifest.
+    ///
+    /// Static and side effect free so that anything needing the answer about a path it was handed,
+    /// rather than about the open project, can ask without going through the open one.
+    /// </remarks>
+    public static ProjectKind Detect(string? folder)
+    {
+        if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder))
+        {
+            return ProjectKind.None;
+        }
+
+        if (File.Exists(Path.Combine(folder, "ProjectSettings", "ProjectVersion.txt")))
+        {
+            return ProjectKind.Unity;
+        }
+
+        if (!Directory.Exists(Path.Combine(folder, "Assets")))
+        {
+            return ProjectKind.Plain;
+        }
+
+        return Directory.Exists(Path.Combine(folder, "ProjectSettings"))
+               || File.Exists(Path.Combine(folder, "Packages", "manifest.json"))
+            ? ProjectKind.Unity
+            : ProjectKind.Plain;
+    }
+
+    /// <summary>
+    /// Opens a folder as the active project, and works out what sort of project it is.
     /// </summary>
     /// <exception cref="DirectoryNotFoundException">The folder does not exist.</exception>
     public void Open(string folder)
@@ -61,14 +113,14 @@ public sealed partial class UnityProjectService : ObservableObject
 
         var full = Path.GetFullPath(folder);
         ProjectPath = full;
-        LooksLikeUnityProject = Directory.Exists(Path.Combine(full, "Assets"));
+        Kind = Detect(full);
     }
 
     /// <summary>Closes the current project.</summary>
     public void Close()
     {
         ProjectPath = null;
-        LooksLikeUnityProject = false;
+        Kind = ProjectKind.None;
     }
 
     /// <summary>
@@ -80,7 +132,7 @@ public sealed partial class UnityProjectService : ObservableObject
     {
         if (!HasProject)
         {
-            throw new InvalidOperationException("Open a Unity project before running a graph that writes files.");
+            throw new InvalidOperationException("Open a project before running a graph that writes files.");
         }
 
         if (string.IsNullOrWhiteSpace(fileName))

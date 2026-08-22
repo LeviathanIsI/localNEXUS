@@ -30,14 +30,14 @@
                 <TextBlock Style="{StaticResource SideBarHeader}" Text="UNITY PROJECT" />
 
                 <TextBlock Margin="14,0,14,2"
-                           Text="{Binding UnityProject.ProjectName, TargetNullValue=No project open}"
+                           Text="{Binding Project.ProjectName, TargetNullValue=No project open}"
                            TextTrimming="CharacterEllipsis" />
 
                 <TextBlock Style="{StaticResource MonoText}"
                            Margin="14,0,14,0"
                            Foreground="{DynamicResource Text.Muted.Brush}"
                            TextWrapping="Wrap"
-                           Text="{Binding UnityProject.ProjectPath, TargetNullValue=Open one from the File menu}" />
+                           Text="{Binding Project.ProjectPath, TargetNullValue=Open one from the File menu}" />
 
                 <StackPanel Orientation="Horizontal" Margin="14,6,14,0">
                     <Ellipse Style="{StaticResource StateDot}"

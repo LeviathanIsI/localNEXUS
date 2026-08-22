@@ -157,7 +157,7 @@ public sealed partial class ExtensionsViewModel : ObservableObject
     /// <summary>What to say when there is nothing in the list.</summary>
     public string EmptyMessage => HasProject
         ? "No extensions for this project yet. Install one from Presets, or add your own."
-        : "Open a Unity project first. Extensions belong to a project, because what they talk to does.";
+        : "Open a project first. Extensions belong to a project, because what they talk to does.";
 
     partial void OnSourceChanged(ExtensionSource value)
     {

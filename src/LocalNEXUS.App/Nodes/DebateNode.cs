@@ -404,7 +404,7 @@ public sealed partial class DebateNode : NodeBase
             return string.Empty;
         }
 
-        var project = ctx.Services.UnityProject;
+        var project = ctx.Services.Project;
 
         if (!project.HasProject)
         {

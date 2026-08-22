@@ -81,13 +81,18 @@
 
             <StackPanel Orientation="Horizontal"
                         Margin="0,0,16,0"
-                        ToolTip="{Binding UnityProject.StatusText}">
+                        ToolTip="{Binding Project.StatusText}">
                 <Ellipse Style="{StaticResource StateDot}"
                          Width="6" Height="6"
                          Margin="0,0,6,0"
                          Fill="{Binding ProjectIndex.State, Converter={StaticResource ResourceLookup}, ConverterParameter=ProjectIndexState}" />
                 <TextBlock FontSize="{StaticResource Font.Size.Micro}"
-                           Text="{Binding UnityProject.ProjectName, TargetNullValue=No project}" />
+                           Text="{Binding Project.ProjectName, TargetNullValue=No project}" />
+                <TextBlock FontSize="{StaticResource Font.Size.Micro}"
+                           Margin="4,0,0,0"
+                           Foreground="{DynamicResource Text.Secondary.Brush}"
+                           Text="{Binding Project.KindText}"
+                           Visibility="{Binding Project.HasProject, Converter={StaticResource BooleanToVisibility}}" />
             </StackPanel>
         </StackPanel>
 

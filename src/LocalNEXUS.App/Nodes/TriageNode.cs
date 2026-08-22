@@ -118,7 +118,7 @@ public sealed partial class TriageNode : NodeBase
             throw new InvalidOperationException($"{Title} received no request to plan.");
         }
 
-        var project = ctx.Services.UnityProject;
+        var project = ctx.Services.Project;
 
         if (!project.HasProject)
         {

@@ -125,7 +125,7 @@
                                 <MenuItem Header="_Open graph..." InputGestureText="Ctrl+O" Command="{Binding LoadGraphCommand}" />
                                 <MenuItem Header="_Save graph..." InputGestureText="Ctrl+S" Command="{Binding SaveGraphCommand}" />
                                 <Separator />
-                                <MenuItem Header="Open _Unity project..." Command="{Binding OpenUnityProjectCommand}" />
+                                <MenuItem Header="Open _project..." Command="{Binding OpenProjectCommand}" />
                                 <Separator />
                                 <MenuItem Header="Se_ttings" InputGestureText="Ctrl+," Command="{Binding OpenSettingsCommand}" />
                                 <Separator />

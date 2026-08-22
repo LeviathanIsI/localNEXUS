@@ -100,8 +100,8 @@ public partial class App : Application
         var feed = new ActivityFeed(Dispatcher);
         var dialogs = new WindowsDialogService();
 
-        var unityProject = new UnityProjectService();
-        RestoreLastProject(config, unityProject, feed);
+        var project = new ProjectService();
+        RestoreLastProject(config, project, feed);
 
         // Owns every engine process this session starts. Built before anything can start one,
         // and given the chance to deal with anything a previous session failed to clean up.
@@ -124,12 +124,12 @@ public partial class App : Application
         var cost = new RunCostTracker();
 
         var extensions = new ExtensionRegistry(feed);
-        extensions.OpenProject(unityProject.ProjectPath);
-        unityProject.PropertyChanged += (_, e) =>
+        extensions.OpenProject(project.ProjectPath);
+        project.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(UnityProjectService.ProjectPath))
+            if (e.PropertyName == nameof(ProjectService.ProjectPath))
             {
-                extensions.OpenProject(unityProject.ProjectPath);
+                extensions.OpenProject(project.ProjectPath);
             }
         };
         var extensionHost = new ExtensionHost(children, feed);
@@ -166,7 +166,7 @@ public partial class App : Application
 
         // Work a previous run left unfinished, read back from whichever project is open.
         var staging = new Services.Files.StagingStore(Dispatcher);
-        staging.OpenProject(unityProject.ProjectPath);
+        staging.OpenProject(project.ProjectPath);
 
         // Every run this project has had. Opened without being awaited, because creating a
         // database is not something the window should wait behind, and nothing can be recorded
@@ -185,7 +185,7 @@ public partial class App : Application
         // Not awaited: opening a database is not something the window should wait behind, and
         // nothing can be said or recorded until it is on screen anyway. The conversation is read
         // back after the store, because it reads from it.
-        _ = OpenRecordAsync(history, conversation, unityProject.ProjectPath);
+        _ = OpenRecordAsync(history, conversation, project.ProjectPath);
 
         var historyWindow = new Services.Dialogs.HistoryWindowService();
         _historyWindow = historyWindow;
@@ -200,7 +200,7 @@ public partial class App : Application
             mesh,
             compiler,
             projectIndex,
-            unityProject,
+            project,
             new FileWriter(),
             feed,
             staging,
@@ -250,7 +250,7 @@ public partial class App : Application
             new CloudProvidersViewModel(credentials, config, dialogs, feed),
             projectIndex,
             dialogs,
-            () => IndexProjectAsync(projectIndex, unityProject.ProjectPath, feed, indexing.Token));
+            () => IndexProjectAsync(projectIndex, project.ProjectPath, feed, indexing.Token));
 
         // The settings panel reports what the record holds, so it is pointed at the same one the
         // recorder writes to rather than at a second instance of nothing.
@@ -266,7 +266,7 @@ public partial class App : Application
             catalogViewModel,
             pythonViewModel,
             networkViewModel,
-            unityProject,
+            project,
             projectIndex,
             themes,
             settingsViewModel,
@@ -295,17 +295,17 @@ public partial class App : Application
         // that what the application knows about the project is visible before anything depends on
         // it, and so the first run does not pay for it. Not awaited: reading a large project takes
         // long enough to notice and the window has to be usable throughout.
-        _ = IndexProjectAsync(projectIndex, unityProject.ProjectPath, feed, indexing.Token);
+        _ = IndexProjectAsync(projectIndex, project.ProjectPath, feed, indexing.Token);
 
-        unityProject.PropertyChanged += (_, e) =>
+        project.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName != nameof(UnityProjectService.ProjectPath))
+            if (e.PropertyName != nameof(ProjectService.ProjectPath))
             {
                 return;
             }
 
             projectIndex.Forget();
-            _ = IndexProjectAsync(projectIndex, unityProject.ProjectPath, feed, indexing.Token);
+            _ = IndexProjectAsync(projectIndex, project.ProjectPath, feed, indexing.Token);
         };
     }
 
@@ -417,22 +417,22 @@ public partial class App : Application
         }
     }
 
-    private static void RestoreLastProject(AppConfig config, UnityProjectService unityProject, ActivityFeed feed)
+    private static void RestoreLastProject(AppConfig config, ProjectService project, ActivityFeed feed)
     {
-        if (string.IsNullOrWhiteSpace(config.LastUnityProjectPath))
+        if (string.IsNullOrWhiteSpace(config.LastProjectPath))
         {
             return;
         }
 
         try
         {
-            unityProject.Open(config.LastUnityProjectPath);
+            project.Open(config.LastProjectPath);
         }
         catch (DirectoryNotFoundException)
         {
             feed.Info(
-                "Previous Unity project not found",
-                $"{config.LastUnityProjectPath} no longer exists. Open a project from the File menu.");
+                "Previous project not found",
+                $"{config.LastProjectPath} no longer exists. Open a project from the File menu.");
         }
     }
 

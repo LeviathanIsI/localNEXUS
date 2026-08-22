@@ -130,7 +130,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         ModelCatalogViewModel catalog,
         PythonEnvironmentViewModel pythonEnvironment,
         NetworkViewModel network,
-        UnityProjectService unityProject,
+        ProjectService project,
         ProjectIndexService projectIndex,
         ThemeService themes,
         AppSettingsViewModel settings,
@@ -156,7 +156,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         Catalog = catalog;
         PythonEnvironment = pythonEnvironment;
         Network = network;
-        UnityProject = unityProject;
+        Project = project;
         ProjectIndex = projectIndex;
         Themes = themes;
         Settings = settings;
@@ -171,7 +171,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         Graph.Nodes.CollectionChanged += OnNodesChanged;
         Graph.Connections.CollectionChanged += OnConnectionsChanged;
-        UnityProject.PropertyChanged += OnUnityProjectChanged;
+        Project.PropertyChanged += OnProjectChanged;
         Feed.PropertyChanged += OnFeedChanged;
         Network.PropertyChanged += OnNetworkChanged;
         Document.PropertyChanged += OnDocumentChanged;
@@ -197,7 +197,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     public NetworkViewModel Network { get; }
 
     /// <summary>The Unity project that output nodes write into.</summary>
-    public UnityProjectService UnityProject { get; }
+    public ProjectService Project { get; }
 
     /// <summary>What the open project contains, shown under the explorer.</summary>
     public ProjectIndexService ProjectIndex { get; }
@@ -339,7 +339,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
             var graphName = Document.Name;
 
-            return UnityProject.ProjectName is { } project
+            return Project.ProjectName is { } project
                 ? $"{graphName} - {project}"
                 : graphName;
         }
@@ -474,11 +474,18 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>Opens a Unity project folder and remembers it for the next session.</summary>
+    /// <summary>
+    /// Opens a project folder, works out what sort it is, and remembers it for the next session.
+    /// </summary>
+    /// <remarks>
+    /// What was detected is said in the feed rather than left to be inferred, because whether the
+    /// Unity write rules are in force changes what the application will refuse, and somebody who
+    /// cannot tell which mode they are in cannot tell whether a refusal was right.
+    /// </remarks>
     [RelayCommand]
-    private void OpenUnityProject()
+    private void OpenProject()
     {
-        var folder = _dialogs.PickFolder("Choose a Unity project folder", _config.LastUnityProjectPath);
+        var folder = _dialogs.PickFolder("Choose a project folder", _config.LastProjectPath);
         if (folder is null)
         {
             return;
@@ -486,15 +493,16 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         try
         {
-            UnityProject.Open(folder);
-            _config.LastUnityProjectPath = UnityProject.ProjectPath;
+            Project.Open(folder);
+            _config.LastProjectPath = Project.ProjectPath;
             _config.Save();
 
             _feed.Info(
-                "Unity project opened",
-                UnityProject.LooksLikeUnityProject
-                    ? UnityProject.ProjectPath
-                    : $"{UnityProject.ProjectPath} (no Assets folder found, output nodes will create one)");
+                $"{Project.KindText} opened",
+                Project.IsUnity
+                    ? $"{Project.ProjectPath}. The Unity write rules are in force: a file name has to match "
+                      + "its MonoBehaviour, and a type, namespace or serialized field cannot quietly change name."
+                    : $"{Project.ProjectPath}. An ordinary C# project, so the Unity write rules do not apply.");
         }
         catch (DirectoryNotFoundException ex)
         {
@@ -637,7 +645,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// <summary>Reads the newly opened project's record and its conversation, in that order.</summary>
     private async Task ReopenRecordAsync()
     {
-        await _history.OpenProjectAsync(UnityProject.ProjectPath, CancellationToken.None).ConfigureAwait(true);
+        await _history.OpenProjectAsync(Project.ProjectPath, CancellationToken.None).ConfigureAwait(true);
 
         if (_history.IsOpen && Feed.Conversation is { } conversation)
         {
@@ -649,7 +657,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         foreach (var node in Graph.Nodes.OfType<CompilerCheckNode>())
         {
-            node.RefreshReachability(_compiler, UnityProject.ProjectPath);
+            node.RefreshReachability(_compiler, Project.ProjectPath);
         }
     }
 
@@ -720,9 +728,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    private void OnUnityProjectChanged(object? sender, PropertyChangedEventArgs e)
+    private void OnProjectChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(UnityProjectService.StatusText) or nameof(UnityProjectService.ProjectPath))
+        if (e.PropertyName is nameof(ProjectService.StatusText) or nameof(ProjectService.ProjectPath))
         {
             OnPropertyChanged(nameof(WindowTitle));
             OnPropertyChanged(nameof(TitleText));
@@ -732,7 +740,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // belongs to a project rather than to this install: opening another project must not
             // offer somebody the unfinished work of the one they just left.
             RefreshCompilerReachability();
-            Feed.Staging.OpenProject(UnityProject.ProjectPath);
+            Feed.Staging.OpenProject(Project.ProjectPath);
 
             // The record and the conversation kept inside it belong to a project too, and for
             // the same reason. Not awaited: opening a database is not something a property change
@@ -794,7 +802,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         Graph.Nodes.CollectionChanged -= OnNodesChanged;
         Graph.Connections.CollectionChanged -= OnConnectionsChanged;
-        UnityProject.PropertyChanged -= OnUnityProjectChanged;
+        Project.PropertyChanged -= OnProjectChanged;
         Feed.PropertyChanged -= OnFeedChanged;
         Network.PropertyChanged -= OnNetworkChanged;
         Document.PropertyChanged -= OnDocumentChanged;

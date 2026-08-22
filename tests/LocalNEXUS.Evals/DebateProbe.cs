@@ -220,7 +220,7 @@ public sealed class DebateProbe : IDisposable
     {
         // No project, because a debate produces a brief rather than a file and nothing here writes
         // anything. Grounding is left on own reasoning for the same reason.
-        var unityProject = new UnityProjectService();
+        var project = new ProjectService();
 
         return new ExecutionServices(
             new ModelClientRouter(new OpenAiCompatibleClient(), new AnthropicClient(), new GeminiClient()),
@@ -228,7 +228,7 @@ public sealed class DebateProbe : IDisposable
             _mesh,
             _compiler,
             new ProjectIndexService(),
-            unityProject,
+            project,
             new FileWriter(),
             _feed,
             new StagingStore(_loop.Dispatcher),

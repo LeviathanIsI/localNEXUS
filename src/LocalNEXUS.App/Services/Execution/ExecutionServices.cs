@@ -22,7 +22,7 @@ public sealed class ExecutionServices
         MeshManager mesh,
         ICodeCompiler compiler,
         ProjectIndexService projectIndex,
-        UnityProjectService unityProject,
+        ProjectService project,
         FileWriter fileWriter,
         IActivityFeed feed,
         StagingStore? staging = null,
@@ -42,7 +42,7 @@ public sealed class ExecutionServices
         Mesh = mesh;
         Compiler = compiler;
         ProjectIndex = projectIndex;
-        UnityProject = unityProject;
+        Project = project;
         FileWriter = fileWriter;
         Staging = staging ?? new StagingStore();
         History = history ?? new History.RunHistoryStore();
@@ -69,7 +69,7 @@ public sealed class ExecutionServices
     public ProjectIndexService ProjectIndex { get; }
 
     /// <summary>The Unity project that output nodes write into.</summary>
-    public UnityProjectService UnityProject { get; }
+    public ProjectService Project { get; }
 
     /// <summary>Writes generated files to disk.</summary>
     public FileWriter FileWriter { get; }

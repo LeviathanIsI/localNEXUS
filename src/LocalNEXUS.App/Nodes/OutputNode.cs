@@ -14,7 +14,7 @@ namespace LocalNEXUS.App.Nodes;
 /// Writes the value arriving on its input pin to a file inside the opened Unity project.
 /// </summary>
 /// <remarks>
-/// The path is always resolved through <see cref="Services.Files.UnityProjectService"/>, which
+/// The path is always resolved through <see cref="Services.Files.ProjectService"/>, which
 /// refuses anything that would land outside the project folder.
 ///
 /// When a whole plan arrives rather than one file, each file is written on its own as soon as it
@@ -79,7 +79,7 @@ public sealed partial class OutputNode : NodeBase
                 $"{Title} received nothing to write. Connect a node to its Code pin.");
         }
 
-        var project = ctx.Services.UnityProject;
+        var project = ctx.Services.Project;
         var absolutePath = project.ResolveTargetPath(TargetSubfolder ?? string.Empty, FileName);
         var displayPath = project.ToDisplayPath(absolutePath);
 
@@ -146,7 +146,7 @@ public sealed partial class OutputNode : NodeBase
             throw new InvalidOperationException($"{Title} received an empty plan, so there was nothing to write.");
         }
 
-        var project = ctx.Services.UnityProject;
+        var project = ctx.Services.Project;
         var index = ctx.Services.ProjectIndex;
         var staging = ctx.Services.Staging;
 

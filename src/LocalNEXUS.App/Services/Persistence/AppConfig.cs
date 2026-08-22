@@ -94,8 +94,8 @@ public sealed class AppConfig
     /// into a file that gets shared.
     /// </remarks>
 
-    /// <summary>The Unity project folder that was open when the app last closed.</summary>
-    public string? LastUnityProjectPath { get; set; }
+    /// <summary>The project folder that was open when the app last closed.</summary>
+    public string? LastProjectPath { get; set; }
 
     /// <summary>Folders added by the user that are scanned for models alongside the default one.</summary>
     public List<string> ExtraModelFolders { get; set; } = new();

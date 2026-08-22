@@ -42,7 +42,7 @@ public sealed class TestServices : IDisposable
         StubModelClient models,
         NodeFactory factory,
         ExecutionServices services,
-        UnityProjectService project,
+        ProjectService project,
         ProjectIndexService index)
     {
         _loop = loop;
@@ -72,7 +72,7 @@ public sealed class TestServices : IDisposable
     public ExecutionServices Services { get; }
 
     /// <summary>The open project, or none.</summary>
-    public UnityProjectService Project { get; }
+    public ProjectService Project { get; }
 
     /// <summary>What the open project contains.</summary>
     public ProjectIndexService Index { get; }
@@ -99,11 +99,11 @@ public sealed class TestServices : IDisposable
 
         var factory = new NodeFactory(catalog, mesh, dialogs, config, extensions, host, credentials);
 
-        var unityProject = new UnityProjectService();
+        var projectService = new ProjectService();
 
         if (project is not null)
         {
-            unityProject.Open(project.Root);
+            projectService.Open(project.Root);
         }
 
         var index = new ProjectIndexService();
@@ -117,7 +117,7 @@ public sealed class TestServices : IDisposable
             mesh,
             compiler,
             index,
-            unityProject,
+            projectService,
             new FileWriter(),
             feed,
             new StagingStore(dispatcher),
@@ -127,7 +127,7 @@ public sealed class TestServices : IDisposable
             null,
             credentials);
 
-        return new TestServices(loop, children, config, feed, models, factory, services, unityProject, index);
+        return new TestServices(loop, children, config, feed, models, factory, services, projectService, index);
     }
 
     /// <summary>A context for running one node, as the executor would build it.</summary>

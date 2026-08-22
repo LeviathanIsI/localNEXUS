@@ -10,7 +10,7 @@
     <StackPanel>
         <TextBlock Style="{StaticResource SectionHeader}" Text="Destination" />
 
-        <TextBlock Style="{StaticResource FieldLabel}" Text="Target subfolder (relative to the Unity project)" />
+        <TextBlock Style="{StaticResource FieldLabel}" Text="Target subfolder (relative to the project)" />
         <TextBox Text="{Binding TargetSubfolder, UpdateSourceTrigger=PropertyChanged}" />
 
         <TextBlock Style="{StaticResource FieldLabel}" Text="File name" />
