@@ -406,16 +406,22 @@ public static class ResultWriter
 
         text.AppendLine();
         text.AppendLine(
-            "The compile check has no way to resolve a plain project's references, so it falls back to");
+            "Since v1.41 the check reads the project's own source and, when a restore has left one, the");
         text.AppendLine(
-            "the framework this application runs on plus the files already settled in the same run.");
+            "packages its restore record names, so a file calling into existing code resolves. What is");
         text.AppendLine(
-            "Any file calling into code the project already declares therefore reads as inconclusive:");
+            "left is the project that has never been restored: its own types are known and its packages");
         text.AppendLine(
-            "not compiled and not broken, because nothing was established either way. That share is the");
+            "are not, so the reference set is still short of something and an error blaming a missing");
         text.AppendLine(
-            "measure of what this set cannot prove, and the argument for reading a csproj and loading");
-        text.AppendLine("what it names.");
+            "type is still not trusted. That is the state this scratch project is in, deliberately, since");
+        text.AppendLine(
+            "restoring it to make the number look better would be measuring something else.");
+        text.AppendLine();
+        text.AppendLine(
+            "So a genuinely wrong reference reads as inconclusive here rather than as an error, which is");
+        text.AppendLine(
+            "the honest floor rather than a gap: nothing is claimed that was not established.");
 
         if (checkedFiles != plainChecked || inconclusive != plainInconclusive)
         {
