@@ -73,11 +73,16 @@ would make the ranking the dominant variable, and this measures the whole pipeli
 
 ## Results
 
-Written to `%LOCALAPPDATA%\LocalNEXUS\evals` by default, overridable with `--out`. Three shapes:
+Written to an `evals/` folder in the repository by default, overridable with `--out`. Three shapes:
 
 - `<timestamp>-<model>.md` — the summary, meant to be read
 - `<timestamp>-<model>.json` — everything, for anything the summary does not answer
 - `history.csv` — one row per task appended across every run, so a series reads as a series
+
+Deliberately not `%LOCALAPPDATA%\LocalNEXUS\`. Results are the one thing here whose value is
+accumulating across weeks, and keeping them among the models, the config and the credentials meant
+anything clearing application data took the record with it. That happened three times in one
+session and `history.csv` went with it every time.
 
 Every one carries the conditions that produced it: model, quantization, context size, GPU layers,
 temperature, token ceiling, planner budget, task set version, app version and machine. A number

@@ -136,3 +136,6 @@ dist/installer/
 # The application payload the installer embeds. Copied in by release.ps1 from dist, and no more
 # committable than dist itself.
 src/LocalNEXUS.Installer/Payload/
+
+# Eval results. Durable, kept out of the application data folder on purpose, not source.
+evals/

@@ -32,7 +32,36 @@ public sealed class EvalOptions
     public int Repeats { get; init; } = 1;
 
     /// <summary>Where results are written.</summary>
-    public string OutputDirectory { get; init; } = Path.Combine(AppPaths.Root, "evals");
+    public string OutputDirectory { get; init; } = DefaultOutputDirectory();
+
+    /// <summary>
+    /// Where results go when nobody says otherwise, which is deliberately not the application's
+    /// own data folder.
+    /// </summary>
+    /// <remarks>
+    /// It used to be a folder inside <c>%LOCALAPPDATA%\LocalNEXUS</c>, and that was a mistake of
+    /// exactly the kind this file is supposed to help find. Results are the one thing here whose
+    /// whole value is accumulating across weeks, and putting them among the models, the config and
+    /// the credentials meant anything clearing the application's data took the record with it.
+    /// That happened three times in one session, and <c>history.csv</c> went with it every time.
+    ///
+    /// The repository is the right home: it outlives a run, it is where the harness is invoked
+    /// from, and nothing that tidies up application data can reach it. When there is no repository
+    /// to find, which is a published copy of the harness, results sit beside the executable
+    /// instead. Neither is inside the application's data folder, which is the whole point.
+    /// </remarks>
+    public static string DefaultOutputDirectory()
+    {
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "LocalNEXUS.sln")))
+            {
+                return Path.Combine(directory.FullName, "evals");
+            }
+        }
+
+        return Path.Combine(AppContext.BaseDirectory, "evals");
+    }
 
     /// <summary>Context window the server is started with.</summary>
     public int ContextSize { get; init; } = LlamaLaunchOptions.DefaultContextSize;
@@ -134,7 +163,7 @@ public sealed class EvalOptions
         var tasks = new List<string>();
 
         var repeats = 1;
-        var output = Path.Combine(AppPaths.Root, "evals");
+        var output = DefaultOutputDirectory();
         var context = LlamaLaunchOptions.DefaultContextSize;
         var gpuLayers = LlamaLaunchOptions.DefaultGpuLayers;
         var maxTokens = 4096;
@@ -242,8 +271,9 @@ public sealed class EvalOptions
           --tasks <a,b>       Task identifiers to run. Defaults to all of them.
           --repeats <n>       How many times to run the set. Defaults to 1. More than one is how
                               a rate becomes meaningful, because a model is not deterministic.
-          --out <folder>      Where results are written. Defaults to the evals folder under the
-                              application's data directory.
+          --out <folder>      Where results are written. Defaults to an evals folder in the
+                              repository, deliberately not the application's data directory, so
+                              that clearing app data cannot take the record with it.
           --context <n>       Context window the server is started with.
           --gpu-layers <n>    Layers offloaded to the GPU.
           --max-tokens <n>    Ceiling on one reply.
