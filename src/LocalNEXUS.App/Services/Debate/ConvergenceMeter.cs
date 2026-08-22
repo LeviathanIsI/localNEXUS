@@ -26,6 +26,7 @@ public sealed record Contradiction(string Identifier, string First, string Secon
 /// <param name="Contradictions">Where they named the same thing and want opposite things done to it.</param>
 public sealed record Convergence(
     int? Score,
+    string Reason,
     IReadOnlyList<string> SharedIdentifiers,
     IReadOnlyList<string> FirstOnlyIdentifiers,
     IReadOnlyList<string> SecondOnlyIdentifiers,
@@ -35,14 +36,32 @@ public sealed record Convergence(
     IReadOnlyList<Contradiction> Contradictions)
 {
     /// <summary>Nothing concrete was said by either side, so there is nothing to compare.</summary>
+    /// <summary>Neither side said anything concrete enough to compare.</summary>
     public static Convergence Unmeasurable { get; } = new(
         null,
+        "Neither position named anything concrete, so there was nothing to compare.",
         Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>(),
         Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>(),
         Array.Empty<Contradiction>());
 
+    /// <summary>
+    /// True when a number was produced. False is a missing measurement, never a low one.
+    /// </summary>
+    /// <remarks>
+    /// The distinction the whole of this turns on. A debate that could not be measured has not
+    /// failed to agree, and nothing may treat it as though it had: it falls through to the round
+    /// cap, the clock, and whatever the node was told to do when nothing converged.
+    /// </remarks>
+    public bool IsMeasured => Score is not null;
+
+    /// <summary>The score as a phrase, or that it could not be taken.</summary>
     /// <summary>The score as a phrase, or that it could not be taken.</summary>
     public string Text => Score is { } value ? $"{value} percent" : "not measurable";
+
+    /// <summary>The same, with the reason attached when there is one to give.</summary>
+    public string Explanation => Score is { } value
+        ? $"{value} percent"
+        : $"not measurable, because {Reason.TrimEnd('.').ToLowerInvariant()}";
 
     /// <summary>
     /// The whole working, so the number can be argued with.
@@ -54,6 +73,17 @@ public sealed record Convergence(
     public string Breakdown()
     {
         var builder = new StringBuilder();
+
+        if (!IsMeasured)
+        {
+            builder.AppendLine($"Not measurable. {Capitalised(Reason)}.");
+            builder.AppendLine();
+            builder.AppendLine(
+                "This is not a low score and nothing treats it as one. The debate carries on to its "
+                + "round limit and its clock, and what happens then is whatever the node was told to "
+                + "do when nothing converged.");
+            builder.AppendLine();
+        }
 
         builder.AppendLine(ConvergenceMeter.WeightingSummary);
         builder.AppendLine();
@@ -77,6 +107,10 @@ public sealed record Convergence(
 
         return builder.ToString().TrimEnd();
     }
+
+    /// <summary>The reason reads as a clause after "because", so it needs a capital to stand alone.</summary>
+    private static string Capitalised(string reason)
+        => reason.Length == 0 ? reason : char.ToUpperInvariant(reason[0]) + reason[1..].TrimEnd('.');
 
     private static void Section(StringBuilder builder, string label, IReadOnlyList<string> items)
     {
@@ -135,6 +169,28 @@ public static class ConvergenceMeter
     /// <summary>The most contradiction can take off, so a single argument cannot zero the score.</summary>
     public const int MaximumPenalty = 60;
 
+    /// <summary>
+    /// How many distinct identifiers both positions have to mention between them before a share of
+    /// them means anything.
+    /// </summary>
+    /// <remarks>
+    /// Three, and the number comes from watching this fail rather than from taste. A six round
+    /// debate about whether to store inventory as ScriptableObjects or as JSON produced positions
+    /// of roughly five hundred words each, and the whole of every round scored on one identifier
+    /// that both sides happened to use. One out of one is a hundred percent, which carried seventy
+    /// percent of the weight, which is why a round where the two reached opposite conclusions read
+    /// as seventy percent converged.
+    ///
+    /// Below three, a share has no resolution: it can only be nothing, everything, or a half, and
+    /// which of those it lands on is decided by a single token. Three is the smallest union where
+    /// the answer has more values than the noise does.
+    ///
+    /// Identifiers alone hold this gate and intents cannot open it. Intents are thirteen coarse
+    /// buckets and were always the secondary signal; two positions agreeing only that they both
+    /// said "add" have not been measured against each other in any sense worth a number.
+    /// </remarks>
+    public const int MinimumDistinctIdentifiers = 3;
+
     /// <summary>What a sentence ends with, for deciding which verbs are about which name.</summary>
     private static readonly char[] SentenceEnds = { '.', '!', '?', ';', '\n', '\r' };
 
@@ -143,7 +199,9 @@ public static class ConvergenceMeter
         $"Identifiers are {IdentifierWeight * 100:0} percent of the score and verbs of intent "
         + $"{IntentWeight * 100:0} percent, both measured as the share of everything named that both "
         + $"sides named. Everything else counts for nothing. Each thing they both named but want "
-        + $"opposite things done to takes off {ContradictionPenalty}, up to {MaximumPenalty}.";
+        + $"opposite things done to takes off {ContradictionPenalty}, up to {MaximumPenalty}. "
+        + $"Below {MinimumDistinctIdentifiers} distinct identifiers named between the two positions "
+        + $"there is too little to compare and no score is given.";
 
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(2);
 
@@ -240,6 +298,24 @@ public static class ConvergenceMeter
 
         var contradictions = FindContradictions(first, second, firstIdentifiers, secondIdentifiers);
 
+        var named = new HashSet<string>(firstIdentifiers, StringComparer.OrdinalIgnoreCase);
+        named.UnionWith(secondIdentifiers);
+
+        if (named.Count < MinimumDistinctIdentifiers)
+        {
+            // Too little was named for a share of it to mean anything. Everything found is still
+            // reported, because the breakdown is what shows why there was nothing to go on.
+            return Describe(
+                null,
+                $"the two positions named {Count(named.Count, "identifier")} between them, and "
+                + $"{MinimumDistinctIdentifiers} are needed before a share of them says anything",
+                firstIdentifiers,
+                secondIdentifiers,
+                firstIntents,
+                secondIntents,
+                contradictions);
+        }
+
         // Whichever halves exist are renormalised over themselves, so a debate that named types and
         // proposed nothing is scored on what it did say rather than being halved for silence.
         var weight = (identifierShare is null ? 0d : IdentifierWeight) + (intentShare is null ? 0d : IntentWeight);
@@ -249,8 +325,28 @@ public static class ConvergenceMeter
         var penalty = Math.Min(MaximumPenalty, contradictions.Count * ContradictionPenalty);
         var score = Math.Clamp((int)Math.Round(raw * 100d) - penalty, 0, 100);
 
-        return new Convergence(
+        return Describe(
             score,
+            string.Empty,
+            firstIdentifiers,
+            secondIdentifiers,
+            firstIntents,
+            secondIntents,
+            contradictions);
+    }
+
+    /// <summary>Assembles the result, scored or not, with everything that was found either way.</summary>
+    private static Convergence Describe(
+        int? score,
+        string reason,
+        IReadOnlySet<string> firstIdentifiers,
+        IReadOnlySet<string> secondIdentifiers,
+        IReadOnlySet<string> firstIntents,
+        IReadOnlySet<string> secondIntents,
+        IReadOnlyList<Contradiction> contradictions)
+        => new(
+            score,
+            reason,
             Sorted(firstIdentifiers.Intersect(secondIdentifiers, StringComparer.OrdinalIgnoreCase)),
             Sorted(firstIdentifiers.Except(secondIdentifiers, StringComparer.OrdinalIgnoreCase)),
             Sorted(secondIdentifiers.Except(firstIdentifiers, StringComparer.OrdinalIgnoreCase)),
@@ -258,7 +354,9 @@ public static class ConvergenceMeter
             Sorted(firstIntents.Except(secondIntents, StringComparer.OrdinalIgnoreCase)),
             Sorted(secondIntents.Except(firstIntents, StringComparer.OrdinalIgnoreCase)),
             contradictions);
-    }
+
+    private static string Count(int value, string noun)
+        => value == 1 ? $"1 {noun}" : $"{value} {noun}s";
 
     /// <summary>How much of everything named by either side was named by both.</summary>
     private static double? Share(IReadOnlySet<string> first, IReadOnlySet<string> second)
@@ -355,6 +453,34 @@ public static class ConvergenceMeter
         return found;
     }
 
+    /// <summary>
+    /// One identifier written two ways is one identifier.
+    /// </summary>
+    /// <remarks>
+    /// The first round of the debate that prompted all of this counted ScriptableObject and
+    /// ScriptableObjects as two separate things, which moved the score on its own.
+    ///
+    /// Deliberately timid. It takes a single trailing s off a plain word and leaves everything else
+    /// alone, because the cost of being wrong here is silently merging two real identifiers.
+    /// Anything with a dot in it is a file name and keeps its extension; a word ending in a double
+    /// s, or in us, is, or os, is left as it is, so Class stays Class and Status stays Status.
+    /// </remarks>
+    private static string Singular(string identifier)
+    {
+        if (identifier.Length <= 3
+            || identifier.Contains('.', StringComparison.Ordinal)
+            || !identifier.EndsWith('s'))
+        {
+            return identifier;
+        }
+
+        var tail = identifier[^2..];
+
+        return tail is "ss" or "us" or "is" or "os"
+            ? identifier
+            : identifier[..^1];
+    }
+
     private static HashSet<string> ReadIdentifiers(string text)
     {
         var found = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -375,7 +501,7 @@ public static class ConvergenceMeter
                     // A backticked span can be a whole phrase. Only a single token is a name.
                     if (value.Length is > 1 and < 80 && !value.Contains(' ', StringComparison.Ordinal))
                     {
-                        found.Add(value);
+                        found.Add(Singular(value));
                     }
                 }
             }

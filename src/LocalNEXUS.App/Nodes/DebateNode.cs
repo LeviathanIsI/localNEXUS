@@ -256,7 +256,9 @@ public sealed partial class DebateNode : NodeBase
 
             if (resolved is { } verdict)
             {
-                    LastOutcome = $"Judged after {round} round(s) at {scored.Text}";
+                    LastOutcome = scored.IsMeasured
+                        ? $"Judged after {round} round(s) at {scored.Text}"
+                        : $"Judged after {round} round(s), never measurable";
                 StatusMessage = LastOutcome;
                 return NodeResult.FromPin(Brief, verdict);
             }
@@ -274,7 +276,9 @@ public sealed partial class DebateNode : NodeBase
 
         LastOutcome = converged
             ? $"Settled after {round} round(s) at {scored.Text}"
-            : $"Ran out after {round} round(s) at {scored.Text}, and went on anyway";
+            : scored.IsMeasured
+                ? $"Ran out after {round} round(s) at {scored.Text}, and went on anyway"
+                : $"Ran out after {round} round(s) without a measurable score, and went on anyway";
 
         StatusMessage = LastOutcome;
         ctx.Feed.Add(ActivityKind.NodeCompleted, $"{Title}: {LastOutcome}", brief, Id);
@@ -312,7 +316,7 @@ public sealed partial class DebateNode : NodeBase
         {
             ctx.Feed.Info(
                 $"{Title}: a judge is deciding",
-                $"The two positions are at {scored.Text} and {why}. "
+                $"The two positions are at {scored.Explanation} and {why}. "
                 + $"{((NodeBase)arbiter).Title} will {Describe(FallbackJudgeMode)}.");
 
             return await DebateJudge
@@ -321,7 +325,7 @@ public sealed partial class DebateNode : NodeBase
         }
 
         var question =
-            $"{Title} could not get its two models to agree. They are at {scored.Text} and {why}."
+            $"{Title} could not get its two models to agree. They are at {scored.Explanation} and {why}."
             + $"{Environment.NewLine}{Environment.NewLine}"
             + $"Say which way to go, or anything that would settle it, and the debate will take it as the "
             + $"deciding word. Proceed without answering and a judge will decide instead.";
@@ -463,8 +467,11 @@ public sealed partial class DebateNode : NodeBase
             : $"They put themselves at {Describe(firstSelf)} and {Describe(secondSelf)}.";
 
         ctx.Feed.Info(
-            $"{Title}: after round {round}, measured at {scored.Text}",
-            $"{selves} The measured number is what decides, and the threshold is {ConvergenceThreshold} percent."
+            $"{Title}: after round {round}, {(scored.IsMeasured ? $"measured at {scored.Text}" : "not measurable")}",
+            $"{selves} {(scored.IsMeasured
+                ? $"The measured number is what decides, and the threshold is {ConvergenceThreshold} percent."
+                : $"There was too little in common to judge: {scored.Reason}. Nothing settles on an "
+                  + "unmeasured round, and it is not being read as disagreement.")}"
             + $"{Environment.NewLine}{Environment.NewLine}{scored.Breakdown()}");
     }
 

@@ -14,8 +14,12 @@ namespace LocalNEXUS.Tests;
 /// counts for the rest, and filler counts for nothing.
 ///
 /// The cases here are the ones the weighting has to get right for the number to mean anything: the
-/// same content in different prose has to score high, and different content in similar prose has
-/// to score low. A meter that cannot tell those apart is measuring style.
+/// same content in different prose has to score high, different content in similar prose has to
+/// score low, and too little of either has to produce no number at all.
+///
+/// Every position below names at least three things, because that is now the floor beneath which
+/// nothing is scored. The older versions of these tests used one or two and were measuring a share
+/// of a sample too small to have one.
 /// </remarks>
 [Trait(Layers.Name, Layers.Deterministic)]
 public sealed class ConvergenceTests
@@ -23,7 +27,7 @@ public sealed class ConvergenceTests
     [Fact]
     public void IdenticalPositionsScoreTop()
     {
-        const string position = "Put stacking on InventorySlot. Health should implement IDamageable.";
+        const string position = "Put stacking on InventorySlot. HealthBar reads from ItemStack.";
 
         var measured = ConvergenceMeter.Measure(position, position);
 
@@ -42,8 +46,8 @@ public sealed class ConvergenceTests
     public void TheSameProposalInDifferentProseScoresHigh()
     {
         var measured = ConvergenceMeter.Measure(
-            "I would add stacking to InventorySlot, and have Health implement IDamageable.",
-            "Stacking belongs on InventorySlot. Health should implement IDamageable as well.");
+            "I would add stacking to InventorySlot, and have HealthBar read from ItemStack.",
+            "Stacking belongs on InventorySlot. HealthBar should read ItemStack as well.");
 
         Assert.NotNull(measured.Score);
         Assert.True(measured.Score >= 60, $"scored {measured.Score}: {measured.Breakdown()}");
@@ -55,8 +59,8 @@ public sealed class ConvergenceTests
     public void DifferentProposalsInSimilarProseScoreLow()
     {
         var measured = ConvergenceMeter.Measure(
-            "I would add stacking to InventorySlot and have Health implement IDamageable.",
-            "I would add pooling to ProjectileSpawner and have Weapon implement IReloadable.");
+            "I would add stacking to InventorySlot and have HealthBar read ItemStack.",
+            "I would add pooling to ProjectileSpawner and have WeaponSlot read DamageType.");
 
         Assert.NotNull(measured.Score);
         Assert.True(measured.Score <= 30, $"scored {measured.Score}: {measured.Breakdown()}");
@@ -73,13 +77,14 @@ public sealed class ConvergenceTests
     public void OppositeIntentionsAboutTheSameThingArePenalised()
     {
         var agreeing = ConvergenceMeter.Measure(
-            "Add stacking to InventorySlot.",
-            "Add stacking to InventorySlot.");
+            "Add stacking to InventorySlot. Keep HealthBar and ItemStack as they are.",
+            "Add stacking to InventorySlot. Keep HealthBar and ItemStack as they are.");
 
         var opposed = ConvergenceMeter.Measure(
-            "Add stacking to InventorySlot.",
-            "Remove stacking from InventorySlot.");
+            "Add stacking to InventorySlot. Keep HealthBar and ItemStack as they are.",
+            "Remove stacking from InventorySlot. Keep HealthBar and ItemStack as they are.");
 
+        Assert.NotNull(agreeing.Score);
         Assert.NotNull(opposed.Score);
         Assert.True(opposed.Score < agreeing.Score, $"opposed {opposed.Score} against agreeing {agreeing.Score}");
     }
@@ -96,8 +101,8 @@ public sealed class ConvergenceTests
     public void AVerbDoesNotReachIntoTheNextSentence()
     {
         var measured = ConvergenceMeter.Measure(
-            "Add stacking to InventorySlot. Do not remove Health.",
-            "Add stacking to InventorySlot. Do not remove Health.");
+            "Add stacking to InventorySlot. Do not remove HealthBar or ItemStack.",
+            "Add stacking to InventorySlot. Do not remove HealthBar or ItemStack.");
 
         Assert.Empty(measured.Contradictions);
         Assert.Equal(100, measured.Score);
@@ -121,8 +126,8 @@ public sealed class ConvergenceTests
     [Fact]
     public void TheOrderOfTheTwoDoesNotMatter()
     {
-        const string a = "Add stacking to InventorySlot and pooling to ProjectileSpawner.";
-        const string b = "Add pooling to ProjectileSpawner. Leave InventorySlot alone.";
+        const string a = "Add stacking to InventorySlot, pooling to ProjectileSpawner, and read ItemStack.";
+        const string b = "Add pooling to ProjectileSpawner. Leave InventorySlot and WeaponSlot alone.";
 
         Assert.Equal(ConvergenceMeter.Measure(a, b).Score, ConvergenceMeter.Measure(b, a).Score);
     }
@@ -138,8 +143,8 @@ public sealed class ConvergenceTests
     public void TheBreakdownNamesWhatItCounted()
     {
         var measured = ConvergenceMeter.Measure(
-            "Add stacking to InventorySlot.",
-            "Add pooling to ProjectileSpawner.");
+            "Add stacking to InventorySlot, and leave HealthBar alone.",
+            "Add pooling to ProjectileSpawner, and rewrite WeaponSlot.");
 
         var breakdown = measured.Breakdown();
 
@@ -164,8 +169,8 @@ public sealed class ConvergenceTests
         Assert.True(ConvergenceMeter.MaximumPenalty >= ConvergenceMeter.ContradictionPenalty);
 
         var measured = ConvergenceMeter.Measure(
-            "Add stacking to InventorySlot. Add pooling to Spawner. Add reloading to Weapon. Add saving to Inventory.",
-            "Remove stacking from InventorySlot. Remove pooling from Spawner. Remove reloading from Weapon. Remove saving from Inventory.");
+            "Add stacking to InventorySlot. Add pooling to ProjectileSpawner. Add reloading to WeaponSlot. Add saving to ItemStack.",
+            "Remove stacking from InventorySlot. Remove pooling from ProjectileSpawner. Remove reloading from WeaponSlot. Remove saving from ItemStack.");
 
         Assert.NotNull(measured.Score);
         Assert.InRange(measured.Score!.Value, 0, 100);
@@ -173,7 +178,7 @@ public sealed class ConvergenceTests
 
     /// <summary>A score is always a percentage, whatever went in.</summary>
     [Theory]
-    [InlineData("Add stacking to InventorySlot.", "Remove everything from InventorySlot and delete Health.")]
+    [InlineData("Add stacking to InventorySlot and HealthBar.", "Remove everything from InventorySlot, HealthBar and ItemStack.")]
     [InlineData("InventorySlot InventorySlot InventorySlot", "InventorySlot")]
     [InlineData("Add Add Add stacking", "Add stacking")]
     public void AScoreIsAlwaysAPercentage(string first, string second)
@@ -184,5 +189,114 @@ public sealed class ConvergenceTests
         {
             Assert.InRange(value, 0, 100);
         }
+    }
+
+    /// <summary>
+    /// Two positions with almost nothing named in common are not scored at all.
+    /// </summary>
+    /// <remarks>
+    /// The finding this exists for, taken from a real debate. Six rounds of roughly five hundred
+    /// words each about whether to store inventory as ScriptableObjects or as JSON, and the whole
+    /// of every round scored on the one identifier both sides happened to use. One out of one is a
+    /// hundred percent, which carried seventy percent of the weight, which is how a round where the
+    /// two reached opposite conclusions came out at seventy percent converged.
+    /// </remarks>
+    [Fact]
+    public void OneSharedIdentifierIsNotAMeasurement()
+    {
+        var measured = ConvergenceMeter.Measure(
+            "ScriptableObjects give us editor authoring, validation in the inspector, and a workflow "
+            + "the designers already understand, which matters more than the loading cost.",
+            "ScriptableObjects are awkward to merge and hard to diff, so the loading cost is worth "
+            + "paying for something a person can read and edit outside the editor.");
+
+        Assert.False(measured.IsMeasured);
+        Assert.Null(measured.Score);
+        Assert.Equal("not measurable", measured.Text);
+        Assert.False(string.IsNullOrWhiteSpace(measured.Reason));
+    }
+
+    /// <summary>
+    /// Not measurable is not nought, and nothing may read it as disagreement.
+    /// </summary>
+    /// <remarks>
+    /// A thing that could not be determined is not a thing that failed. The gate that stops a
+    /// debate is a measured score at or above the threshold, so an unmeasured round cannot settle
+    /// one and cannot fail one either: it falls through to the round cap and the clock.
+    /// </remarks>
+    [Fact]
+    public void NotMeasurableIsNotZero()
+    {
+        var measured = ConvergenceMeter.Measure(
+            "ScriptableObjects are the better answer here for authoring reasons.",
+            "ScriptableObjects are the wrong answer here for merging reasons.");
+
+        Assert.False(measured.IsMeasured);
+        Assert.Null(measured.Score);
+
+        // And it says as much where a person will read it.
+        Assert.Contains("not measurable", measured.Explanation, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("not a low score", measured.Breakdown(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Enough named between them, and it scores as it always did.</summary>
+    [Fact]
+    public void EnoughSharedMaterialStillScores()
+    {
+        var measured = ConvergenceMeter.Measure(
+            "Put stacking on InventorySlot, keep HealthBar, and leave ItemStack alone.",
+            "Put stacking on InventorySlot, keep HealthBar, and leave ItemStack alone.");
+
+        Assert.True(measured.IsMeasured);
+        Assert.Equal(100, measured.Score);
+        Assert.Equal(string.Empty, measured.Reason);
+    }
+
+    /// <summary>The threshold is three, and it is stated where the score is explained.</summary>
+    [Fact]
+    public void TheThresholdIsStated()
+    {
+        Assert.Equal(3, ConvergenceMeter.MinimumDistinctIdentifiers);
+        Assert.Contains("3 distinct identifiers", ConvergenceMeter.WeightingSummary, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// One identifier written two ways is one identifier.
+    /// </summary>
+    /// <remarks>
+    /// Round one of the same debate counted ScriptableObject and ScriptableObjects separately,
+    /// which moved the score on its own before anything else went wrong.
+    /// </remarks>
+    [Fact]
+    public void SingularAndPluralAreTheSameIdentifier()
+    {
+        var measured = ConvergenceMeter.Measure(
+            "Use ScriptableObject for items, keep HealthBar, and leave ItemStack alone.",
+            "Use ScriptableObjects for items, keep HealthBar, and leave ItemStack alone.");
+
+        Assert.True(measured.IsMeasured);
+        Assert.Equal(100, measured.Score);
+
+        // One entry, not two, and neither side has one the other lacks.
+        Assert.Contains("ScriptableObject", measured.SharedIdentifiers);
+        Assert.Empty(measured.FirstOnlyIdentifiers);
+        Assert.Empty(measured.SecondOnlyIdentifiers);
+    }
+
+    /// <summary>A word whose ending merely looks plural is left alone.</summary>
+    /// <remarks>
+    /// The normalisation is deliberately timid, because merging two identifiers that are genuinely
+    /// different is worse than missing that two are the same.
+    /// </remarks>
+    [Theory]
+    [InlineData("ItemClass")]
+    [InlineData("GameStatus")]
+    public void AWordThatMerelyEndsInSIsNotAPlural(string identifier)
+    {
+        var measured = ConvergenceMeter.Measure(
+            $"Keep {identifier}, keep HealthBar, and leave ItemStack alone.",
+            $"Keep {identifier}, keep HealthBar, and leave ItemStack alone.");
+
+        Assert.Contains(identifier, measured.SharedIdentifiers);
     }
 }

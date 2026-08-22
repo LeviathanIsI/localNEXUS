@@ -51,8 +51,11 @@ public sealed class DebateTests
         using var services = TestServices.Create();
         var (graph, node, first, second) = Wire();
 
-        const string position = "InventorySlot should hold an ItemId and a Count. "
-            + "Stacking belongs on InventorySlot. Serialization stays out of it.";
+        // Three named things, which is the floor beneath which the meter reports nothing rather
+        // than a number. Two identical positions below it never settle, which is correct and is
+        // not what this test is about.
+        const string position = "InventorySlot should hold an ItemId. "
+            + "Stacking belongs on InventorySlot. ItemStack stays out of it.";
 
         first.ThenAlways(position);
         second.ThenAlways(position);
@@ -96,8 +99,8 @@ public sealed class DebateTests
         using var services = TestServices.Create();
         var (graph, node, first, second) = Wire(threshold: 0);
 
-        first.ThenAlways("InventorySlot should be a struct and stacking belongs on it.");
-        second.ThenAlways("Weapon should be a ScriptableObject and pooling matters most.");
+        first.ThenAlways("InventorySlot should be a struct and ItemStack belongs on it.");
+        second.ThenAlways("WeaponSlot should be a ScriptableObject and ProjectileSpawner matters most.");
 
         await Run(services, graph);
 
