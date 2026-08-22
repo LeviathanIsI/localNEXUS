@@ -59,6 +59,19 @@ if (options.DebateOnly)
 
 var tasks = TaskSet.Select(options.Tasks);
 
+if (options.DiagnoseOnly)
+{
+    using var planner = new PlannerProbe(options);
+
+    await planner.RunAsync(
+        models[0],
+        tasks,
+        Path.Combine(options.OutputDirectory, "planner-diagnosis.md"),
+        CancellationToken.None);
+
+    return 0;
+}
+
 if (tasks.Count == 0)
 {
     Console.Error.WriteLine("No task matched. Known tasks: " + string.Join(", ", TaskSet.Tasks.Select(t => t.Id)));

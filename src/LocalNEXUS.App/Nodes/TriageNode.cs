@@ -196,8 +196,20 @@ public sealed partial class TriageNode : NodeBase
 
         if (plan.Tasks.Count == 0)
         {
+            // Three quite different things end here and they used to read the same. Nothing
+            // parsed at all is a reply in the wrong shape; rows that parsed and were all refused
+            // is the guard doing its job; and a plan of nothing is the model declining. Saying
+            // which turns a dead end into something somebody can act on.
+            var why = parsed.Rows.Count == 0
+                ? "Nothing in the reply parsed as a plan row. Each row needs five columns separated by pipes."
+                : plan.Blocked.Count > 0
+                    ? $"All {parsed.Rows.Count} planned row(s) were refused: "
+                      + string.Join("; ", plan.Blocked.Select(b => b.Message))
+                    : $"{parsed.Rows.Count} row(s) parsed and none survived.";
+
             throw new InvalidOperationException(
-                $"{Title} produced no files to write. The planner replied:{Environment.NewLine}{reply}");
+                $"{Title} produced no files to write. {why}{Environment.NewLine}{Environment.NewLine}"
+                + $"The planner replied:{Environment.NewLine}{reply}");
         }
 
         StatusMessage = plan.Summary;

@@ -59,6 +59,15 @@ public sealed class EvalOptions
     /// </remarks>
     public bool DebateOnly { get; init; }
 
+    /// <summary>
+    /// Print what the planner replies for the named tasks, instead of scoring anything.
+    /// </summary>
+    /// <remarks>
+    /// A task that fails every time fails for a reason, and Triage parses the reply and discards
+    /// it, so the reason is nowhere. This puts it somewhere.
+    /// </remarks>
+    public bool DiagnoseOnly { get; init; }
+
     /// <summary>Everything the models folder holds, in a stable order.</summary>
     public static IReadOnlyList<string> DiscoverModels()
     {
@@ -132,6 +141,7 @@ public sealed class EvalOptions
         var temperature = 0.2d;
         var retries = 2;
         var debate = false;
+        var diagnose = false;
 
         for (var i = 0; i < args.Length; i++)
         {
@@ -188,6 +198,10 @@ public sealed class EvalOptions
                     debate = true;
                     break;
 
+                case "--diagnose":
+                    diagnose = true;
+                    break;
+
                 default:
                     options = new EvalOptions();
                     error = $"Unrecognised argument '{name}'.";
@@ -206,7 +220,8 @@ public sealed class EvalOptions
             MaxTokens = maxTokens,
             Temperature = temperature,
             RetryLimit = retries,
-            DebateOnly = debate
+            DebateOnly = debate,
+            DiagnoseOnly = diagnose
         };
 
         error = null;
@@ -234,6 +249,9 @@ public sealed class EvalOptions
           --max-tokens <n>    Ceiling on one reply.
           --temperature <n>   Sampling temperature for the coder.
           --retries <n>       How many times the compiler check may ask for a fix.
+          --diagnose          Print what the planner replies for the selected tasks, and what
+                              each parser makes of it. Scores nothing and writes nothing into a
+                              project. Use with --tasks.
           --debate            Run one debate and one judgement and print the transcript,
                               instead of the task set. Nothing is scored and nothing is
                               written into a project; the output is something to read.

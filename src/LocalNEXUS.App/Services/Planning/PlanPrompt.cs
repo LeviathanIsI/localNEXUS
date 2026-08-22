@@ -47,13 +47,26 @@ public static class PlanPrompt
         builder.AppendLine();
         builder.AppendLine("Answer in exactly two sections.");
         builder.AppendLine();
+        // Both formats carry a filled in example, because without one they are three columns and
+        // five columns of similar looking words and a model merges them. Asked to rename a class,
+        // it replied with a single DECISIONS row whose reason column was the literal text
+        // "path | main type name | what this file is for", and no PLAN section at all. Triage then
+        // reported an empty plan and said nothing about why, ten times out of ten.
         builder.AppendLine("DECISIONS");
-        builder.AppendLine("One row per file listed above that is relevant, in this format:");
+        builder.AppendLine("One row per file listed above that is relevant, with exactly three columns:");
         builder.AppendLine("path | USE_AS_IS or EDIT or CREATE_NEW_REFERENCING <TypeName> or IGNORE | why");
         builder.AppendLine();
+        builder.AppendLine("For example:");
+        builder.AppendLine("Assets/Scripts/Health.cs | EDIT | the healing cap belongs on this type");
+        builder.AppendLine();
         builder.AppendLine("PLAN");
-        builder.AppendLine("One row per file to write, in the order they must be written, in this format:");
+        builder.AppendLine("One row per file to write, in the order they must be written, with exactly five columns:");
         builder.AppendLine("order | CREATE or EDIT | path | main type name | what this file is for");
+        builder.AppendLine();
+        builder.AppendLine("For example:");
+        builder.AppendLine("1 | EDIT | Assets/Scripts/Health.cs | Health | add a maximum and stop healing past it");
+        builder.AppendLine();
+        builder.AppendLine("Fill every column in with the real value. Do not repeat the column names back.");
         builder.AppendLine();
         builder.AppendLine("Rules.");
         builder.AppendLine("Order the plan by dependency: interfaces and data types first, then what implements them, then what uses them.");

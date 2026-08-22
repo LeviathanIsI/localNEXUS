@@ -305,7 +305,7 @@ public sealed class EvalHarness : IDisposable
             task.Shape,
             attempt,
             fault is not null || run?.State == RunState.Faulted,
-            fault ?? FaultFromFeed(),
+            fault ?? FaultFromRun(run),
             run?.State.ToString() ?? "NeverStarted",
             plan.Count,
             plan.Select(t => t.ToString()).ToList(),
@@ -421,8 +421,27 @@ public sealed class EvalHarness : IDisposable
     private static string Normalise(string path) => path.Replace('\\', '/').Trim();
 
 
-    private string? FaultFromFeed()
-        => _feed.Events.LastOrDefault(e => e.Kind is ActivityKind.Error or ActivityKind.NodeFaulted)?.Title;
+    /// <summary>
+    /// Why a run stopped, in enough words to act on.
+    /// </summary>
+    /// <remarks>
+    /// This used to read the title of the last error entry, which for a node fault is the node's
+    /// name and nothing else, so every one of thirteen faults in two hundred runs was reported as
+    /// the single word "Triage". The run itself carries the detail; it just was not being asked.
+    /// </remarks>
+    private string? FaultFromRun(RunContext? run)
+    {
+        if (run?.FaultMessage is { Length: > 0 } message)
+        {
+            return message;
+        }
+
+        var entry = _feed.Events.LastOrDefault(e => e.Kind is ActivityKind.Error or ActivityKind.NodeFaulted);
+
+        return entry is null
+            ? null
+            : string.IsNullOrWhiteSpace(entry.Text) ? entry.Title : $"{entry.Title}: {entry.Text}";
+    }
 
     private RunConditions DescribeConditions(string modelPath)
     {
