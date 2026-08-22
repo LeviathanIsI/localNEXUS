@@ -22,6 +22,53 @@ public static class GraphTopology
     }
 
     /// <summary>Produces an execution order for the graph, or reports the nodes involved in a cycle.</summary>
+    /// <summary>
+    /// True when everything this node is wired to wants it rather than what it produces.
+    /// </summary>
+    /// <remarks>
+    /// The other half of the rule the sort below already follows, and the half that was missed. A
+    /// model wire carries a reference to a configured model, so the consumer needs the model to
+    /// exist rather than to have run. The sort stopped counting those as dependencies in v1.16,
+    /// which fixed the ordering, and the node was still executed anyway. A model handed to a debate
+    /// has nothing on its own prompt pin, because being handed over is the whole of its job, so it
+    /// threw and the run stopped before a word was exchanged.
+    ///
+    /// The question is about outgoing use, not about the node. A model wired to a debate on its
+    /// Model pin and to a file writer on its Code pin is both a configuration and a step, and it
+    /// runs, because something downstream is waiting on what it says. Only a node whose every
+    /// outgoing wire is a reference is not a step.
+    ///
+    /// A node wired to nothing at all is left alone and still runs. Whether an unconnected node
+    /// should execute is a different question with a different answer, and it is not this one.
+    ///
+    /// Like the sort, this reasons about a pin type and never about a node type. Nothing here can
+    /// tell a model node from anything else, and the executor above it still cannot either.
+    /// </remarks>
+    public static bool IsReferenceOnly(GraphModel graph, NodeBase node)
+    {
+        ArgumentNullException.ThrowIfNull(graph);
+        ArgumentNullException.ThrowIfNull(node);
+
+        var wired = false;
+
+        foreach (var connection in graph.Connections)
+        {
+            if (connection.Source.Owner != node)
+            {
+                continue;
+            }
+
+            if (connection.Source.PinType != PinType.Model)
+            {
+                return false;
+            }
+
+            wired = true;
+        }
+
+        return wired;
+    }
+
     public static SortResult Sort(GraphModel graph)
     {
         ArgumentNullException.ThrowIfNull(graph);

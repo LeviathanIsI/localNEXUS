@@ -101,6 +101,14 @@ public sealed class GraphExecutor
 
         foreach (var node in sort.Ordered)
         {
+            // Something the graph reads rather than something it does. Asked of the topology,
+            // which answers from pin types, so this still knows nothing about what any node is.
+            if (GraphTopology.IsReferenceOnly(run.Graph, node))
+            {
+                node.StatusMessage = "Read as configuration by another node. Nothing ran here.";
+                continue;
+            }
+
             try
             {
                 await run.WaitWhilePausedAsync(ct).ConfigureAwait(false);

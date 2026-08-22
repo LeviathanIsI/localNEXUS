@@ -98,3 +98,12 @@ Fixed: the history file header drift, because it made the night's data unreadabl
 
 Not fixed, deliberately: everything else. Ten defects, all in the report with enough detail to act
 on, in a suggested order.
+
+## Afterwards: D2 fixed in v1.28
+
+The reference only model node is fixed and the workaround is out of the probe. A debate now runs
+end to end from a graph wired the way the Model pin was introduced for. The transcript in the
+appendix of the report is the one taken with the workaround in place; the run without it settled
+after one round at 80 percent, which is sampling rather than anything the fix changed.
+
+Everything else in the report stands unfixed.

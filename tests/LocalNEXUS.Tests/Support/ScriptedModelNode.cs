@@ -28,12 +28,24 @@ public sealed class ScriptedModelNode : NodeBase, IModelHandle
         : base(title)
     {
         Self = AddOutput("Model", PinType.Model);
+
+        // Appended after Self, never before it, because a saved graph matches pins by name and
+        // falls back to position. Present so a test can wire this node as something other than a
+        // reference, which is the difference between a node that is only configuration and a node
+        // that is also a step.
+        Reply = AddOutput("Reply", PinType.Text);
     }
 
     public override string TypeKey => "TestScriptedModel";
 
     /// <summary>The pin a consumer wires itself to.</summary>
     public Pin Self { get; }
+
+    /// <summary>An ordinary output, so this node can be wired as a step as well as a reference.</summary>
+    public Pin Reply { get; }
+
+    /// <summary>True once the run has executed this node as a step.</summary>
+    public bool Executed { get; private set; }
 
     /// <summary>Set to have the handle report that it cannot answer.</summary>
     public string? Unavailable { get; set; }
@@ -76,9 +88,12 @@ public sealed class ScriptedModelNode : NodeBase, IModelHandle
         return Task.FromResult(_replies.Count > 0 ? _replies.Dequeue() : _whenEmpty);
     }
 
-    /// <summary>A model node is a reference, so it produces nothing when the run reaches it.</summary>
+    /// <summary>Records that the run treated this as a step, and says something on its own pin.</summary>
     public override Task<NodeResult> ExecuteAsync(NodeExecutionContext ctx, CancellationToken ct)
-        => Task.FromResult(NodeResult.Empty);
+    {
+        Executed = true;
+        return Task.FromResult(NodeResult.FromPin(Reply, "ran"));
+    }
 
     public override JsonObject SaveSettings() => new();
 
