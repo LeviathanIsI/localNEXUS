@@ -54,6 +54,7 @@ public partial class App : Application
     private ViewModels.MainViewModel? _mainViewModel;
     private Services.History.RunHistoryStore? _history;
     private Services.Dialogs.IHistoryWindow? _historyWindow;
+    private Services.Mcp.McpBridgeServer? _mcp;
     private Services.History.ConversationService? _conversation;
 
     protected override void OnStartup(StartupEventArgs e)
@@ -277,6 +278,35 @@ public partial class App : Application
             history,
             historyWindow,
             services.Breakpoints);
+
+        // The MCP server, if this installation answers to other tools. Built whatever the setting
+        // says so the toggle has something to start, and started only when it is on.
+        var mcp = new Services.Mcp.McpBridgeServer(
+            new Services.Mcp.McpToolSurface(new Services.Mcp.McpAppSurface(
+                Dispatcher,
+                project,
+                projectIndex,
+                graph,
+                mainViewModel,
+                feedViewModel,
+                history,
+                (path, token) =>
+                {
+                    project.Open(path);
+                    config.LastProjectPath = project.ProjectPath;
+                    config.Save();
+
+                    return IndexProjectAsync(projectIndex, project.ProjectPath, feed, token);
+                })),
+            feed);
+
+        _mcp = mcp;
+        settingsViewModel.UseMcpServer(mcp);
+
+        if (config.McpServerEnabled)
+        {
+            mcp.Start();
+        }
 
         ReportEnvironment(feed, catalog);
 

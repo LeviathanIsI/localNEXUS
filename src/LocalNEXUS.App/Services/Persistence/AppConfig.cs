@@ -166,6 +166,21 @@ public sealed class AppConfig
     /// <summary>Port the mesh node's management API answers on.</summary>
     public int MeshConsolePort { get; set; } = 3131;
 
+    /// <summary>
+    /// True when this installation answers MCP tool calls from other tools.
+    /// </summary>
+    /// <remarks>
+    /// Off by default, and that is a decision rather than caution. With it on, anything on this
+    /// account that can start a process can open a project, open a graph and run it, and a run
+    /// writes files and spends whatever a cloud model costs. That is a different security posture
+    /// from an application that only does what the person in front of it asks for, and it is the
+    /// sort of difference somebody should choose rather than discover.
+    ///
+    /// The server is a local named pipe and never a socket, so switching it on is not a network
+    /// exposure. What it is is a second way in.
+    /// </remarks>
+    public bool McpServerEnabled { get; set; }
+
     /// <summary>True once somebody has closed the walkthrough, so it stops opening itself.</summary>
     /// <remarks>
     /// Dismissal and not completion. Somebody who works through every step never has to press

@@ -177,6 +177,48 @@ public sealed partial class AppSettingsViewModel : ObservableObject
     /// <summary>Points this panel at the record, which App owns.</summary>
     public void UseHistory(Services.History.RunHistoryStore history) => History = history;
 
+    private Services.Mcp.McpBridgeServer? _mcp;
+
+    /// <summary>Points this panel at the MCP server, which App owns.</summary>
+    public void UseMcpServer(Services.Mcp.McpBridgeServer server)
+    {
+        _mcp = server;
+        OnPropertyChanged(nameof(McpServerEnabled));
+        OnPropertyChanged(nameof(McpServerStatus));
+    }
+
+    /// <summary>
+    /// Whether this installation answers MCP tool calls from other tools.
+    /// </summary>
+    /// <remarks>
+    /// Off unless somebody turns it on. With it on, anything on this account that can start a
+    /// process can open a project, open a graph and run it, and a run writes files and spends
+    /// whatever a cloud model costs.
+    /// </remarks>
+    public bool McpServerEnabled
+    {
+        get => _config.McpServerEnabled;
+        set
+        {
+            SetConfig(value, v => _config.McpServerEnabled = v, nameof(McpServerStatus));
+
+            if (value)
+            {
+                _mcp?.Start();
+            }
+            else
+            {
+                _mcp?.Stop();
+            }
+        }
+    }
+
+    /// <summary>What to say under the switch.</summary>
+    public string McpServerStatus => _config.McpServerEnabled
+        ? $"Answering on the local pipe {Services.Mcp.McpBridge.PipeName}. Point an MCP client at "
+          + "LocalNEXUS.Mcp.exe beside the application."
+        : "Not answering. Other tools cannot drive this installation.";
+
     /// <summary>Where cloud requests go by default. Blank uses whatever the provider defaults to.</summary>
     public string CloudBaseUrl
     {

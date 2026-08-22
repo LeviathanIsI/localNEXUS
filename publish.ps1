@@ -25,6 +25,26 @@ if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
 
+# The MCP host, beside the application, because that is where an MCP client is pointed. Its own
+# publish rather than a copy of a build output: it is a plain net8.0 console executable and has to
+# be self contained for the same reason the application is, which is that whoever is handed dist/
+# has no .NET install.
+$mcpProject = Join-Path $root 'src\LocalNEXUS.Mcp\LocalNEXUS.Mcp.csproj'
+
+Write-Host "Publishing the MCP host"
+
+dotnet publish $mcpProject `
+    --configuration Release `
+    --runtime win-x64 `
+    --self-contained true `
+    -p:PublishSingleFile=true `
+    --output $dist
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "publishing the MCP host failed with exit code $LASTEXITCODE"
+    exit $LASTEXITCODE
+}
+
 $llamaSource = Join-Path $root 'vendor\llama'
 $llamaTarget = Join-Path $dist 'vendor\llama'
 

@@ -556,6 +556,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             Document.MarkSaved(null);
             _cascadeIndex = 0;
 
+            // After marking it saved, not before. Marking a document saved is also what names it,
+            // and with no path it names it untitled, so a template applied and then marked came out
+            // called untitled however carefully the template had named it. The history records the
+            // graph a run ran, so this was every template run filed under the same name.
+            Graph.Name = template.Name;
+
             _feed.Info(
                 $"Started from {template.Name}",
                 template.Description + " Choose a model on each Model node, then type a request.");

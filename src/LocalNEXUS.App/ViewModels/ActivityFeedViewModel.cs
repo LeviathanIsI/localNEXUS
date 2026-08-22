@@ -48,6 +48,17 @@ public sealed partial class ActivityFeedViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(PauseButtonText))]
     private RunState _runState = RunState.Idle;
 
+    /// <summary>
+    /// The run in progress, or the most recent one, as the history files it.
+    /// </summary>
+    /// <remarks>
+    /// Held so that something outside this class can ask what to read afterwards. It used to be a
+    /// local of the run method, which is all it needed to be until a caller who is not standing at
+    /// the window wanted the answer.
+    /// </remarks>
+    [ObservableProperty]
+    private string? _currentRunId;
+
     public ActivityFeedViewModel(GraphExecutor executor, GraphModel graph, ActivityFeed feed)
         : this(executor, graph, feed, Dispatcher.CurrentDispatcher)
     {
@@ -240,6 +251,7 @@ public sealed partial class ActivityFeedViewModel : ObservableObject
         // recorded as the request is what the person actually typed, not the assembled prompt:
         // the history list is a list of things somebody asked for.
         var runId = _recorder?.BeginRun(typed, _graph.Name, _graph.Nodes.Count, _graph.Connections.Count);
+        CurrentRunId = runId;
 
         // Said before the context is assembled, because the assembly reads the thread and this
         // message is the newest thing in it.

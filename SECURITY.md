@@ -34,6 +34,29 @@ is not a sandbox and was never meant to be one.
 you is running a program they sent you. There is no warning in the interface about this, which
 is itself worth fixing.
 
+**LocalNEXUS can answer to other tools, and it is off until you switch it on.** With
+"Answer MCP tool calls" enabled in Settings, `LocalNEXUS.Mcp.exe` beside the application speaks
+the Model Context Protocol over stdin and stdout and relays each call to the running window over
+a local named pipe.
+
+What a caller can then cause is the whole of the paragraph above this one. It can open any folder
+on your account as the project, open any saved graph or shipped template, and run it. A run writes
+files into the open project, spends whatever a cloud model on that graph costs, and, if the graph
+has a Reshape node in script mode, compiles and runs C# from that graph file in this process. That
+is the same thing a person pressing Run causes, deliberately: the tool call goes through the same
+command the button does. The difference is who pressed it.
+
+It is stdio and a named pipe, never a socket and never a port, so switching it on is not a network
+exposure. The pipe is created for the current user only and is named for the account, so another
+account on the same machine cannot reach it. What it is is a second way in, for anything on your
+account that can start a process, which is why it is off by default and why turning it on is a
+choice rather than a default.
+
+The tool surface is a fixed list of seven and cannot be extended at runtime. There is no tool that
+writes a file: the graph's Output node writes, inside the project folder and through the same write
+rules, and that is the only path. There is no tool that reads a credential, and the interface the
+tools reach the application through has no method that could.
+
 **Installing an extension is running a program somebody else wrote.** An extension is a
 process started with your privileges. It is out of process, so it cannot corrupt this
 application's memory or crash it, and it is held in a job object so it cannot outlive it. That

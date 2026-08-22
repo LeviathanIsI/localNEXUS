@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The stdio end of the MCP server. A console executable and deliberately not the application:
+    MCP speaks over stdin and stdout, and the thing that has a project open, a graph on a canvas
+    and a model server warm is a window. So this owns nothing and relays every call to the running
+    instance over a named pipe.
+
+    Plain net8.0 rather than net8.0-windows, and no reference to the application, so that a process
+    whose whole job is to read a line of JSON does not carry WPF with it.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>LocalNEXUS.Mcp</AssemblyName>
+    <RootNamespace>LocalNEXUS.Mcp</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ModelContextProtocol.Core" Version="2.2.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Linked rather than referenced. Both ends have to agree exactly about the pipe name and the
+      two records that cross it, and the alternative to one source file compiled twice is two
+      copies that drift.
+    -->
+    <Compile Include="..\LocalNEXUS.App\Services\Mcp\McpBridgeContract.cs" Link="McpBridgeContract.cs" />
+    <Compile Include="..\LocalNEXUS.App\Services\Mcp\McpBridgeClient.cs" Link="McpBridgeClient.cs" />
+    <Compile Include="..\LocalNEXUS.App\Services\Mcp\McpToolSurface.cs" Link="McpToolSurface.cs" />
+    <Compile Include="..\LocalNEXUS.App\Services\Mcp\IMcpAppSurface.cs" Link="IMcpAppSurface.cs" />
+  </ItemGroup>
+
+</Project>

@@ -416,6 +416,24 @@
                 <StackPanel Visibility="{Binding Section, Converter={StaticResource EnumToVisibility}, ConverterParameter=Unity}">
                     <TextBlock Style="{StaticResource SectionHeader}" FontSize="{StaticResource Font.Size.Title}" Text="Unity" />
 
+                    <!--
+                        The one setting that changes what this installation will do when nobody is
+                        at the window, so it says what that means rather than only what it is
+                        called.
+                    -->
+                    <TextBlock Style="{StaticResource FieldLabel}" Text="Answer MCP tool calls" />
+                    <CheckBox Margin="0,2,0,0"
+                              IsChecked="{Binding McpServerEnabled}"
+                              Content="Let other tools open a project, open a graph and run it" />
+                    <TextBlock Style="{StaticResource HintText}"
+                               Margin="0,4,0,0"
+                               TextWrapping="Wrap"
+                               Text="{Binding McpServerStatus}" />
+                    <TextBlock Style="{StaticResource HintText}"
+                               Margin="0,4,0,14"
+                               TextWrapping="Wrap"
+                               Text="A local pipe, never a network port. A caller can run a graph, which writes files into the open project through the same rules a person's run goes through. It cannot write a file any other way and cannot read a stored key." />
+
                     <TextBlock Style="{StaticResource FieldLabel}" Text="Open project" />
                     <TextBlock Text="{Binding Index.IndexedProject, TargetNullValue=No project is open.}" />
                     <TextBlock Style="{StaticResource HintText}" Text="Change it from File, Open project." />
