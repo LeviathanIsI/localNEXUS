@@ -104,7 +104,8 @@ public static class SourceFileParser
             baseTypes,
             members,
             isPartial,
-            line);
+            line,
+            ContainingTypesOf(declaration));
     }
 
     private static IndexedTypeKind KindOf(BaseTypeDeclarationSyntax declaration, IReadOnlyList<string> baseTypes)
@@ -286,21 +287,53 @@ public static class SourceFileParser
         return string.Join(' ', property.AccessorList.Accessors.Select(a => a.Keyword.ValueText + ";"));
     }
 
+    /// <summary>
+    /// Every namespace this sits inside, outermost first.
+    /// </summary>
+    /// <remarks>
+    /// Every one, rather than the nearest. A type inside a namespace nested in another was
+    /// reported under the inner name alone, so a type in namespace A containing namespace B came
+    /// back as B.Thing, which names nothing. Rare in a Unity project and wrong wherever it appears.
+    ///
+    /// File scoped and braced namespaces are both walked, which was already true and is worth
+    /// keeping true: the two forms mean the same thing and only one of them was ever likely to be
+    /// tested.
+    /// </remarks>
     private static string NamespaceOf(SyntaxNode node)
     {
+        var parts = new List<string>();
+
         for (var current = node.Parent; current is not null; current = current.Parent)
         {
-            switch (current)
+            if (current is BaseNamespaceDeclarationSyntax declaration)
             {
-                case NamespaceDeclarationSyntax declaration:
-                    return declaration.Name.ToString();
-
-                case FileScopedNamespaceDeclarationSyntax fileScoped:
-                    return fileScoped.Name.ToString();
+                parts.Insert(0, declaration.Name.ToString());
             }
         }
 
-        return string.Empty;
+        return string.Join(".", parts);
+    }
+
+    /// <summary>
+    /// Every type this one is declared inside, outermost first.
+    /// </summary>
+    /// <remarks>
+    /// Arbitrary depth rather than one level, because nothing stops a file nesting three deep and
+    /// a rule that handles one is a rule that is wrong at two.
+    /// </remarks>
+    private static string ContainingTypesOf(SyntaxNode node)
+    {
+        var parts = new List<string>();
+
+        for (var current = node.Parent; current is not null; current = current.Parent)
+        {
+            if (current is BaseTypeDeclarationSyntax declaration)
+            {
+                parts.Insert(0, declaration.Identifier.ValueText);
+            }
+        }
+
+        return string.Join(".", parts);
     }
 
     private static string FirstNamespace(CompilationUnitSyntax root)

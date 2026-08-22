@@ -10,10 +10,12 @@ public sealed class IndexedType
         IReadOnlyList<string> baseTypes,
         IReadOnlyList<IndexedMember> members,
         bool isPartial,
-        int line)
+        int line,
+        string containingTypes = "")
     {
         Name = name;
         Namespace = @namespace;
+        ContainingTypes = containingTypes;
         Kind = kind;
         BaseTypes = baseTypes;
         Members = members;
@@ -26,6 +28,17 @@ public sealed class IndexedType
 
     /// <summary>Its namespace, or an empty string when it is in the global one.</summary>
     public string Namespace { get; }
+
+    /// <summary>
+    /// The types this one is declared inside, outermost first, or empty when it is top level.
+    /// </summary>
+    /// <remarks>
+    /// Kept apart from the namespace because they are different things that only look alike once
+    /// they are joined by dots. A type moving between namespaces breaks every scene referencing
+    /// it, which is a rule this application enforces; a type moving between containing types is
+    /// somebody restructuring a file.
+    /// </remarks>
+    public string ContainingTypes { get; }
 
     /// <summary>What kind of type it is.</summary>
     public IndexedTypeKind Kind { get; }
@@ -42,8 +55,30 @@ public sealed class IndexedType
     /// <summary>One based line the declaration starts on.</summary>
     public int Line { get; }
 
-    /// <summary>Namespace and name, which is what Unity resolves a serialised reference by.</summary>
-    public string FullName => Namespace.Length == 0 ? Name : $"{Namespace}.{Name}";
+    /// <summary>
+    /// Everything it is declared inside, then its name.
+    /// </summary>
+    /// <remarks>
+    /// Nesting used to be left out, so a class called ItemStack inside a class called Inventory
+    /// was recorded as Game.ItemStack, which is the name of a different type that may or may not
+    /// exist. Three things trust this and all three were being answered wrongly: the duplicate
+    /// guard asks whether the project already holds a name, the elicitation check asks whether a
+    /// request names anything real, and the convergence meter counts a name only if the project
+    /// has it.
+    /// </remarks>
+    public string FullName
+    {
+        get
+        {
+            var prefix = Namespace.Length == 0
+                ? ContainingTypes
+                : ContainingTypes.Length == 0
+                    ? Namespace
+                    : $"{Namespace}.{ContainingTypes}";
+
+            return prefix.Length == 0 ? Name : $"{prefix}.{Name}";
+        }
+    }
 
     /// <summary>True when Unity attaches this to a GameObject, so its file name has to match it.</summary>
     public bool IsMonoBehaviour => Kind == IndexedTypeKind.MonoBehaviour;
