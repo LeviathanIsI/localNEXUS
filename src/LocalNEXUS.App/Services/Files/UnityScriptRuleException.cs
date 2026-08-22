@@ -31,7 +31,18 @@ public enum ProjectWriteRule
     FileMustExistToEdit,
 
     /// <summary>A new file was planned and one is already there.</summary>
-    FileMustNotExistToCreate
+    FileMustNotExistToCreate,
+
+    /// <summary>
+    /// Two files of the same plan declare a type of the same name.
+    /// </summary>
+    /// <remarks>
+    /// The only rule here that is not about Unity. It is about the thing this application was
+    /// built to stop, and it sits with the others because the write is the last place it can be
+    /// caught: what a file declares is decided by the coder, after the plan the duplicate guard
+    /// checked has already been approved.
+    /// </remarks>
+    NothingDeclaredTwice
 }
 
 /// <summary>

@@ -95,6 +95,11 @@ public sealed record RunConditions(
 /// <param name="ChangedFileContents">
 /// What every file the run touched looks like now.
 /// </param>
+/// <param name="ModelReplies">
+/// What the model said, in order, truncated. The only record of it: every node parses a reply,
+/// acts on it and throws it away, so a run that quietly did nothing otherwise leaves no evidence
+/// of what it was told to do.
+/// </param>
 public sealed record TaskResult(
     string TaskId,
     TaskShape Shape,
@@ -136,7 +141,8 @@ public sealed record TaskResult(
     int GeneratedCharacters,
     int ClarificationsAsked,
     IReadOnlyList<string> ChangedFiles,
-    IReadOnlyDictionary<string, string> ChangedFileContents)
+    IReadOnlyDictionary<string, string> ChangedFileContents,
+    IReadOnlyList<string> ModelReplies)
 {
     /// <summary>Files the check reached a verdict on.</summary>
     public int FilesChecked => FilesCompiledFirstPass + FilesCompiledAfterRepair + FilesNeverCompiled + FilesInconclusive;

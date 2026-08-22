@@ -22,6 +22,9 @@ public sealed class MeasuringModelClient : IModelClient
     private readonly List<Call> _calls = new();
     private readonly object _sync = new();
 
+    /// <summary>How much of a reply is kept, which is enough to read and not enough to bloat.</summary>
+    private const int ReplyKept = 4000;
+
     public MeasuringModelClient(IModelClient inner) => _inner = inner;
 
     /// <summary>One request and what it cost.</summary>
@@ -31,13 +34,19 @@ public sealed class MeasuringModelClient : IModelClient
     /// <param name="ToFirstToken">Wall time until the first streamed chunk, or null when nothing streamed.</param>
     /// <param name="Characters">How long the reply was, which is measurable even when tokens are not.</param>
     /// <param name="FinishReason">Why the model stopped. A length stop is a truncated answer.</param>
+    /// <param name="Reply">
+    /// What came back, truncated. Kept because a task that fails the same way every run fails for
+    /// a reason that is in the reply, and nothing else keeps one: the nodes parse a reply, act on
+    /// it and discard it, so a run that quietly did nothing leaves no trace of what it was told.
+    /// </param>
     public sealed record Call(
         int? PromptTokens,
         int? CompletionTokens,
         TimeSpan Elapsed,
         TimeSpan? ToFirstToken,
         int Characters,
-        string? FinishReason);
+        string? FinishReason,
+        string Reply);
 
     /// <summary>Every call made since the last reset, in order.</summary>
     public IReadOnlyList<Call> Calls
@@ -108,13 +117,16 @@ public sealed class MeasuringModelClient : IModelClient
 
         lock (_sync)
         {
+            var reply = result.Text ?? string.Empty;
+
             _calls.Add(new Call(
                 result.PromptTokens,
                 result.CompletionTokens,
                 watch.Elapsed,
                 first.Elapsed,
-                result.Text?.Length ?? 0,
-                result.FinishReason));
+                reply.Length,
+                result.FinishReason,
+                reply.Length <= ReplyKept ? reply : reply[..ReplyKept] + " ... (truncated)"));
         }
     }
 

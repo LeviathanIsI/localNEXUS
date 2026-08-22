@@ -168,6 +168,17 @@ public sealed partial class OutputNode : NodeBase
         var staged = 0;
         var bytes = 0L;
 
+        // What the files of this plan have declared between them so far, by the name a type is
+        // referred to by. The duplicate guard runs while the plan is being made and can only see
+        // what the plan says it will write, which is a path and one type name per row. It cannot
+        // see what a file turns out to declare.
+        //
+        // That gap let one through. A plan created ItemStack.cs and Inventory.cs, and the coder
+        // wrote Inventory with an ItemStack nested inside it, so the project ended with two types
+        // called ItemStack and nothing said a word. Both compile, which is exactly why nothing
+        // downstream noticed: it is not an error, it is a project with two of something.
+        var declaredHere = new Dictionary<string, string>(StringComparer.Ordinal);
+
         foreach (var file in files)
         {
             ct.ThrowIfCancellationRequested();
@@ -200,6 +211,7 @@ public sealed partial class OutputNode : NodeBase
             {
                 batch.EnforceExpectedExistence(absolute, file.Operation == FileOperation.Edit);
                 UnityScriptRules.Enforce(file.RelativePath, file.Content, index.FindFile(file.RelativePath), file.Types);
+                EnforceNothingDeclaredTwice(file, declaredHere);
             }
             catch (UnityScriptRuleException ex)
             {
@@ -322,6 +334,45 @@ public sealed partial class OutputNode : NodeBase
     }
 
     /// <summary>Turns a file the run could not finish into the record that outlives the run.</summary>
+    /// <summary>
+    /// Refuses a file that declares a type another file of the same plan already declared.
+    /// </summary>
+    /// <remarks>
+    /// The content level half of the rule the duplicate guard enforces on the plan. The guard is
+    /// the authority on what the project already has and runs before anything is written, which is
+    /// the right place for it and cannot cover this: a file declares what the coder decided to put
+    /// in it, and that is known only after the coder has run.
+    ///
+    /// Nesting is what made it invisible. A type nested inside another is a different type to a
+    /// compiler and the same name to a person, so two ItemStacks compiled cleanly and left a
+    /// project with two of something. Names are compared rather than full names for that reason.
+    ///
+    /// It refuses the second file rather than the first, so the plan's own order decides which
+    /// survives, and the refusal names both so the person can see which pair collided.
+    /// </remarks>
+    /// <exception cref="UnityScriptRuleException">Another file of this plan declares the same name.</exception>
+    private static void EnforceNothingDeclaredTwice(GeneratedFile file, Dictionary<string, string> declaredHere)
+    {
+        foreach (var type in file.Types)
+        {
+            if (declaredHere.TryGetValue(type.Name, out var owner)
+                && !string.Equals(owner, file.RelativePath, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new UnityScriptRuleException(
+                    ProjectWriteRule.NothingDeclaredTwice,
+                    $"{file.RelativePath} declares {type.Name}, and {owner} in this same plan already declares "
+                    + $"a type of that name. Two types with one name is what this application exists to prevent, "
+                    + "and it compiles, so nothing further along would have noticed. Fold the work into one of "
+                    + "them, or give one of them a different name.");
+            }
+        }
+
+        foreach (var type in file.Types)
+        {
+            declaredHere[type.Name] = file.RelativePath;
+        }
+    }
+
     private static StagedFile Stage(GeneratedFile file, StagedReason reason, string detail)
         => new(
             file.RelativePath,
