@@ -219,9 +219,16 @@ public partial class App : Application
         {
             CostWarningThreshold = config.CostWarningThreshold
         };
+        // Web search, if this installation has a key for it. Built whatever the answer, because
+        // the settings panel needs something to add a key to.
+        var search = new Services.Search.WebSearchService(
+            credentials, OpenAiCompatibleClient.CreateDefaultHttpClient());
+
+        services.Search = search;
+
         var executor = new GraphExecutor(services);
 
-        var feedViewModel = new ActivityFeedViewModel(executor, graph, feed, Dispatcher, cost, staging, recorder, conversation, history);
+        var feedViewModel = new ActivityFeedViewModel(executor, graph, feed, Dispatcher, cost, staging, recorder, conversation, history, search);
         var catalogViewModel = new ModelCatalogViewModel(catalog, dialogs);
         var pythonViewModel = new PythonEnvironmentViewModel(pythonEnvironment, dialogs);
         var networkViewModel = new NetworkViewModel(mesh, catalog, config, feed, dialogs);
@@ -262,6 +269,7 @@ public partial class App : Application
         // recorder writes to rather than at a second instance of nothing.
         settingsViewModel.UseHistory(history);
         settingsViewModel.UseProjectSettings(projectSettings);
+        settingsViewModel.UseSearch(search);
 
         var mainViewModel = new MainViewModel(
             graph,

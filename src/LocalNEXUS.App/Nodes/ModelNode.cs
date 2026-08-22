@@ -578,9 +578,17 @@ public sealed partial class ModelNode : NodeBase, ICodeRepairSource, IModelHandl
         ModelEndpoint endpoint,
         CancellationToken ct)
     {
+        var search = ctx.Services.Search;
+        var offerSearch = search?.IsOfferedThisRun == true;
+
         if (_toolset is null || SelectedExtensionIds.Count == 0)
         {
-            return Array.Empty<ToolDefinition>();
+            // Search alone is still tools. A graph with no extensions selected and search turned
+            // on for this send has exactly one tool, and it is worth the same check as any other.
+            return offerSearch
+                ? await WithSupportCheckAsync(ctx, endpoint, new[] { Services.Search.WebSearchService.Tool }, ct)
+                    .ConfigureAwait(false)
+                : Array.Empty<ToolDefinition>();
         }
 
         var tools = await _toolset
@@ -591,25 +599,106 @@ public sealed partial class ModelNode : NodeBase, ICodeRepairSource, IModelHandl
                 ct)
             .ConfigureAwait(false);
 
+        if (offerSearch)
+        {
+            tools = tools.Append(Services.Search.WebSearchService.Tool).ToList();
+        }
+
         if (tools.Count == 0)
         {
             return tools;
         }
 
+        return await WithSupportCheckAsync(ctx, endpoint, tools, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Says whether the model can call any of these, before the run rather than after.
+    /// </summary>
+    /// <remarks>
+    /// A model without a tool template silently ignores every tool it is offered, so the run looks
+    /// like one where the model chose not to search. Asked here, at the point the tools are
+    /// assembled, so the answer is in the feed before the first token.
+    /// </remarks>
+    private static async Task<IReadOnlyList<ToolDefinition>> WithSupportCheckAsync(
+        NodeExecutionContext ctx,
+        ModelEndpoint endpoint,
+        IReadOnlyList<ToolDefinition> tools,
+        CancellationToken ct)
+    {
         var (support, detail) = await ctx.Services.ToolSupport
             .ProbeAsync(endpoint, ct)
             .ConfigureAwait(false);
 
         if (support == ToolSupport.Unsupported)
         {
-            ctx.Feed.Error($"{Title} has {tools.Count} tools it cannot use", detail);
+            ctx.Feed.Error($"{ctx.Node.Title} has {tools.Count} tool(s) it cannot use", detail);
         }
         else
         {
-            ctx.Feed.Info($"{Title} has {tools.Count} tool(s)", detail);
+            ctx.Feed.Info($"{ctx.Node.Title} has {tools.Count} tool(s)", detail);
         }
 
         return tools;
+    }
+
+    /// <summary>
+    /// Runs one search and hands the results back as the tool result.
+    /// </summary>
+    /// <remarks>
+    /// Every search is in the feed, with the query and what came back, for the same reason every
+    /// extension tool call is: a model quietly searching is the same problem as a model quietly
+    /// firing a dozen editor commands.
+    ///
+    /// A failure goes back as a result rather than up as a fault, exactly as an extension tool's
+    /// does, so the model can say something without the search rather than the run stopping.
+    /// </remarks>
+    private async Task<(string Text, bool IsError)> SearchAsync(
+        NodeExecutionContext ctx,
+        ToolCall call,
+        CancellationToken ct)
+    {
+        if (ctx.Services.Search is not { } search)
+        {
+            return ("Web search is not available in this installation.", true);
+        }
+
+        string query;
+
+        try
+        {
+            query = JsonNode.Parse(call.ArgumentsJson ?? "{}") is JsonObject arguments
+                    && arguments["query"]?.GetValue<string>() is { Length: > 0 } text
+                ? text
+                : string.Empty;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            query = string.Empty;
+        }
+
+        if (query.Length == 0)
+        {
+            return ("The search tool needs a 'query' saying what to search for.", true);
+        }
+
+        try
+        {
+            var results = await search.SearchAsync(query, ct).ConfigureAwait(false);
+
+            ctx.Feed.Info(
+                $"{Title} searched for {query}",
+                results.Count == 0
+                    ? "Nothing came back."
+                    : string.Join(Environment.NewLine, results.Select(r => $"{r.Title}  {r.Url}")));
+
+            return (Services.Search.WebSearchService.Format(query, results), false);
+        }
+        catch (Services.Search.SearchException ex)
+        {
+            ctx.Feed.Error($"{Title} could not search for {query}", ex.Message);
+            return (ex.Message, true);
+        }
     }
 
     /// <summary>Shortens a payload for the feed, which shows what happened rather than everything.</summary>
@@ -884,9 +973,9 @@ public sealed partial class ModelNode : NodeBase, ICodeRepairSource, IModelHandl
 
                 StatusMessage = $"tool {callsMade} of {MaxToolCalls}: {call.Name}";
 
-                var (text, isError) = await _toolset
-                    .CallAsync(call, owner.ExtensionId, ct)
-                    .ConfigureAwait(false);
+                var (text, isError) = owner.ExtensionId == Services.Search.WebSearchService.OwnerId
+                    ? await SearchAsync(ctx, call, ct).ConfigureAwait(false)
+                    : await _toolset.CallAsync(call, owner.ExtensionId, ct).ConfigureAwait(false);
 
                 toolEntry.Detail = $"{Summarise(call.ArgumentsJson)} -> {(isError ? "failed: " : string.Empty)}{Summarise(text)}";
 

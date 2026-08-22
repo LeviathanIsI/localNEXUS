@@ -306,12 +306,24 @@
                                Visibility="{Binding Feed.RequestText, Converter={StaticResource StringToVisibility}, ConverterParameter=Invert}" />
                 </Grid>
 
-                <Button Grid.Column="2"
-                        Style="{StaticResource PrimaryButton}"
-                        MinWidth="96"
-                        VerticalAlignment="Stretch"
-                        Content="Run"
-                        Command="{Binding Feed.RunCommand}" />
+                <StackPanel Grid.Column="2" VerticalAlignment="Stretch">
+                    <!--
+                        Per send rather than per node, because most requests do not need search and
+                        whoever is typing knows which do. It is absent rather than disabled when
+                        there is no key, since a toggle for something unavailable teaches people it
+                        does not work.
+                    -->
+                    <CheckBox Margin="0,0,0,6"
+                              Content="Search the web"
+                              IsChecked="{Binding Feed.SearchThisSend}"
+                              ToolTip="Let every Model node in this run call web search when it needs something newer than its training. Snippets only; no page is fetched."
+                              Visibility="{Binding Feed.CanSearch, Converter={StaticResource BooleanToVisibility}}" />
+
+                    <Button Style="{StaticResource PrimaryButton}"
+                            MinWidth="96"
+                            Content="Run"
+                            Command="{Binding Feed.RunCommand}" />
+                </StackPanel>
                 </Grid>
             </StackPanel>
         </Border>

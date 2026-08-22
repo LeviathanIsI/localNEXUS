@@ -79,6 +79,40 @@ public sealed partial class ActivityFeedViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(ClearFeedCommand))]
     private bool _isActive = true;
 
+    /// <summary>
+    /// Web search, when this installation has a key for it.
+    /// </summary>
+    /// <remarks>
+    /// Bound to directly by the request box, so the checkbox appears when a key exists and there
+    /// is nothing at all when one does not. A toggle for something unavailable is a toggle that
+    /// teaches people it does not work.
+    /// </remarks>
+    public Services.Search.WebSearchService? Search { get; }
+
+    /// <summary>True when the search checkbox should be on the request box at all.</summary>
+    public bool CanSearch => Search?.HasKey == true;
+
+    /// <summary>
+    /// Whether this send may search.
+    /// </summary>
+    /// <remarks>
+    /// Per send rather than per node. Most requests do not need search and whoever is typing knows
+    /// which do, and a setting on each node would mean setting it in five places for one question.
+    /// It applies to every Model node in the run, which the box says next to it.
+    /// </remarks>
+    public bool SearchThisSend
+    {
+        get => Search?.EnabledForThisRun == true;
+        set
+        {
+            if (Search is { } search && search.EnabledForThisRun != value)
+            {
+                search.EnabledForThisRun = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
     public ActivityFeedViewModel(
         GraphExecutor executor,
         GraphModel graph,
@@ -88,8 +122,10 @@ public sealed partial class ActivityFeedViewModel : ObservableObject
         Services.Files.StagingStore? staging = null,
         Services.History.RunRecorder? recorder = null,
         Services.History.ConversationService? conversation = null,
-        Services.History.RunHistoryStore? history = null)
+        Services.History.RunHistoryStore? history = null,
+        Services.Search.WebSearchService? search = null)
     {
+        Search = search;
         _conversation = conversation;
         _history = history;
 

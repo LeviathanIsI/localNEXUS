@@ -88,6 +88,16 @@ public sealed class ExecutionServices
     public BreakpointService Breakpoints { get; }
 
     /// <summary>
+    /// Web search, when this run was sent with it turned on and a key exists.
+    /// </summary>
+    /// <remarks>
+    /// Set after construction rather than taken as an argument, because the constructor is already
+    /// fifteen parameters long and search is optional in a way none of the others are: an
+    /// installation with no key never has one.
+    /// </remarks>
+    public Search.WebSearchService? Search { get; set; }
+
+    /// <summary>
     /// The record of every run this project has had.
     /// </summary>
     /// <remarks>

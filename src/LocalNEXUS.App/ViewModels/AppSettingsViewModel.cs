@@ -178,6 +178,50 @@ public sealed partial class AppSettingsViewModel : ObservableObject
     public void UseHistory(Services.History.RunHistoryStore history) => History = history;
 
     private Services.Mcp.McpBridgeServer? _mcp;
+    private Services.Search.WebSearchService? _search;
+
+    /// <summary>Points this panel at web search, which App owns.</summary>
+    public void UseSearch(Services.Search.WebSearchService search)
+    {
+        _search = search;
+
+        OnPropertyChanged(nameof(HasSearchKey));
+        OnPropertyChanged(nameof(SearchStatus));
+    }
+
+    /// <summary>True when a search key is stored, without decrypting it.</summary>
+    public bool HasSearchKey => _search?.HasKey == true;
+
+    /// <summary>Where a key comes from, and what having one does.</summary>
+    public string SearchStatus => HasSearchKey
+        ? "A key is stored. The request box has a search checkbox on it, and a model may call search "
+          + "during a run when that is ticked."
+        : "No key, so search is not offered anywhere. Brave gives five dollars of credit a month, "
+          + $"then charges per thousand requests. Get a key at {Services.Search.WebSearchService.KeyUrl}";
+
+    /// <summary>Where a key is obtained, for the link.</summary>
+    public string SearchKeyUrl => Services.Search.WebSearchService.KeyUrl;
+
+    /// <summary>
+    /// Stores or clears the search key.
+    /// </summary>
+    /// <remarks>
+    /// Write only, like the model keys. What is stored is never read back into the interface,
+    /// because a box that shows a key is a key on somebody's screen.
+    /// </remarks>
+    [RelayCommand]
+    private void SetSearchKey(string? key)
+    {
+        _search?.SetKey(key);
+
+        OnPropertyChanged(nameof(HasSearchKey));
+        OnPropertyChanged(nameof(SearchStatus));
+    }
+
+    /// <summary>Forgets the search key.</summary>
+    [RelayCommand]
+    private void ClearSearchKey() => SetSearchKey(null);
+
     private Services.Files.ProjectSettingsService? _projectSettings;
 
     /// <summary>Points this panel at the open project's settings, which App owns.</summary>
