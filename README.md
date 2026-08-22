@@ -24,7 +24,7 @@ Five minutes to a generated file, assuming a `.gguf` on disk:
    project or an ordinary C# one, and reports how many C# files it indexed. Unity is detected,
    never asked for, and a Unity project is the only kind the Unity write rules apply to.
 2. `File > Settings`, Models section. Drop a `.gguf` into the `models\gguf` folder it names, or point it at a folder of your own. Format is detected by reading the file, not the name.
-3. `Edit > Add node`. Add a Prompt, a Model and an Output. Wire Prompt `Text` to Model `Text`, Model `Code` to Output `Code`. Pins refuse connections that do not typecheck.
+3. `File > Start from > One model, one file`, or click it on the empty canvas. That is the Prompt, Model and Output graph already wired. To build it yourself instead, double click the canvas to search for a node, or drag a wire out and let go over empty space to be offered only what could connect.
 4. Click the Model node, choose Local, pick your model.
 5. Click the Output node, set folder and filename. `Assets/Scripts`, `Spinner.cs`.
 6. Type into the box under the canvas and press Ctrl+Enter:

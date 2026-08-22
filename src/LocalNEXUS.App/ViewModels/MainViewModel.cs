@@ -46,6 +46,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private readonly Services.Compilation.ICodeCompiler _compiler;
     private readonly Services.History.RunHistoryStore _history;
     private readonly IHistoryWindow _historyWindow;
+    private readonly GraphTemplates _templates;
     private readonly IExtensionsWindow _extensionsWindow;
 
     /// <summary>Nodes whose selection state this view model is currently following.</summary>
@@ -163,6 +164,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         Themes = themes;
         Settings = settings;
         NodeSearch = new NodeSearchViewModel(factory, PlaceSearchedNode);
+        _templates = new GraphTemplates(factory, serializer);
 
         PendingConnection = new PendingConnectionViewModel(
             graph,
@@ -211,6 +213,18 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     /// <summary>The search that places a node, opened from the canvas rather than from a menu.</summary>
     public NodeSearchViewModel NodeSearch { get; }
+
+    /// <summary>
+    /// The graphs somebody can start from, rebuilt each time it is read.
+    /// </summary>
+    /// <remarks>
+    /// Not cached, because the saved ones are files and somebody can add one while the application
+    /// is open. It is a list of a handful read from a folder, once, when a menu is dropped.
+    /// </remarks>
+    public IReadOnlyList<GraphTemplate> Templates => _templates.All();
+
+    /// <summary>True when the canvas has nothing on it, which is what the empty state is drawn from.</summary>
+    public bool IsCanvasEmpty => Graph.Nodes.Count == 0;
 
     /// <summary>What the open project contains, shown under the explorer.</summary>
     public ProjectIndexService ProjectIndex { get; }
@@ -504,6 +518,90 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             + "pin on it would take the connection.");
     }
 
+    /// <summary>
+    /// Replaces the canvas with a template.
+    /// </summary>
+    /// <remarks>
+    /// The same confirmation an ordinary open gets, because this discards the canvas exactly as
+    /// opening a file does and a template is the thing somebody reaches for when they are not yet
+    /// sure what they are doing.
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(IsWorkspace))]
+    private void ApplyTemplate(GraphTemplate? template)
+    {
+        if (template is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var warnings = _templates.Apply(template, Graph);
+
+            SelectedNode = null;
+            CurrentGraphPath = null;
+            Document.MarkSaved(null);
+            _cascadeIndex = 0;
+
+            _feed.Info(
+                $"Started from {template.Name}",
+                template.Description + " Choose a model on each Model node, then type a request.");
+
+            foreach (var warning in warnings)
+            {
+                _feed.Error("Part of the template did not open", warning);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException)
+        {
+            _dialogs.ShowError("Template not opened", ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Saves what is on the canvas as a template to start from later.
+    /// </summary>
+    /// <remarks>
+    /// Through the ordinary save dialog pointed at the templates folder rather than a box asking
+    /// for a name, so the name and the place it goes are the same question and somebody who wants
+    /// it somewhere else can say so.
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(CanSaveAsTemplate))]
+    private void SaveAsTemplate()
+    {
+        Directory.CreateDirectory(GraphTemplates.Folder);
+
+        var chosen = _dialogs.PickSaveFile(
+            "Save this graph as a template",
+            Graph.Name + GraphSerializer.FileExtension,
+            $"LocalNEXUS graph|*{GraphSerializer.FileExtension}",
+            GraphTemplates.Folder);
+
+        if (chosen is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _serializer.Save(Graph, chosen);
+
+            _feed.Info(
+                "Saved as a template",
+                Path.GetDirectoryName(chosen)?.Equals(GraphTemplates.Folder, StringComparison.OrdinalIgnoreCase) == true
+                    ? $"{Path.GetFileName(chosen)} is now on the File menu under Start from."
+                    : $"Written to {chosen}. It is outside the templates folder, so it will not appear on the File menu.");
+
+            OnPropertyChanged(nameof(Templates));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _dialogs.ShowError("Template not saved", ex.Message);
+        }
+    }
+
+    private bool CanSaveAsTemplate() => IsWorkspace && Graph.Nodes.Count > 0;
+
     /// <summary>Opens the search where a wire was let go over empty canvas.</summary>
     private void OpenSearchFromPin(Pin source)
         => NodeSearch.OpenFrom(source, LastCanvasPoint.X, LastCanvasPoint.Y);
@@ -766,6 +864,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     private void OnNodesChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
+        OnPropertyChanged(nameof(IsCanvasEmpty));
+        SaveAsTemplateCommand.NotifyCanExecuteChanged();
+
         // A reset carries no item lists, which is what clearing the canvas raises. Rebuilding the
         // subscription set from the collection covers that case as well as ordinary add and
         // remove, and stops nodes from a discarded graph holding this view model alive.

@@ -364,6 +364,55 @@
         </nodify:NodifyEditor>
 
         <!--
+            What an empty canvas says.
+
+            A first launch used to be a grid and nothing else, which tells somebody that the
+            application opened and nothing about what to do next. The templates are here rather
+            than only on the File menu because this is where the eye already is, and they are the
+            same list, so one of them cannot go stale.
+
+            Hit test invisible except for the buttons, so the canvas underneath still takes a
+            double click and a right click while this is showing.
+        -->
+        <StackPanel VerticalAlignment="Center"
+                    HorizontalAlignment="Center"
+                    MaxWidth="460"
+                    IsHitTestVisible="True"
+                    Visibility="{Binding IsCanvasEmpty, Converter={StaticResource BooleanToVisibility}}">
+            <TextBlock Text="Nothing on the canvas yet"
+                       HorizontalAlignment="Center"
+                       FontSize="{StaticResource Font.Size.Large}"
+                       Foreground="{DynamicResource Text.Secondary.Brush}" />
+
+            <TextBlock Style="{StaticResource HintText}"
+                       Margin="0,6,0,0"
+                       TextAlignment="Center"
+                       TextWrapping="Wrap"
+                       Text="Start from one of these, or double click anywhere to add a node. Every template runs as it is once a model is chosen on each Model node." />
+
+            <ItemsControl ItemsSource="{Binding Templates}" Margin="0,14,0,0">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Button Margin="0,0,0,6"
+                                HorizontalContentAlignment="Left"
+                                Padding="12,8"
+                                ToolTip="{Binding Description}"
+                                Command="{Binding DataContext.ApplyTemplateCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                CommandParameter="{Binding}">
+                            <StackPanel>
+                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                                <TextBlock Style="{StaticResource HintText}"
+                                           TextWrapping="Wrap"
+                                           MaxWidth="400"
+                                           Text="{Binding Description}" />
+                            </StackPanel>
+                        </Button>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+
+        <!--
             Dimmed behind, so the click that lands anywhere else closes the search rather than
             reaching the canvas underneath and starting something.
         -->

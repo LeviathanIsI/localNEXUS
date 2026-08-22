@@ -125,6 +125,29 @@
                                 <MenuItem Header="_Open graph..." InputGestureText="Ctrl+O" Command="{Binding LoadGraphCommand}" />
                                 <MenuItem Header="_Save graph..." InputGestureText="Ctrl+S" Command="{Binding SaveGraphCommand}" />
                                 <Separator />
+
+                                <!--
+                                    The graphs somebody can start from. Built in ones first, then
+                                    anything saved into the templates folder, which is the same
+                                    list the empty canvas offers.
+                                -->
+                                <MenuItem Header="Start _from"
+                                          ItemsSource="{Binding Templates}"
+                                          IsEnabled="{Binding IsWorkspace}">
+                                    <MenuItem.ItemContainerStyle>
+                                        <Style TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}">
+                                            <Setter Property="Header" Value="{Binding Name}" />
+                                            <Setter Property="ToolTip" Value="{Binding Description}" />
+                                            <Setter Property="Command"
+                                                    Value="{Binding DataContext.ApplyTemplateCommand,
+                                                                    RelativeSource={RelativeSource AncestorType=Window}}" />
+                                            <Setter Property="CommandParameter" Value="{Binding}" />
+                                        </Style>
+                                    </MenuItem.ItemContainerStyle>
+                                </MenuItem>
+
+                                <MenuItem Header="Save as _template..." Command="{Binding SaveAsTemplateCommand}" />
+                                <Separator />
                                 <MenuItem Header="Open _project..." Command="{Binding OpenProjectCommand}" />
                                 <Separator />
                                 <MenuItem Header="Se_ttings" InputGestureText="Ctrl+," Command="{Binding OpenSettingsCommand}" />
