@@ -24,12 +24,26 @@ namespace LocalNEXUS.Tests;
 [Trait(Layers.Name, Layers.Deterministic)]
 public sealed class ConvergenceTests
 {
+    /// <summary>
+    /// What the project in these tests contains.
+    /// </summary>
+    /// <remarks>
+    /// A word is a name because the project has one by that name, so a test measuring positions
+    /// about InventorySlot has to say that InventorySlot exists. Passing it explicitly is also what
+    /// keeps these deterministic: nothing here reads a real project.
+    /// </remarks>
+    private static readonly string[] Project =
+    {
+        "InventorySlot", "HealthBar", "ItemStack", "ProjectileSpawner", "WeaponSlot",
+        "DamageType", "ItemClass", "GameStatus", "ScriptableObject", "Spinner", "ItemId"
+    };
+
     [Fact]
     public void IdenticalPositionsScoreTop()
     {
         const string position = "Put stacking on InventorySlot. HealthBar reads from ItemStack.";
 
-        var measured = ConvergenceMeter.Measure(position, position);
+        var measured = ConvergenceMeter.Measure(position, position, Project);
 
         Assert.Equal(100, measured.Score);
         Assert.Empty(measured.Contradictions);
@@ -47,7 +61,7 @@ public sealed class ConvergenceTests
     {
         var measured = ConvergenceMeter.Measure(
             "I would add stacking to InventorySlot, and have HealthBar read from ItemStack.",
-            "Stacking belongs on InventorySlot. HealthBar should read ItemStack as well.");
+            "Stacking belongs on InventorySlot. HealthBar should read ItemStack as well.", Project);
 
         Assert.NotNull(measured.Score);
         Assert.True(measured.Score >= 60, $"scored {measured.Score}: {measured.Breakdown()}");
@@ -60,7 +74,7 @@ public sealed class ConvergenceTests
     {
         var measured = ConvergenceMeter.Measure(
             "I would add stacking to InventorySlot and have HealthBar read ItemStack.",
-            "I would add pooling to ProjectileSpawner and have WeaponSlot read DamageType.");
+            "I would add pooling to ProjectileSpawner and have WeaponSlot read DamageType.", Project);
 
         Assert.NotNull(measured.Score);
         Assert.True(measured.Score <= 30, $"scored {measured.Score}: {measured.Breakdown()}");
@@ -78,11 +92,11 @@ public sealed class ConvergenceTests
     {
         var agreeing = ConvergenceMeter.Measure(
             "Add stacking to InventorySlot. Keep HealthBar and ItemStack as they are.",
-            "Add stacking to InventorySlot. Keep HealthBar and ItemStack as they are.");
+            "Add stacking to InventorySlot. Keep HealthBar and ItemStack as they are.", Project);
 
         var opposed = ConvergenceMeter.Measure(
             "Add stacking to InventorySlot. Keep HealthBar and ItemStack as they are.",
-            "Remove stacking from InventorySlot. Keep HealthBar and ItemStack as they are.");
+            "Remove stacking from InventorySlot. Keep HealthBar and ItemStack as they are.", Project);
 
         Assert.NotNull(agreeing.Score);
         Assert.NotNull(opposed.Score);
@@ -102,7 +116,7 @@ public sealed class ConvergenceTests
     {
         var measured = ConvergenceMeter.Measure(
             "Add stacking to InventorySlot. Do not remove HealthBar or ItemStack.",
-            "Add stacking to InventorySlot. Do not remove HealthBar or ItemStack.");
+            "Add stacking to InventorySlot. Do not remove HealthBar or ItemStack.", Project);
 
         Assert.Empty(measured.Contradictions);
         Assert.Equal(100, measured.Score);
@@ -112,7 +126,7 @@ public sealed class ConvergenceTests
     [Fact]
     public void NothingConcreteIsNotMeasurable()
     {
-        var measured = ConvergenceMeter.Measure("I agree.", "So do I.");
+        var measured = ConvergenceMeter.Measure("I agree.", "So do I.", Project);
 
         Assert.Null(measured.Score);
         Assert.Equal("not measurable", measured.Text);
@@ -120,7 +134,7 @@ public sealed class ConvergenceTests
 
     [Fact]
     public void AnEmptyPositionIsNotMeasurable()
-        => Assert.Null(ConvergenceMeter.Measure(string.Empty, "something concrete about InventorySlot").Score);
+        => Assert.Null(ConvergenceMeter.Measure(string.Empty, "something concrete about InventorySlot", Project).Score);
 
     /// <summary>The score is symmetric, because neither side is the reference.</summary>
     [Fact]
@@ -129,7 +143,7 @@ public sealed class ConvergenceTests
         const string a = "Add stacking to InventorySlot, pooling to ProjectileSpawner, and read ItemStack.";
         const string b = "Add pooling to ProjectileSpawner. Leave InventorySlot and WeaponSlot alone.";
 
-        Assert.Equal(ConvergenceMeter.Measure(a, b).Score, ConvergenceMeter.Measure(b, a).Score);
+        Assert.Equal(ConvergenceMeter.Measure(a, b, Project).Score, ConvergenceMeter.Measure(b, a, Project).Score);
     }
 
     /// <summary>
@@ -144,7 +158,7 @@ public sealed class ConvergenceTests
     {
         var measured = ConvergenceMeter.Measure(
             "Add stacking to InventorySlot, and leave HealthBar alone.",
-            "Add pooling to ProjectileSpawner, and rewrite WeaponSlot.");
+            "Add pooling to ProjectileSpawner, and rewrite WeaponSlot.", Project);
 
         var breakdown = measured.Breakdown();
 
@@ -170,7 +184,8 @@ public sealed class ConvergenceTests
 
         var measured = ConvergenceMeter.Measure(
             "Add stacking to InventorySlot. Add pooling to ProjectileSpawner. Add reloading to WeaponSlot. Add saving to ItemStack.",
-            "Remove stacking from InventorySlot. Remove pooling from ProjectileSpawner. Remove reloading from WeaponSlot. Remove saving from ItemStack.");
+            "Remove stacking from InventorySlot. Remove pooling from ProjectileSpawner. Remove reloading from WeaponSlot. Remove saving from ItemStack.",
+            Project);
 
         Assert.NotNull(measured.Score);
         Assert.InRange(measured.Score!.Value, 0, 100);
@@ -183,7 +198,7 @@ public sealed class ConvergenceTests
     [InlineData("Add Add Add stacking", "Add stacking")]
     public void AScoreIsAlwaysAPercentage(string first, string second)
     {
-        var measured = ConvergenceMeter.Measure(first, second);
+        var measured = ConvergenceMeter.Measure(first, second, Project);
 
         if (measured.Score is { } value)
         {
@@ -208,7 +223,8 @@ public sealed class ConvergenceTests
             "ScriptableObjects give us editor authoring, validation in the inspector, and a workflow "
             + "the designers already understand, which matters more than the loading cost.",
             "ScriptableObjects are awkward to merge and hard to diff, so the loading cost is worth "
-            + "paying for something a person can read and edit outside the editor.");
+            + "paying for something a person can read and edit outside the editor.",
+            Project);
 
         Assert.False(measured.IsMeasured);
         Assert.Null(measured.Score);
@@ -229,7 +245,7 @@ public sealed class ConvergenceTests
     {
         var measured = ConvergenceMeter.Measure(
             "ScriptableObjects are the better answer here for authoring reasons.",
-            "ScriptableObjects are the wrong answer here for merging reasons.");
+            "ScriptableObjects are the wrong answer here for merging reasons.", Project);
 
         Assert.False(measured.IsMeasured);
         Assert.Null(measured.Score);
@@ -245,7 +261,7 @@ public sealed class ConvergenceTests
     {
         var measured = ConvergenceMeter.Measure(
             "Put stacking on InventorySlot, keep HealthBar, and leave ItemStack alone.",
-            "Put stacking on InventorySlot, keep HealthBar, and leave ItemStack alone.");
+            "Put stacking on InventorySlot, keep HealthBar, and leave ItemStack alone.", Project);
 
         Assert.True(measured.IsMeasured);
         Assert.Equal(100, measured.Score);
@@ -272,7 +288,7 @@ public sealed class ConvergenceTests
     {
         var measured = ConvergenceMeter.Measure(
             "Use ScriptableObject for items, keep HealthBar, and leave ItemStack alone.",
-            "Use ScriptableObjects for items, keep HealthBar, and leave ItemStack alone.");
+            "Use ScriptableObjects for items, keep HealthBar, and leave ItemStack alone.", Project);
 
         Assert.True(measured.IsMeasured);
         Assert.Equal(100, measured.Score);
@@ -295,7 +311,7 @@ public sealed class ConvergenceTests
     {
         var measured = ConvergenceMeter.Measure(
             $"Keep {identifier}, keep HealthBar, and leave ItemStack alone.",
-            $"Keep {identifier}, keep HealthBar, and leave ItemStack alone.");
+            $"Keep {identifier}, keep HealthBar, and leave ItemStack alone.", Project);
 
         Assert.Contains(identifier, measured.SharedIdentifiers);
     }

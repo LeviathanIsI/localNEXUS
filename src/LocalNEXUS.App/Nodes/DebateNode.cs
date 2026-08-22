@@ -182,6 +182,10 @@ public sealed partial class DebateNode : NodeBase
             + $"{((NodeBase)second).Title} as {SecondRole} from {Describe(SecondSource)}. "
             + $"Settles at {ConvergenceThreshold} percent, at most {MaximumRounds} rounds, at most {Format(budget)}.");
 
+        // What the project calls things, which is what decides whether a word in a position is a
+        // name or an ordinary word. Read once: a debate does not change the project underneath it.
+        var known = KnownNames(ctx);
+
         var clock = System.Diagnostics.Stopwatch.StartNew();
 
         var firstPosition = await first
@@ -203,7 +207,7 @@ public sealed partial class DebateNode : NodeBase
         Record(ctx, 1, (NodeBase)first, firstPosition, null);
         Record(ctx, 1, (NodeBase)second, secondPosition, null);
 
-        var scored = ConvergenceMeter.Measure(firstPosition, secondPosition);
+        var scored = ConvergenceMeter.Measure(firstPosition, secondPosition, known);
         ReportConvergence(ctx, 1, scored, null, null);
 
         var round = 1;
@@ -240,7 +244,7 @@ public sealed partial class DebateNode : NodeBase
             Record(ctx, round, (NodeBase)first, firstPosition, firstSelf);
             Record(ctx, round, (NodeBase)second, secondPosition, secondSelf);
 
-            scored = ConvergenceMeter.Measure(firstPosition, secondPosition);
+            scored = ConvergenceMeter.Measure(firstPosition, secondPosition, known);
             ReportConvergence(ctx, round, scored, firstSelf, secondSelf);
         }
 
@@ -425,6 +429,42 @@ public sealed partial class DebateNode : NodeBase
     }
 
     private bool Settled(Convergence scored) => scored.Score is { } value && value >= ConvergenceThreshold;
+
+    /// <summary>
+    /// Every name the open project answers to.
+    /// </summary>
+    /// <remarks>
+    /// The index is the authority on what exists, so it is the authority on what counts as a name
+    /// in an argument about this project. Nothing is inferred from the shape of a word.
+    ///
+    /// The index is used as it stands rather than being built here. A debate is grounded on its
+    /// own reasoning unless it was told otherwise, and forcing a project scan for the sake of the
+    /// measurement would make an unrelated setting cost time. When nothing has been indexed the
+    /// set is empty and the two unambiguous shapes carry the measurement on their own.
+    /// </remarks>
+    private static IReadOnlyCollection<string> KnownNames(NodeExecutionContext ctx)
+    {
+        var names = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var file in ctx.Services.ProjectIndex.Files)
+        {
+            names.Add(file.FileName);
+            names.Add(file.RelativePath);
+
+            foreach (var type in file.Types)
+            {
+                names.Add(type.Name);
+                names.Add(type.FullName);
+
+                foreach (var member in type.Members)
+                {
+                    names.Add(member.Name);
+                }
+            }
+        }
+
+        return names;
+    }
 
     private static IModelHandle Require(NodeExecutionContext ctx, Pin pin, string which)
         => ctx.GetSourceNode(pin) as IModelHandle

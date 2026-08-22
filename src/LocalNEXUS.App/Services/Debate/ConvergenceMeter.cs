@@ -206,32 +206,32 @@ public static class ConvergenceMeter
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(2);
 
     /// <summary>
-    /// Types, members and files. Backticked spans, anything that looks like a path, and names with
-    /// more than one hump in them.
+    /// The two shapes that are a name whatever the project contains.
     /// </summary>
     /// <remarks>
-    /// More than one hump is what keeps ordinary sentences out. A rule that took every capitalised
-    /// word would count The and Unity and Create as things being proposed, and a rule that took
-    /// every capitalised word at the start of a sentence would count most of the prose. The cost is
-    /// that a single word type name like Slot is only seen when a model marks it up or writes it as
-    /// a path, which is the right way round: missing one is a smaller error than inventing twenty.
+    /// A backticked span is somebody saying this is code, and a capital I followed by another
+    /// capital and a lowercase run is not a shape English produces. Neither needs corroborating,
+    /// which is what makes them safe for a debate about something that does not exist yet.
     /// </remarks>
-    private static readonly Regex Identifiers = new(
+    private static readonly Regex Unambiguous = new(
         @"`([^`\r\n]{1,80})`"
-        + @"|\b([A-Za-z0-9_]+(?:[/\\][A-Za-z0-9_.]+)+\.[A-Za-z0-9]{1,6})\b"
-        + @"|\b([A-Za-z0-9_]+\.(?:cs|json|asset|prefab|shader|md))\b"
-        + @"|\b([A-Z][a-z0-9]+(?:[A-Z][a-z0-9]*)+)\b"
-        + @"|\b([a-z][a-z0-9]*(?:[A-Z][a-z0-9]*)+)\b",
+        + @"|\b(I[A-Z][a-z][A-Za-z0-9]*)\b",
         RegexOptions.None,
         Timeout);
 
     /// <summary>
-    /// The verbs a proposal is made of, each with the forms a model actually writes.
+    /// Every word that could be a name, for checking against what the project actually has.
     /// </summary>
     /// <remarks>
-    /// A fixed list rather than anything clever. These are the moves available when changing a
-    /// codebase, and a verb that is not one of them is not a proposal about the code.
+    /// Deliberately generous, because it decides nothing. Whether any of these is an identifier is
+    /// answered by the project index, not by the shape of the word.
     /// </remarks>
+    private static readonly Regex Words = new(
+        @"[A-Za-z_][A-Za-z0-9_]*(?:[./\\][A-Za-z0-9_]+)*",
+        RegexOptions.None,
+        Timeout);
+
+    /// <summary>What a verb of intent is, folded to the action it means.</summary>
     private static readonly Dictionary<string, string[]> Intents = new(StringComparer.OrdinalIgnoreCase)
     {
         ["create"] = new[] { "create", "creates", "creating", "created", "new", "introduce", "introduces", "introducing", "add", "adds", "adding" },
@@ -249,14 +249,6 @@ public static class ConvergenceMeter
         ["inject"] = new[] { "inject", "injects", "injecting", "wire", "wires", "wiring" }
     };
 
-    /// <summary>
-    /// Which intents cannot both be right about the same thing.
-    /// </summary>
-    /// <remarks>
-    /// Only pairs that are genuinely exclusive. Creating a type and extending one are different
-    /// answers to the same question; editing a type and exposing a field on it are not, and
-    /// treating them as a contradiction would punish two sides for agreeing in detail.
-    /// </remarks>
     private static readonly (string First, string Second)[] Opposed =
     {
         ("create", "reuse"),
@@ -273,15 +265,27 @@ public static class ConvergenceMeter
     };
 
     /// <summary>Reads two positions and says how far apart they are.</summary>
-    public static Convergence Measure(string first, string second)
+    /// <summary>
+    /// How far apart two positions are, measured against what the project actually contains.
+    /// </summary>
+    /// <param name="first">One position.</param>
+    /// <param name="second">The other.</param>
+    /// <param name="known">
+    /// Every name the open project has: its types, their full names, and its files. A word is an
+    /// identifier because the project has something by that name, not because it looks like one.
+    /// Empty when nothing is open, and then only the unambiguous shapes count.
+    /// </param>
+    public static Convergence Measure(string first, string second, IReadOnlyCollection<string>? known = null)
     {
         if (string.IsNullOrWhiteSpace(first) || string.IsNullOrWhiteSpace(second))
         {
             return Convergence.Unmeasurable;
         }
 
-        var firstIdentifiers = ReadIdentifiers(first);
-        var secondIdentifiers = ReadIdentifiers(second);
+        var vocabulary = Vocabulary(known);
+
+        var firstIdentifiers = ReadIdentifiers(first, vocabulary);
+        var secondIdentifiers = ReadIdentifiers(second, vocabulary);
 
         var firstIntents = ReadIntents(first);
         var secondIntents = ReadIntents(second);
@@ -481,13 +485,51 @@ public static class ConvergenceMeter
             : identifier[..^1];
     }
 
-    private static HashSet<string> ReadIdentifiers(string text)
+    /// <summary>What the project knows itself by, normalised the same way the text will be.</summary>
+    private static HashSet<string> Vocabulary(IReadOnlyCollection<string>? known)
+    {
+        var vocabulary = new HashSet<string>(StringComparer.Ordinal);
+
+        if (known is null)
+        {
+            return vocabulary;
+        }
+
+        foreach (var name in known)
+        {
+            if (!string.IsNullOrWhiteSpace(name))
+            {
+                vocabulary.Add(Singular(name.Trim()));
+            }
+        }
+
+        return vocabulary;
+    }
+
+    /// <summary>
+    /// The names one position mentions.
+    /// </summary>
+    /// <remarks>
+    /// Two sources and no guessing between them. A word is an identifier when the open project has
+    /// a type or a file by that name, which is exact and needs no list of exceptions; and the two
+    /// shapes that cannot be anything else are taken whether the project has them or not, so a
+    /// debate about something nobody has written yet can still be measured.
+    ///
+    /// What was here before tried to tell a type name from an ordinary word by looking at it, and
+    /// every guard added revealed another class of word that got through. The last run of it
+    /// produced Existing, Integration, Practice, Reusability, Support and Usability as identifiers.
+    /// There is no pattern that separates those from Health, because there is no difference to see.
+    ///
+    /// Matching is case sensitive, so the door in a sentence is not the type Door. Plurals are
+    /// folded first, on both sides, so Doors finds Door.
+    /// </remarks>
+    private static HashSet<string> ReadIdentifiers(string text, IReadOnlySet<string> vocabulary)
     {
         var found = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         try
         {
-            foreach (Match match in Identifiers.Matches(text))
+            foreach (Match match in Unambiguous.Matches(text))
             {
                 for (var group = 1; group < match.Groups.Count; group++)
                 {
@@ -503,6 +545,21 @@ public static class ConvergenceMeter
                     {
                         found.Add(Singular(value));
                     }
+                }
+            }
+
+            if (vocabulary.Count == 0)
+            {
+                return found;
+            }
+
+            foreach (Match match in Words.Matches(text))
+            {
+                var candidate = Singular(match.Value);
+
+                if (vocabulary.Contains(candidate))
+                {
+                    found.Add(candidate);
                 }
             }
         }
